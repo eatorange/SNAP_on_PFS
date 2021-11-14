@@ -1,7 +1,7 @@
    * ******************************************************************** *
    * ******************************************************************** *
    *                                                                      *
-   *               PSID                                        *
+   *               SNAP on FS		                                        *
    *               MASTER DO_FILE                                         *
    *                                                                      *
    * ******************************************************************** *
@@ -20,7 +20,7 @@
 
        ** WRITTEN BY:   Seungmin Lee
 
-       ** Last date modified:  25 Jan 2020
+       ** Last date modified:  14 Nov 2021
        */
 
 *iefolder*0*StandardSettings****************************************************
@@ -72,21 +72,21 @@
    * To find collaborator's user name, type -di "`c(username)'"- in STATA
 
    if "`c(username)'"== "Seungmin Lee" {	//	Min, office PC
-       global	projectfolder	"E:\GitHub\US_Food_Dynamics"		//	Github location
-	   global	clouldfolder	"E:\Box\US Food Security Dynamics"	// Clouldfolder location (where rawdata is stored)
+       global	projectfolder	"E:/GitHub/SNAP_on_FS"		//	Github location
+	   global	clouldfolder	"E:/OneDrive - Cornell University/SNAP"	// Clouldfolder location (where rawdata is stored)
    }
 
    if "`c(username)'"== "ftac2" {	//	Min, personal laptop
-       global	projectfolder	"E:\GitHub\US_Food_Dynamics"
-	   global	clouldfolder	"E:\Box\US Food Security Dynamics"
+       global	projectfolder	"E:/GitHub/US_Food_Dynamics"
+	   global	clouldfolder	"E:/Box/US Food Security Dynamics"
    }
    
-   if "`c(username)'"== "xxx" {	//	Liz
+   if "`c(username)'"== "xxx" {	//	
        global	projectfolder	"..."
 	   global	clouldfolder	"..."
    }
    
-   if "`c(username)'"== "xxx" {	//	Lizzie
+   if "`c(username)'"== "xxx" {	//	
        global	projectfolder	"..."
 	   global	clouldfolder	"..."
    }
@@ -113,28 +113,28 @@
 
 
    *Encrypted round sub-folder globals
-   global PSID                   "$dataWorkFolder/PSID" 
+   global SNAP                   "$dataWorkFolder/PSID" 
 
    *DataSets sub-folder globals
-   global PSID_dt                "$PSID/DataSets"
-   global PSID_dtRaw			 "$clouldfolder/DataWork/PSID/DataSets/Raw"
-   global PSID_dtInt             "$PSID_dt/Intermediate" 
-   global PSID_dtFin             "$PSID_dt/Final" 
+   global SNAP_dt                "$SNAP/DataSets"
+   global SNAP_dtRaw			 "$clouldfolder/DataWork/PSID/DataSets/Raw"
+   global SNAP_dtInt             "$SNAP_dt/Intermediate" 
+   global SNAP_dtFin             "$SNAP_dt/Final" 
 
    *Dofile sub-folder globals
-   global PSID_do                "$PSID/Dofiles" 
-   global PSID_doCln             "$PSID_do/Cleaning" 
-   global PSID_doCon             "$PSID_do/Construct" 
-   global PSID_doAnl             "$PSID_do/Analysis" 
+   global SNAP_do                "$SNAP/Dofiles" 
+   global SNAP_doCln             "$SNAP_do/Cleaning" 
+   global SNAP_doCon             "$SNAP_do/Construct" 
+   global SNAP_doAnl             "$SNAP_do/Analysis" 
 
    *Output sub-folder globals
-   global PSID_out               "$PSID/Output" 
-   global PSID_outRaw            "$PSID_out/Raw" 
-   global PSID_outFin            "$PSID_out/Final" 
+   global SNAP_out               "$SNAP/Output" 
+   global SNAP_outRaw            "$SNAP_out/Raw" 
+   global SNAP_outFin            "$SNAP_out/Final" 
 
    *Questionnaire sub-folder globals
-   global PSID_prld              "$PSID_quest/PreloadData" 
-   global PSID_doc               "$PSID_quest/Questionnaire Documentation" 
+   global SNAP_prld              "$SNAP_quest/PreloadData" 
+   global SNAP_doc               "$SNAP_quest/Questionnaire Documentation" 
 
 *iefolder*1*End_FolderGlobals***************************************************
 *iefolder will not work properly if the line above is edited
@@ -180,19 +180,19 @@
    local analysisDo     0
 
    if (`importDo' == 1) { // Change the local above to run or not to run this file
-       do "$PSID_doImp/PSID_import_MasterDofile.do" 
+       do "$SNAP_do/SNAP_import_MasterDofile.do" 
    }
 
    if (`cleaningDo' == 1) { // Change the local above to run or not to run this file
-       do "$PSID_do/PSID_cleaning_MasterDofile.do" 
+       do "$SNAP_do/SNAP_cleaning_MasterDofile.do" 
    }
 
    if (`constructDo' == 1) { // Change the local above to run or not to run this file
-       do "$PSID_do/PSID_construct_MasterDofile.do" 
+       do "$SNAP_do/SNAP_construct_MasterDofile.do" 
    }
 
    if (`analysisDo' == 1) { // Change the local above to run or not to run this file
-       do "$PSID_do/PSID_analysis_MasterDofile.do" 
+       do "$SNAP_do/SNAP_analysis_MasterDofile.do" 
    }
 
 *iefolder*3*End_RunDofiles******************************************************

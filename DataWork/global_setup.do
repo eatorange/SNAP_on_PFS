@@ -74,7 +74,7 @@
    * ******************************************************************** *
    
    *	Run macros used for analyses
-   include	"${PSID_doAnl}/Macros_for_analyses.do"
+   *include	"${SNAP_doAnl}/Macros_for_analyses.do"
 
    **Everything that is constant may be included here. One example of
    * something not constant that should be included here is exchange
