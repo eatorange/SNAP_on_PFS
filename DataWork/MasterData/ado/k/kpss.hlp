@@ -1,0 +1,156 @@
+{smcl}
+{* 19oct2004}{...}
+{hline}
+help for {hi:kpss}{right:(SJ6-3: sts15_2; STB-58: sts15.1; STB-57: sts15)}
+{hline}
+
+{title:Kwiatkowski-Phillips-Schmidt-Shin test for stationarity}
+
+{p 8 17 2}
+{cmd:kpss}
+{varname}
+{ifin}
+[{cmd:,} {opt maxlag(#)} {opt not:rend} {opt qs} {opt auto}]
+
+{phang}
+{cmd:kpss} is for use with time-series data.  {varname} may contain
+time-series operators.  You must {helpb tsset} your data before using
+{cmd:kpss}. 
+
+{phang}
+{cmd:kpss} supports the {helpb by} prefix, which may be used to operate on
+each time series in a panel. Alternatively, the {cmd:if} qualifier may be used
+to specify one time series in a panel.
+
+
+{title:Description}
+
+{pstd}
+{cmd:kpss} performs the Kwiatkowski, Phillips, Schmidt, and Shin (KPSS, 1992)
+test for stationarity of a time series. This test differs from those "unit
+root" tests in common use (such as {helpb dfuller}, {helpb pperron}, and
+{helpb dfgls}) by having a null hypothesis of stationarity. The test may be
+conducted under the null of either trend stationarity (the default) or level
+stationarity.  Inference from this test is complementary to that derived from
+those based on the Dickey-Fuller distribution (such as {cmd:dfuller},
+{cmd:pperron}, and {cmd:dfgls}). The KPSS test is often used in conjunction
+with those tests to investigate the possibility that a series is fractionally
+integrated (that is, neither I(1) nor I(0)); see Lee and Schmidt (1996). As
+such, it is complementary to {cmd:gphudak}, {cmd:modlpr}, and
+{cmd:roblpr}.
+
+{pstd}
+The test's denominator--an estimate of the long-run variance of the 
+time series, computed from the empirical autocorrelation function--may 
+be calculated using either the Bartlett kernel, as employed
+by KPSS, or the quadratic spectral kernel. Andrews (1991) and Newey
+and West (1994) indicate that the latter kernel yields more accurate 
+estimates of sigma-squared than other kernels in finite samples.
+(Hobijn et al., 1998, 6)
+
+{pstd}
+The maximum lag order for the test is by default calculated from the sample
+size using a rule provided by Schwert (1989) using c=12 and d=4 in his
+terminology. The maximum lag order may also be provided with the {cmd:maxlag()}
+option and may be zero. If the maximum lag order is at least one, the test 
+is performed for each lag, with the sample size held constant over lags 
+at the maximum available sample.
+
+{pstd}
+Alternatively, the maximum lag order (bandwidth) may be derived from an
+automatic bandwidth selection routine, rendering it unnecessary to evaluate 
+a range of test statistics for various lags. Hobijn et al. (1998) found
+that the combination of the automatic bandwidth selection option and the 
+quadratic spectral kernel yielded the best small sample test performance
+in Monte Carlo simulations.{p_end}
+
+{pstd}
+Approximate critical values for the KPSS test are taken from
+Kwiatkowski, Phillips, Schmidt, and Shin (1992)
+
+{pstd}
+The KPSS test statistic for each lag is placed in the return array.
+
+
+{title:Options}
+
+{phang}
+{opt maxlag(#)} specifies the maximum lag order to be used in
+calculating the test. If omitted, the maximum lag order is calculated as
+described above.
+
+{phang}
+{opt notrend} indicates that level stationarity, rather than trend
+stationarity, is the null hypothesis.
+
+{phang}
+{opt qs} specifies that the autocovariance function is to be weighted by the 
+quadratic spectral kernel, rather than the Bartlett kernel.
+
+{phang}
+{opt auto} specifies that the automatic bandwidth selection procedure proposed
+by Newey and West (1994) as described by Hobijn et al. (1998, 7) is used to
+determine {cmd:maxlag()}. Here one value of the test statistic is produced at
+the optimal bandwidth.
+
+
+{title:Examples}
+
+{p 4 8 2}{stata "use http://fmwww.bc.edu/ec-p/data/macro/nelsonplosser.dta":. use http://fmwww.bc.edu/ec-p/data/macro/nelsonplosser.dta}{p_end}
+	
+{p 4 8 2}{stata "kpss lrgnp":. kpss lrgnp}{p_end}
+
+{p 4 8 2}{stata "kpss D.lrgnp, maxlag(8) notrend":. kpss D.lrgnp, maxlag(8) notrend}{p_end}
+	
+{p 4 8 2}{stata "kpss lrgnp if tin(1910,1970)":. kpss lrgnp if tin(1910,1970)}{p_end}
+	
+{p 4 8 2}{stata "kpss lrgnp, qs auto":. kpss lrgnp, qs auto}{p_end}
+
+
+{title:Author}
+
+{p 4 4 2}Christopher F. Baum, Boston College, USA{break} 
+       baum@bc.edu
+       
+
+{title:References}
+      
+{phang}Andrews, D. W. K.  1991. Heteroskedasticity and autocorrelation
+consistent covariance matrix estimation. {it:Econometrica} 59: 817-858.
+
+{phang}Hobijn, B., P. H. Franses, and M. Ooms. 1998. Generalizations
+of the KPSS-test for stationarity. Econometric Institute Report 9802/A, 
+Econometric Institute, Erasmus University Rotterdam.
+{browse "http://www.feweb.vu.nl/econometricLinks/ooms/papers/ei9802.pdf"}.
+
+{phang}Kwiatkowski, D., P. C. B Phillips, P. Schmidt, and Y. Shin. 1992.
+Testing the null hypothesis of stationarity against the alternative of a unit
+root: How sure are we that economic time series have a unit root?
+{it:Journal of Econometrics} 54: 159-178.
+
+{phang}Lee, D., and P. Schmidt. 1996. On the power of the KPSS test of
+stationarity against fractionally-integrated alternatives.
+{it:Journal of Econometrics} 73: 285-302.
+
+{phang}Newey, W. K., and K. D. West. 1994. Automatic lag selection in
+covariance matrix estimation. {it:Review of Economic Studies} 61:
+631-653.
+
+{phang}Schwert, G. W. 1989. Tests for unit roots: A Monte Carlo investigation.
+{it:Journal of Business and Economic Statistics} 7: 147-160.
+
+
+{title:Acknowledgments}
+
+{pstd}
+A version of this code written in the RATS programming language by
+John Barkoulas served as a guide for the development of the Stata code.
+Thanks to Richard Sperling for suggesting its validation against the 
+Nelson-Plosser data (Kwiatkowski, Phillips, Schmidt, and Shin 1992, table 5).
+
+
+{title:Also see}
+
+{psee}Online: {helpb dfuller}, {helpb pperron}, {help time}, {helpb tsset}, 
+{helpb dfgls}, {helpb gphudak} (if installed), {helpb modlpr} (if 
+installed), {helpb roblpr} (if installed){p_end}

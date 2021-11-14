@@ -1,0 +1,1124 @@
+* 00000044
+*! version 1.0.0
+* Do not erase or edit this file
+* It is used by Stata to track the ado and help
+* files you have installed.
+
+S http://fmwww.bc.edu/repec/bocode/i
+N ietoolkit.pkg
+D 12 Apr 2020
+U 1
+d 'IETOOLKIT': module providing commands specially developed for Impact Evaluations
+d 
+d  ietookit provides a set of commands that address different
+d aspects of data management and data analysis in relation to
+d Impact Evaluations. The list of commands will be extended
+d continuously, and suggestions on new commands are highly
+d appreciated. Some of the commands are related to standardized
+d practices developed at the World Bank’s unit for Impact
+d Evaluations (DIME) and might not apply to practices adopted at
+d other institutions. For these commands, the corresponding help
+d files provide justifications for the standardized practices
+d applied. ieduplicates and iecompdup are useful tools to identify
+d and correct for duplicates. iebaltab is a tool for multiple
+d treatment arm balance tables. ieboilstart standardizes the
+d boilerplate code at the top of all do-files. iegraph produces
+d graphs based on common impact evaluation regression models. See
+d https://github.com/worldbank/ietoolkit for more details.
+d 
+d KW: impact evaluations
+d KW: data management
+d KW: survey data
+d KW: data analysis
+d KW: balance tables
+d KW: difference-in-differences
+d KW: matching
+d 
+d Requires: Stata version 11
+d 
+d Distribution-Date: 20191108
+d 
+d Author: DIME Analytics, The World Bank, DECIE
+d Support: email  lcardosodeandrad@@worldbank.org
+d 
+f i\ietoolkit.ado
+f i\ietoolkit.sthlp
+f i\iebaltab.ado
+f i\iebaltab.sthlp
+f i\ieboilsave.ado
+f i\ieboilsave.sthlp
+f i\ieboilstart.ado
+f i\ieboilstart.sthlp
+f i\ieddtab.ado
+f i\ieddtab.sthlp
+f i\iedropone.ado
+f i\iedropone.sthlp
+f i\iefolder.ado
+f i\iefolder.sthlp
+f i\iegitaddmd.ado
+f i\iegitaddmd.sthlp
+f i\iegraph.ado
+f i\iegraph.sthlp
+f i\iekdensity.ado
+f i\iekdensity.sthlp
+f i\iematch.ado
+f i\iematch.sthlp
+e
+S http://fmwww.bc.edu/repec/bocode/s
+N stgit.pkg
+D 12 Apr 2020
+U 2
+d 'STGIT': module to retrieve information about a Git repository
+d 
+d  stgit retrieves information about a Git repository.
+d 
+d KW: Git
+d KW: Java
+d KW: version control
+d 
+d Requires: Stata version 9.2 (13.1 for full functionality), statajava from SSC, and JGit (https://eclipse.org/jgit/download/)
+d 
+d Distribution-Date: 20150311
+d 
+d Author: Matthew White
+d Support: email matthew65536@@gmail.com
+d 
+f s\stgit.ado
+f s\stgit9.ado
+f s\stgit13.ado
+f s\stgit_summary.ado
+f s\stgit_error.ado
+f s\stgit_parse.ado
+f s\stgit.sthlp
+f jar\stgit.jar
+e
+S http://fmwww.bc.edu/repec/bocode/p
+N psidtools.pkg
+D 12 Apr 2020
+U 3
+d 'PSIDTOOLS': module to facilitate access to Panel Study of Income Dynamics (PSID)
+d 
+d  psid is an interface to the "Panel Study of Income Dynamics"
+d (PSID) and to the American branch of the "Cross National
+d Equivalence File" (CNEF).
+d 
+d KW: PSID
+d KW: data management
+d 
+d Requires: Stata version 13
+d 
+d Distribution-Date: 20190722
+d 
+d Author: Ulrich Kohler, Universitat Potsdam
+d Support: email ukohler@@uni-potsdam.de
+d 
+f p\psidtools.sthlp
+f p\psid.ado
+f p\psid.sthlp
+f p\psidadd.ado
+f p\psidadd.sthlp
+f p\psiduse.ado
+f p\psiduse.sthlp
+f p\psid_install.ado
+f p\psid_long.ado
+f p\psid_vardoc.ado
+e
+S http://fmwww.bc.edu/repec/bocode/s
+N sepscatter.pkg
+D 12 Apr 2020
+U 4
+d 'SEPSCATTER': module to draw scatter (or other twoway) plots separated by a third variable
+d 
+d  sepscatter produces a scatter or other twoway plot for yvar
+d versus xvar. Points, or as recast lines, are portrayed separately
+d according to the distinct values of a third variable.
+d 
+d KW:  graphics
+d KW: scatter plots
+d KW: line plots
+d 
+d Requires: Stata version 9
+d 
+d Distribution-Date: 20181226
+d 
+d Author: Nicholas J. Cox, Durham University
+d Support: email N.J.Cox@@durham.ac.uk
+d 
+f s\sepscatter.ado
+f s\sepscatter.sthlp
+e
+S https://github.com/pguimaraes99/panelstat/raw/master
+N panelstat.pkg
+D 12 Apr 2020
+U 5
+d PANELSTAT: tool to explore unbalanced panel data sets
+d 
+d Author: Paulo Guimaraes. Banco de Portugal
+d Contact: pguimaraes2001@gmail.com
+d 
+d KW: panel data
+d 
+d Requires: Stata version 13
+d 
+d Required packages:
+d 
+d group2hdfe
+d excelcol
+d sreshape
+d ftools
+d 
+d Distribution-Date: 20170827
+d 
+f p\panelstat.ado
+f p\panelstat.sthlp
+e
+S http://www.stata-journal.com/software/sj19-3
+N gr42_8.pkg
+D 12 Apr 2020
+U 6
+d SJ19-3 gr42_8. Update: Quantile plots
+d Update: Quantile plots
+d by Nicholas J. Cox, Department of Geography,
+d      Durham University, Durham, UK
+d Support:  n.j.cox@durham.ac.uk
+d After installation, type help {cmd:qplot}
+d DOI:  10.1177/1536867X19874265
+f q\qplot.ado
+f q\qplot.sthlp
+e
+S http://staskolenikov.net/stata
+N epctile.pkg
+D 12 Apr 2020
+U 7
+d epctile -- estimation and inference for percentiles
+d 
+d Author: Stas Kolenikov, skolenik at gmaildotcom
+d 
+d epctile is an e-class version of pctiles that produces
+d standard errors in addition to point estimates,
+d including standard errors for complex survey data.
+f e\epctile.ado
+f e\epctile.sthlp
+f f\formxlevels.ado
+e
+S http://fmwww.bc.edu/repec/bocode/w
+N winsor.pkg
+D 12 Apr 2020
+U 8
+d 'WINSOR': module to Winsorize a variable
+d 
+d winsor takes the non-missing values of a variable and generates a
+d new variable  identical except that the h highest and h lowest
+d values are replaced by the  next value counting inwards from the
+d extremes. h can be specified directly or  indirectly by
+d specifying a fraction p of the number of observations: h =  [p
+d n]. This transformation is named after the biostatistician C.P.
+d Winsor. This is version 1.3.0 of  the software.
+d 
+d Author: Nicholas J. Cox, University of Durham
+d Support: email N.J.Cox@@durham.ac.uk
+d 
+d Distribution-Date: 20060809
+f w\winsor.ado
+f w\winsor.hlp
+e
+S http://fmwww.bc.edu/repec/bocode/d
+N distinct.pkg
+D 13 Apr 2020
+U 10
+d 'DISTINCT': module to display distinct values of variables
+d 
+d distinct displays the number of distinct values for each variable
+d in a varlist.  The varlist may include both numeric and string
+d variables.
+d 
+d KW: distinct observations
+d KW: unique values
+d 
+d Requires: Stata version 8.0
+d 
+d 
+d Author: Gary Longton, Fred Hutchinson Cancer Research Center
+d Support: email glongton@@fhcrc.org
+d 
+d Author: Nicholas J. Cox, Durham University
+d Support: email N.J.Cox@@durham.ac.uk
+d 
+d Distribution-Date: 20120321
+d 
+f d\distinct.ado
+f d\distinct.hlp
+e
+S http://www.stata-journal.com/software/sj14-2
+N st0085_2.pkg
+D 15 Apr 2020
+U 11
+d SJ14-2 st0085_2. Update: Making regression...
+d Update: Making regression tables from stored
+d   estimates
+d by Ben Jann, University of Bern
+d Support:  jann@@soz.unibe.ch
+d After installation, type help ^estout^,
+d   ^esttab^, ^eststo^, ^estadd^, and ^estpost^
+f _\_eststo.ado
+f _\_eststo.hlp
+f e\esttab.ado
+f e\esttab.hlp
+f e\estadd.ado
+f e\estadd.hlp
+f e\eststo.ado
+f e\eststo.hlp
+f e\estout.ado
+f e\estout.hlp
+f e\estpost.ado
+f e\estpost.hlp
+e
+S http://fmwww.bc.edu/repec/bocode/f
+N ftools.pkg
+D  2 May 2020
+U 13
+d 'FTOOLS': module to provide alternatives to common Stata commands optimized for large datasets
+d 
+d  ftools consists of a Mata file and several Stata commands: The
+d Mata file creates identifiers (factors) from variables by using
+d hash functions instead of sorting the data, so it runs in time
+d O(N) and not in O(N log N). The Stata commands exploit this to
+d avoid sort operations,  at the cost of being slower for small
+d datasets (mainly because of the cost involved in moving data from
+d Stata to Mata). Implemented commands are fcollapse, fegen group,
+d and fsort. Note that most of the capabilities of levels and
+d contract are already supported by these commands. Possible
+d commands include more egen functions and merge and reshape
+d alternatives.
+d 
+d KW: levels
+d KW: collapse
+d KW: contract
+d KW: egen
+d KW: sort
+d KW: factor variables
+d KW: Mata
+d 
+d Requires: Stata version 11.2
+d 
+d Distribution-Date: 20191118
+d 
+d Author: Sergio Correia, Board of Governors of the Federal Reserve System
+d Support: email sergio.correia@@gmail.com
+d 
+f f\ftools.ado
+f f\ftools.mata
+f f\ftools.sthlp
+f f\fcollapse.ado
+f f\fcollapse.sthlp
+f f\fegen.ado
+f f\fegen_group.ado
+f f\fegen.sthlp
+f f\fisid.ado
+f f\fisid.sthlp
+f f\flevelsof.ado
+f f\flevelsof.sthlp
+f f\fmerge.ado
+f f\fmerge.sthlp
+f f\freshape.ado
+f f\fsort.ado
+f f\fsort.sthlp
+f f\ftab.ado
+f j\join.ado
+f j\join.sthlp
+f l\local_inlist.ado
+f l\local_inlist.sthlp
+f f\fcollapse_functions.mata
+f f\fcollapse_main.mata
+f f\ftools_type_aliases.mata
+f f\ftools.mata
+f f\ftools_common.mata
+f f\ftools_hash1.mata
+f f\ftools_main.mata
+f f\ftools_experimental.mata
+f f\ftools_plugin.mata
+f f\ftools_type_aliases.mata
+f m\ms_compile_mata.ado
+f m\ms_expand_varlist.ado
+f m\ms_fvstrip.ado
+f m\ms_fvstrip.sthlp
+f m\ms_fvunab.ado
+f m\ms_get_version.ado
+f m\ms_parse_absvars.ado
+f m\ms_parse_varlist.ado
+f m\ms_parse_vce.ado
+f m\ms_add_comma.ado
+e
+S http://fmwww.bc.edu/repec/bocode/c
+N chaidforest.pkg
+D  2 May 2020
+U 14
+d 'CHAIDFOREST': module to conduct random forest ensemble classification based on chi-square automated interaction detection (CHAID) as base learner
+d 
+d  Implements random forest ensemble classifier (Breiman, 2001;
+d Machine Learning) using the CHAID (Chi-square automated
+d interaction detection; Kass, 1980; Applied Statistics) algorithm
+d as the base learner. Includes a module to obtain predicted
+d values from the random forest.
+d 
+d KW: random forest
+d KW: data mining
+d KW: clustering
+d KW: machine learning
+d KW: chi-square
+d KW: decision tree
+d KW: exploratory analysis
+d KW: recursive partitioning
+d KW: classification
+d 
+d Requires: Stata version 12.1 and package moremata from SSC (q.v.)
+d 
+d Distribution-Date: 20151016
+d 
+d Author: Joseph N. Luchman, Fors Marsh Group LLC
+d Support: email  jluchman@@forsmarshgroup.com
+d 
+f c\chaidforest.ado
+f c\chaidforest_pr.ado
+f c\chaidforest_estat.ado
+f c\chaidforest.sthlp
+f c\chaidforest_post.sthlp
+e
+S http://www.stata-journal.com/software/sj20-1
+N st0587.pkg
+D 13 May 2020
+U 15
+d SJ20-1 st0587. Random forest algorithm
+d Random forest algorithm
+d by Matthias Schonlau, University of Waterloo,
+d      Waterloo, Canada
+d    Rosie Yuyan Zou, University of Waterloo,
+d      Waterloo, Canada
+d Support:  schonlau@uwaterloo.ca,
+d           y53zou@uwaterloo.ca
+d After installation, type help {cmd:rforest}
+d DOI:  10.1177/1536867X20909688
+f jar\randomforest.jar
+f r\randomforest_predict.ado
+f r\rforest.ado
+f r\rforest_examples.ado
+f r\rforest_examples.ihlp
+f r\rforest.sthlp
+f jar\weka.jar
+e
+S http://fmwww.bc.edu/repec/bocode/s
+N shapley2.pkg
+D 19 May 2020
+U 16
+d 'SHAPLEY2': module to compute additive decomposition of estimation statistics by regressors or groups of regressors
+d 
+d   Shapley2 is a post-estimation command to compute the
+d Shorrocks-Shapley decomposition of any statistic of the model
+d (normally the R squared). Shapley2 can be used for most
+d estimation commands, e.g. ols, probit, logit, oprobit. Compared
+d to the user written command shapley, shapley2 is faster and
+d enables you to compute the Shapley value by groups of variables.
+d The results are stored as e()-matrices, allowing the user to use
+d them afterwards, for instance to export them to LaTeX.
+d 
+d KW: Shapley
+d KW: decomposition
+d KW: post-estimation
+d 
+d Requires: Stata version 9.2
+d 
+d Distribution-Date: 20150617
+d 
+d Author: Florian Chavez Juarez, University of Geneva
+d Support: email Florian.Wendelspiess@@unige.ch
+d 
+f s\shapley2.ado
+f s\shapley2.hlp
+e
+S http://fmwww.bc.edu/repec/bocode/s
+N shapley.pkg
+D 19 May 2020
+U 17
+d 'SHAPLEY': module to perform additive decomposition of sample statistic
+d 
+d This program performs (exact additive) decomposition of a sample
+d statistic by effects specified in factor list. To perform the
+d Shapley decomposition, the effects are  eliminated one by one,
+d and marginal effects from each exclusion are weighted in such  a
+d way that all exclusion trajectories have equal weights.
+d 
+d Author: Stanislav Kolenikov, Russian - European Center for Economic Policy
+d Support: email skolenik@@recep.glasnet.ru
+d 
+d Distribution-Date: 20000217
+f s\shapley.ado
+f s\shapley.hlp
+e
+S http://digital.cgdev.org/doc/stata/MO/Misc
+N grc1leg2.pkg
+D 23 May 2020
+U 19
+d {cmd:grc1leg2}. Add a common legend to combined graphs.
+d {cmd:grc1leg2}, like {help graph combine}, arrays separately drawn
+d graphs as panels in a single combined graph.  However,
+d {cmd:grc1leg2} suppresses the legends in the individual graphs
+d and adds a common legend taken from one of them.
+d Optionally {cmd:grc1leg2} also suppresses the xtitle, the ytitle
+d or the main title on the individual graphs and moves any of these
+d to the combined graph.
+d {cmd:grc1leg2} is a wrapper for {help graph combine}.
+d The help file for {cmd:grc1leg2} provides examples of embedding
+d a legend in a multi-panel graph, comparing approaches which use,
+d respectively, {cmd:gr ..., by()}, {cmd:gr combine} and {cmd:grc1leg2}.
+d The dialog offers point-and-click access to {cmd:grc1leg2} options.
+d 
+d by {browse "http://www.cgdev.org/expert/mead-over/":Mead Over}, Center for Global Development
+d http://www.cgdev.org/expert/mead-over
+d 
+d Requires Stata Version 11.2 or later
+d 
+d Version 1.2  11Nov2019
+d Based on {cmd:grc1leg} version 1.0.5  02jun2010, by Vince Wiggins
+d 
+d Distribution-Date: 20191111
+f g\grc1leg2.ado
+f g\grc1leg2.sthlp
+f g\grc1leg2.dlg
+f g\grc1leg2_examples.ado
+e
+S http://www.stata-journal.com/software/sj7-4
+N gr0012_1.pkg
+D 16 Jun 2020
+U 20
+d SJ7-4 gr0012_1.  Update: Density probability plots
+d Update: Density probability plots
+d 
+d by Nicholas J. Cox, Durham University, UK
+d Support:  n.j.cox@@durham.ac.uk
+d After installation, type help ^dpplot^
+f d\dpplot.ado
+f d\dpplot.hlp
+e
+S http://fmwww.bc.edu/RePEc/bocode/g
+N gammafit.pkg
+D 29 Jul 2020
+U 22
+d 'GAMMAFIT': module to fit a two-parameter gamma distribution
+d 
+d gammafit fits a two-parameter gamma distribution with a shape
+d parameter and a scale parameter,  optionally as dependent on
+d covariates. Stata 8 is required.  Also included in this package
+d is gamma4, which also fits a two-parameter gamma distribution,
+d although to a single variable only. That may be used in Stata 4
+d through 7.  There is no connection between this package and
+d official Stata command gamma.
+d 
+d KW:  gamma distribution
+d KW: maximum likelihood
+d 
+d Requires: Stata version 8.0 (4.0 for gamma4)
+d 
+d 
+d Author: Nicholas J. Cox, Durham University
+d Support: email N.J.Cox@@durham.ac.uk
+d 
+d Author: Stephen P. Jenkins, University of Essex
+d Support: email stephenj@@essex.ac.uk
+d 
+d Distribution-Date: 20110517
+d 
+f g\gammafit.ado
+f g\gammafit.hlp
+f g\gammafit_lf.ado
+f g\gammafit_lf2.ado
+f g\gamma4.ado
+f g\gamma4.hlp
+e
+S http://fmwww.bc.edu/repec/bocode/l
+N lmabpxt.pkg
+D 11 Aug 2020
+U 23
+d 'LMABPXT': module to compute Panel Data Autocorrelation Box-Pierce Test
+d 
+d  lmabpxt computes Panel Data Autocorrelation Box-Pierce Test
+d 
+d KW: Regression
+d KW: Panel Data
+d KW: Cross Sections-Time Series
+d KW: Autocorrelation
+d KW: Box-Pierce Test
+d 
+d Requires: Stata version 11.2
+d 
+d Distribution-Date: 20141018
+d 
+d Author: Emad Abd Elmessih Shehata, Agricultural Economics Research Institute, Egypt
+d Support: email emadstat@@hotmail.com
+d 
+d Author:  Sahra Khaleel A. Mickaiel, Cairo University, Faculty of Agriculture, Egypt
+d Support: email sahra_atta@@hotmail.com
+d 
+f l\lmabpxt.ado
+f l\lmabpxt.sthlp
+f l\lmabpxt.dlg
+e
+S http://www.stata-journal.com/software/sj3-2
+N st0039.pkg
+D 11 Aug 2020
+U 24
+d SJ3-2 st0039.  Testing for serial correlation in linear ...
+d Testing for serial correlation in linear panel-data models
+d by David M. Drukker, Stata Corporation
+d Support:  ddrukker@@stata.com
+d After installation, type help ^xtserial^
+f x\xtserial.ado
+f x\xtserial.hlp
+e
+S http://www.stata-journal.com/software/sj6-3
+N sts15_2.pkg
+D 12 Aug 2020
+U 25
+d SJ6-3 sts15_2.  Update:  Tests for stationarity of a...
+d Update:  Tests for stationarity of a time series
+d by Christopher F. Baum, Boston College
+d Support:  baum@@bc.edu
+d After installation, type help ^kpss^
+f k\kpss.ado
+f k\kpss.hlp
+e
+S http://www.stata-journal.com/software/sj18-1
+N st0514.pkg
+D 12 Aug 2020
+U 26
+d SJ18-1 st0514. Testing for serial correlation in...
+d Testing for serial correlation in fixed-effects
+d   models
+d by Jesse Wursten, Faculty of Economics and
+d      Business, KU Leuven, Leuven, Belgium
+d Support:  jesse.wursten@kuleuven.be
+d After installation, type help {cmd:xtqptest},
+d   {cmd:xthrtest}, and {cmd:xtistest}
+f x\xthrtest.ado
+f x\xtistest.ado
+f x\xtqptest.ado
+f x\xthrtest.sthlp
+f x\xtistest.sthlp
+f x\xtqptest.sthlp
+e
+S http://fmwww.bc.edu/RePEc/bocode/m
+N marginscontplot2.pkg
+D 23 Aug 2020
+U 27
+d 'MARGINSCONTPLOT2': module to graph margins for continuous predictors
+d 
+d     marginscontplot2 provides a graph of the marginal effect of a
+d continuous predictor on the response   variable in the most
+d recently fitted regression model. See Royston (Stata Journal,
+d 2013) for details and examples.    This routine is an extension
+d of marginscontplot.
+d 
+d KW: marginal effects
+d KW: graphics
+d KW: marginscontplot
+d 
+d Requires: Stata version 12.1
+d 
+d Distribution-Date: 20180104
+d 
+d Author: Patrick Royston, University College London
+d Support: email  j.royston@@ucl.ac.uk
+d 
+f m\marginscontplot2.ado
+f m\marginscontplot2.sthlp
+f m\mcp2.ado
+f m\mcp2.sthlp
+e
+S http://www.stata-journal.com/software/sj15-1
+N gr0059_1.pkg
+D 25 Aug 2020
+U 28
+d SJ15-1 gr0059_1. Update: Plotting regression...
+d Update: Plotting regression coefficients and
+d   other estimates
+d by Ben Jann, Institute of Sociology, University
+d      of Bern, Bern, Switzerland
+d Support:  ben.jann@@soz.unibe.ch
+d After installation, type help ^coefplot^
+f c\coefplot.ado
+f c\coefplot.sthlp
+e
+S http://fmwww.bc.edu/repec/bocode/g
+N gllamm.pkg
+D 25 Aug 2020
+U 29
+d 'GLLAMM': program to fit generalised linear latent and mixed models
+d 
+d gllamm fits generalized linear latent and mixed models. These
+d models  include Multilevel generalized linear regression models
+d (extensions of the simple random intercept models  that may be
+d fitted in Stata using xtreg, xtlogit, xtpois to include
+d multilevel and random coefficient models), Multilevel factor
+d models and Multilevel structural equation models. The latent
+d variables (or random effects) can be assumed to have a
+d multivariate normal distribution or to be discrete allowing
+d nonparametric maximum likelihood estimation. The common links and
+d families of generalized linear models are available and responses
+d can be of mixed type including continuous, censored, discrete,
+d dichotomous, ordered categorical and unordered categorical. The
+d version of gllamm (gllamm6) described in  STB-53, (sg129, p47-57)
+d does not incorporate many of the features outlined above. This is
+d version 2.3.20 of the software (Sep 2011). A manual in PDF form
+d is available from the SSC archive via web browser.
+d 
+d KW: multilevel models
+d KW: mixed models
+d KW: random coefficients
+d KW: latent variable models
+d 
+d Requires: Stata version 7.0
+d 
+d 
+d Author: Sophia Rabe-Hesketh, University of California - Berkeley
+d Support: email sophiarh@@berkeley.edu
+d 
+d Distribution-Date: 20110911
+d 
+f g\gllamm.ado
+f g\gllamm.hlp
+f e\eq_g.hlp
+f g\gllam_ll.ado
+f g\gllapred.ado
+f g\gllapred.hlp
+f g\gllarob.ado
+f g\gllasim.ado
+f g\gllasim.hlp
+f g\gllas_yu.ado
+f r\remcor.ado
+e
+S http://fmwww.bc.edu/RePEc/bocode/a
+N alorenz.pkg
+D 24 Sep 2020
+U 30
+d 'ALORENZ': module to produce Pen's Parade, Lorenz and Generalised Lorenz curve
+d 
+d  alorenz derive and plot the Pen's Parade, Lorenz and Generalized
+d Lorenz curve.
+d 
+d KW: Pen's Parade
+d KW: Lorenz
+d KW: Generalized Lorenz
+d 
+d Requires: Stata version 8.0
+d 
+d Distribution-Date: 20200413
+d 
+d Author: Joao Pedro Azevedo, World Bank
+d Support: email jazevedo@@worldbank.org
+d 
+d Author: Samuel Franco, IPEA
+d Support: email sam@@ipea.gov.br
+d 
+f a\alorenz.ado
+f a\alorenz.hlp
+f _\_matchval.ado
+f _\_pecatsal.ado
+f _\_ebin.ado
+e
+S http://fmwww.bc.edu/repec/bocode/g
+N groupfunction.pkg
+D 24 Sep 2020
+U 31
+d 'GROUPFUNCTION': module to replace several basic collapse functions
+d 
+d     groupfunction Replaces several collapse functions (mean, sum,
+d variance, first, max, min).  The command is several orders of
+d magnitude faster than collapse.
+d 
+d KW: data management
+d KW: collapse
+d KW: descriptive statistics
+d 
+d Requires: Stata version 11.2
+d 
+d Distribution-Date: 20200413
+d 
+d Author: Paul Corral, World Bank
+d Support: email pcorralrodas@@worldbank.org
+d 
+d Author: Minh Cong Nguyen, World Bank
+d Support: email mnguyen3@@worldbank.org
+d 
+d Author: Joao Pedro Azevedo, World Bank
+d Support: email jazevedo@@worldbank.org
+d 
+f g\groupfunction.ado
+f g\groupfunction.sthlp
+e
+S http://fmwww.bc.edu/repec/bocode/w
+N which_version.pkg
+D 24 Sep 2020
+U 32
+d 'WHICH_VERSION': module to return location and programmer's version of ado-files
+d 
+d  which_version is a variation of the which command and returns
+d its results in s(). which_version returns the full path and
+d filename and, if found, the programmer's version number.
+d 
+d KW: ado files
+d KW: version
+d KW: programming
+d 
+d Requires: Stata version 11.2
+d 
+d Distribution-Date: 20191111
+d 
+d Author: Daniel Klein, Universität Kassel
+d Support: email daniel.klein@@uni-kassel.de
+d 
+f w\which_version.ado
+f w\which_version.sthlp
+e
+S http://fmwww.bc.edu/RePEc/bocode/g
+N ginidesc.pkg
+D 24 Sep 2020
+U 33
+d 'GINIDESC': module to compute Gini index with within- and between-group inequality decomposition
+d 
+d This ado-file provides the Gini coefficient for the whole
+d population, for each subgroup specified in groupvar, and its
+d Pyatt's (1976)  decomposition in between-, overlap- and
+d within-group inequality. Groupvar is a categorical variable (not
+d string) who determines the subgroups in which the population will
+d be divided. It's mandatory that the command ineqdeco (S. P.
+d Jenkins, 1998) has been  installed. A link is provided to that
+d module below.
+d 
+d Author: Roger Aliaga, Instituto de Estudios de la Realidad Argentina y Latinoamericana (IERAL), Argentina
+d Support: email  raliaga@@hotmail.com
+d 
+d Author: Silvia Montoya, Instituto de Estudios de la Realidad Argentina y Latinoamericana (IERAL), Argentina
+d Support: email  ieeracba@@@satlink.com
+d 
+d Distribution-Date: 19990321
+f g\ginidesc.ado
+f g\ginidesc.hlp
+f i\ineqdeco.ado
+f i\ineqdeco.hlp
+e
+S http://fmwww.bc.edu/repec/bocode/i
+N ineqdeco.pkg
+D 24 Sep 2020
+U 34
+d 'INEQDECO': module to calculate inequality indices with decomposition by subgroup
+d 
+d ineqdeco estimates a range of inequality and related
+d indices      commonly  used by economists, plus optional
+d decompositions of a subset of      these indices by  population
+d subgroup.  Indices estimated are:   members of the single
+d parameter Generalized Entropy class GE(a)   for a = -1, 0, 1,
+d 2; the Atkinson class A(e) for e = 0.5, 1, 2;       the Gini
+d coefficient, and the percentile ratios p90/p10 and p75/p25.
+d Optionally presented are indices  related to the Atkinson
+d inequality indices, viz equally-distributed-equivalent income
+d  Yede(e), social welfare indices W(e), and the Sen welfare index.
+d      If there are observations with negative or zero values on
+d the variable     of interest, and you wish to wish to estimate
+d inequality indices    including these observations, then use
+d ineqdec0 (q.v.)      This version is for Stata versions 8.2
+d onwards. For versions 5 to 8.1,      use ineqdeco5 instead.
+d 
+d Author: Stephen P. Jenkins, London School of Economics
+d Support: email s.jenkins@@lse.ac.uk
+d 
+d Distribution-Date: 20150122
+d 
+f i\ineqdeco.ado
+f i\ineqdeco.hlp
+f i\ineqdeco5.ado
+f i\ineqdeco5.hlp
+e
+S http://fmwww.bc.edu/RePEc/bocode/x
+N xttrans2.pkg
+D 30 Sep 2020
+U 35
+d 'XTTRANS2': module to compute tables of transition probabilities
+d 
+d xttrans2 extends the xttrans command of official Stata so  that
+d options of tabulate other than row and freq may also be
+d specified. This means, for example, that transition  frequencies
+d (or in fact probabilities) may be saved as a matrix.
+d 
+d Author: Nicholas J. Cox, University of Durham
+d Support: email N.J.Cox@@durham.ac.uk
+d 
+d Distribution-Date: 20020215
+f x\xttrans2.ado
+f x\xttrans2.hlp
+e
+S http://fmwww.bc.edu/RePEc/bocode/t
+N tsspell.pkg
+D 21 Oct 2020
+U 36
+d 'TSSPELL': module for identification of spells or runs in time series
+d 
+d tsspell examines the data, which must be tsset time series, to
+d identify spells or runs, which are contiguous sequences defined
+d by some condition. tsspell generates new variables indicating
+d distinct spells, giving sequence in spell, and indicating whether
+d observations occur at the end of spells. If the data are panel
+d data, all operations are automatically performed separately
+d within panels.
+d 
+d KW: spells
+d KW: runs
+d KW: time series
+d KW: tsset
+d 
+d Requires: Stata version 7.0
+d 
+d 
+d Author: Nicholas J. Cox, Durham University
+d Support: email N.J.Cox@@durham.ac.uk
+d 
+d Distribution-Date: 20140511
+d 
+f t\tsspell.ado
+f t\tsspell.hlp
+e
+S http://fmwww.bc.edu/repec/bocode/u
+N unique.pkg
+D 11 Nov 2020
+U 37
+d 'UNIQUE': module to report number of unique values in variable(s)
+d 
+d  The command unique without a by reports the number of unique
+d values for the varlist. With a by it does the same, but also
+d creates a new variable (_Unique by default but can be named in
+d the gen option). This new variable contains the number of unique
+d values of the varlist for each level of the by variable. The new
+d variable is coded missing except for the first record in each
+d group defined by the levels of the by variable. The command is
+d useful for exploring data where the records refer to more than
+d one level, for example longitudinal data where each record refers
+d to a visit by a subject.
+d 
+d 
+d Requires: Stata version 10.1
+d 
+d Distribution-Date: 20200618
+d 
+d Author: Tony Brady
+d Support: email tony@@sealedenvelope.com
+d 
+f u\unique.ado
+f u\unique.sthlp
+e
+S http://fmwww.bc.edu/repec/bocode/e
+N eventdd.pkg
+D 11 Nov 2020
+U 38
+d 'EVENTDD': module to panel event study models and generate event study plots
+d 
+d    eventdd estimates a panel event study corresponding to a
+d difference-in-difference style model where a series  of lag and
+d lead coefficients and confidence intervals are estimated and
+d plotted.  These lag and lead   coefficients are all relative to
+d the passage of an event of interest, which can occur at different
+d moments    in different units of the panel. eventdd produces
+d panel event study graphs as well as standard regression output.
+d As well as standard inference procedures, eventdd allows for
+d non-standard inference techniques, such as wild-bootstrapped
+d standard errors (interacting with the user-written boottest
+d command).
+d 
+d KW: event study
+d KW: difference-in-difference
+d KW: graphics
+d 
+d Requires: Stata version 13 and reghdfe, boottest and matsort from SSC (q.v.)
+d 
+d Distribution-Date: 20200708
+d 
+d Author: Damian Clarke, Universidad de Santiago de Chile
+d Support: email damian.clarke@@protonmail.com
+d 
+d Author: Kathya Tapia Schythe, Universidad de Santiago de Chile
+d Support: email kathya.tapia@@usach.cl
+d 
+f e\eventdd.ado
+f e\eventdd.sthlp
+e
+S http://www.stata-journal.com/software/sj8-1
+N sg164_1.pkg
+D 11 Nov 2020
+U 39
+d SJ8-1 sg164_1.  Update:  Specification tests for linear...
+d Update:  Specification tests for linear panel-data models
+d by Walter Sosa-Escudero, Department of Economics
+d      Universidad de San Andres
+d    Anil K. Bera, Department of Economics
+d      University of Illnois at Urbana-Champaign
+d Support:  wsosa@@feedback.net.ar
+d After installation, type help ^xttest1^
+f x\xttest1.ado
+f x\xttest1.hlp
+e
+S http://fmwww.bc.edu/repec/bocode/l
+N lassopack.pkg
+D 29 Dec 2020
+U 40
+d 'LASSOPACK': module for lasso, square-root lasso, elastic net, ridge, adaptive lasso estimation and cross-validation
+d 
+d  LASSOPACK is a suite of programs for penalized regression
+d methods suitable for the high-dimensional setting where the
+d number of predictors p may be large and possibly greater than the
+d number of observations. LASSOPACK supports both lasso and
+d logistic lasso regression. The package consists of six main
+d programs: lasso2 implements lasso, square-root lasso, elastic
+d net, ridge regression, adaptive lasso and post-estimation OLS.
+d cvlasso supports K-fold cross-validation and rolling
+d cross-validation for cross-section, panel and time-series data.
+d rlasso implements theory-driven penalization for the lasso and
+d square-root lasso for cross-section and panel data. lassologit,
+d cvlassologit and rlassologit are the corresponding programs for
+d logistic lasso regression. The lasso (Least Absolute Shrinkage
+d and Selection Operator, Tibshirani 1996), the square-root-lasso
+d (Belloni et al. 2011) and the adaptive lasso (Zou 2006) are
+d regularization methods that use L1 norm penalization to achieve
+d sparse solutions: of the full set of p predictors, typically most
+d will have coefficients set to zero. Ridge regression (Hoerl &
+d Kennard 1970) relies on L2 norm penalization; the elastic net
+d (Zou & Hastie 2005) uses a mix of L1 and L2 penalization. lasso2
+d implements all these estimators. rlasso uses the theory-driven
+d penalization methodology of Belloni et al. (2012, 2013, 2014,
+d 2016) for the lasso and square-root lasso. cvlasso implements
+d K-fold cross-validation and h-step ahead rolling cross-validation
+d (for time-series and panel data) to choose the penalization
+d parameters for all the implemented estimators. lassologit,
+d rlassologit and cvlassologit extend support to the case where the
+d dependent variable is a binary response. In addition, rlasso
+d implements the Chernozhukov et al. (2013) sup-score test of joint
+d significance of the regressors that is suitable for the
+d high-dimensional setting.
+d 
+d KW: lasso
+d KW: elastic net
+d KW: ridge regression
+d KW: adaptive lasso
+d KW: cross-validation
+d KW: high-dimensional models
+d KW: regularization
+d KW: penalization
+d KW: sparsity
+d 
+d Requires: Stata version 13.1
+d 
+d Distribution-Date: 20201214
+d 
+d Author: Achim Ahrens, Economic and Social Research Institute, Republic of Ireland
+d Support: email achim.ahrens@@esri.ie
+d 
+d Author: Christian B. Hansen, University of Chicago
+d Support: email Christian.Hansen@@chicagobooth.edu
+d 
+d Author: Mark E Schaffer, Heriot-Watt University
+d Support: email m.e.schaffer@@hw.ac.uk
+d 
+f l\lassoutils.ado
+f l\lasso2.ado
+f l\lasso2_p.ado
+f l\lasso2.sthlp
+f c\cvlasso.ado
+f c\cvlasso.sthlp
+f r\rlasso.ado
+f c\cvlassologit.ado
+f l\lassologit.ado
+f r\rlassologit.ado
+f l\lassologit_p.ado
+f r\rlasso_p.ado
+f r\rlasso.sthlp
+f l\lassologit.ihlp
+f l\lassologit.sthlp
+e
+S http://www.homepages.ucl.ac.uk/~ucakjpr/stata
+N shapleyx.pkg
+D 30 Dec 2020
+U 41
+d shapleyx. Shapley value decomposition
+d Program by Stas Kolenikov and Patrick Royston.
+d 
+d Distribution-Date: 20130902
+d version: shapleyx, 2.0.1
+d 
+d Please direct queries to Patrick Royston (pr@ctu.mrc.ac.uk)
+d 
+f s\shapleyx.ado
+f s\shapleyx.sthlp
+e
+S http://www.marco-sunder.de/stata
+N rego.pkg
+D 31 Dec 2020
+U 42
+d rego.  Linear regression with Shapley and Owen decomposition of R-squared.
+d by Frank Huettner and Marco Sunder
+d Distribution-Date: 29sep2011
+f r\rego.ado
+f r\rego.hlp
+e
+S http://fmwww.bc.edu/repec/bocode/a
+N adecomp.pkg
+D 31 Dec 2020
+U 43
+d 'ADECOMP': module to estimate Shapley Decomposition by Components of a Welfare Measure
+d 
+d   adecomp implements the Shapley decomposition of changes in a
+d welfare indicator as proposed by Azevedo, Sanfelice and Nguyen
+d (2012). Following Barros et al. (2006), this method takes
+d advantage of the additivity property of a welfare aggregate to
+d construct a counterfactual unconditional distribution of the
+d welfare aggregate by changing each component at a time to
+d calculate their contribution to the observed changes in poverty,
+d inequality and the growth incidence curve. This method can be
+d applied in the context of both repeated cross-section surveys and
+d longitudinal surveys, however the interpretation of the results
+d will change as discussed by Azevedo, Sanfelice and Nguyen (2012). d
+d KW: Shapley decomposition
+d KW: welfare measure
+d KW: panel data
+d KW: repeated measures
+d 
+d Requires: Stata version 12
+d 
+d Distribution-Date: 20190112
+d 
+d Author: Joao Pedro Azevedo, World Bank
+d Support: email jazevedo@@worldbank.org
+d 
+d Author: Minh Cong Nguyen, World Bank
+d Support: email mnguyen3@@worldbank.org
+d 
+d Author: Viviane Sanfelice, World Bank
+d Support: email vsanfelice@@worldbank.org
+d 
+f a\adecomp.ado
+f a\adecomp.sthlp
+f _\_ex_adecomp.ado
+e
+S http://www.stata-journal.com/software/sj17-4
+N st0393_2.pkg
+D 24 Apr 2021
+U 44
+d SJ17-4 st0393_2. Update: Estimating almost-ideal...
+d Update: Estimating almost-ideal demand systems
+d   with endogenous regressors
+d by S�bastien Lecocq, INRA, ALISS, Paris, France
+d    Jean-Marc Robin, Sciences Po, Paris, France,
+d      and UCL, London, UK
+d Support:  Sebastien.Lecocq@ivry.inra.fr
+d After installation, type help {cmd:aidsills}
+f a\aidsills.ado
+f a\aidsills.sthlp
+f a\aidsills_pred.ado
+f a\aidsills_elas.ado
+f a\aidsills_vif.ado
+e
