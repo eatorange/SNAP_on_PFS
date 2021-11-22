@@ -77,8 +77,8 @@
    }
 
    if "`c(username)'"== "ftac2" {	//	Min, personal laptop
-       global	projectfolder	"E:/GitHub/US_Food_Dynamics"
-	   global	clouldfolder	"E:/Box/US Food Security Dynamics"
+       global	projectfolder	"E:/GitHub/SNAP_on_FS"
+	   global	clouldfolder	"E:/OneDrive - Cornell University/SNAP"
    }
    
    if "`c(username)'"== "xxx" {	//	

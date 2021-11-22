@@ -1125,7 +1125,7 @@
 			loc	var	foodexp_home
 			cap	drop	`var'
 			gen	double	`var'=.	
-			
+	/*		
 				*	1968-1993
 				*	Note: at-homme expenditure includes "delivered" during these period.
 				*	NOTE: IT SEEMS FOOD EXPENDITURE OF "PREVIOUS YEAR" IS COLLECTED, WHILE FOOD EXPENDITURE OF "FREE PERIOD"
@@ -1136,7 +1136,7 @@
 				
 					*	For those who didn't use food stamp, just annualize the value
 					replace	`var'	=	foodexp_home_nostamp	if	inrange(year,1994,2019)	&	
-				
+	*/			
 				
 			
 			
