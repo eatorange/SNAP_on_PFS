@@ -68,6 +68,8 @@
 	local	ind_agg		1	//	Aggregate individual-level variables across waves
 	local	fam_agg		1	//	Aggregate family-level variables across waves
 	local	cr_panel	1	//	Create panel structure from ID variable
+	local	merge_data	1	//	Merge ind- and family- variables into panel structure
+	local	clean_vars	1	//	Clean variables and construct consistent variables
 	
 	*	Aggregate individual-level variables
 	if	`ind_agg'==1	{
@@ -75,7 +77,7 @@
 			
 			*	Core information - person number, interview number and sequence number
 			*	This can be created from "psid use" using any variables). Here I will use "age" variable
-			psid use || age_ind   	 	[68]V117 [69]V1008 [70]V1239 [71]V1942 [72]V2542 [73]V3095 [74]V3508 [75]V3921 [76]V4436 [77]V5350 [78]V5850 [79]V6462 [80]V7067 [81]V7658 [82]V8352 [83]V8961 [84]V10419 [85]V11606 [86]V13011 [87]V14114 [88]V15130 [89]V16631 [90]V18049 [91]V19349 [92]V20651 [93]V22406 [94]ER2007 [95]ER5006 [96]ER7006 [97]ER10009 [99]ER13010 [01]ER17013 [03]ER21017 [05]ER25017 [07]ER36017 [09]ER42017 [11]ER47317 [13]ER53017 [15]ER60017 [17]ER66017 [19]ER72017 using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
+			psid use || age_ind   	 	[68]ER30004 [69]ER30023 [70]ER30046 [71]ER30070 [72]ER30094 [73]ER30120 [74]ER30141 [75]ER30163 [76]ER30191 [77]ER30220 [78]ER30249 [79]ER30286 [80]ER30316 [81]ER30346 [82]ER30376 [83]ER30402 [84]ER30432 [85]ER30466 [86]ER30501 [87]ER30538 [88]ER30573 [89]ER30609 [90]ER30645 [91]ER30692 [92]ER30736 [93]ER30809 [94]ER33104 [95]ER33204 [96]ER33304 [97]ER33404 [99]ER33504 [01]ER33604 [03]ER33704 [05]ER33804 [07]ER33904 [09]ER34004 [11]ER34104 [13]ER34204 [15]ER34305 [17]ER34504 [19]ER34704 using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
 			
 			isid	x11101ll	//	Make sure the ID variable uniquely identifies the dataset
 				
@@ -142,6 +144,17 @@
 			
 			keep	x11101ll	`var'*
 			save	"${SNAP_dtInt}/Fam_vars/`var'", replace
+			
+			*	Longitudinal weight, family-level
+			*	I combind 3 series of variables; core (1968-1992), revised (1993-1996) and combined core and immigrant (1997-2019)
+			local	var	wgt_long_fam
+			psid use || `var' 	[68]V439 [69]V1014 [70]V1609 [71]V2321 [72]V2968 [73]V3301 [74]V3721 [75]V4224 [76]V5099 [77]V5665 [78]V6212 [79]V6805 [80]V7451 [81]V8103 [82]V8727 [83]V9433 [84]V11079 [85]V12446 [86]V13687 [87]V14737 [88]V16208 [89]V17612 [90]V18943 [91]V20243 [92]V21547	///
+								[93]V23361 [94]ER4160 [95]ER7000 [96]ER9251	///
+								[97]ER12084 [99]ER16518 [01]ER20394 [03]ER24179 [05]ER28078 [07]ER41069 [09]ER47012 [11]ER52436 [13]ER58257 [15]ER65492 [17]ER71570 [19]ER77631	///
+								using  "${SNAP_dtRaw}/Unpacked"  , keepnotes design(any) clear	
+			
+			keep	x11101ll	`var'*
+			save	"${SNAP_dtInt}/Fam_vars/`var'", replace	 	
 				
 		*	Demogrpahics
 		
@@ -192,7 +205,7 @@
 		
 			*	Employed now (RP)
 			**	Caution: I combined two different series of variables: (1) "Working now" (1968-1996) and (2) "Working now, 1st mention" (1997-2019) (available from 1994). Need to harmonize them.
-			local	var	rp_employed
+			local	var	rp_employment_status
 			psid use || `var'	[68]V196 [69]V639 [70]V1278 [71]V1983 [72]V2581 [73]V3114 [74]V3528 [75]V3967 [76]V4458 [77]V5373 [78]V5872 [79]V6492 [80]V7095 [81]V7706 [82]V8374 [83]V9005 [84]V10453 [85]V11637 [86]V13046 [87]V14146 [88]V15154 [89]V16655 [90]V18093 [91]V19393 [92]V20693 [93]V22448 [94]ER2068 [95]ER5067 [96]ER7163	///
 			[97]ER10081 [99]ER13205 [01]ER17216 [03]ER21123 [05]ER25104 [07]ER36109 [09]ER42140 [11]ER47448 [13]ER53148 [15]ER60163 [17]ER66164 [19]ER72164	///
 			using "${SNAP_dtRaw}/Unpacked", keepnotes design(any) clear	
@@ -212,14 +225,67 @@
 			keep	x11101ll	`var'*
 			save	"${SNAP_dtInt}/Fam_vars/`var'", replace
 			
+			*	Finished HS or has GED (RP)
+			local	var	rp_HS_GED
+			psid use || `var' [85]V11945 [86]V13568 [87]V14615 [88]V16089 [89]V17486 [90]V18817 [91]V20117 [92]V21423 [93]V23279 [94]ER3948 [95]ER6818 [96]ER9064 [97]ER11854 [99]ER15937 [01]ER19998 [03]ER23435 [05]ER27402 [07]ER40574 [09]ER46552 [11]ER51913 [13]ER57669 [15]ER64821 [17]ER70893 [19]ER76908	///
+			using "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear		
+			
+			keep	x11101ll	`var'*
+			save	"${SNAP_dtInt}/Fam_vars/`var'", replace
+			
+			*	Finished HS or has GED (Spouse)
+			local	var	sp_HS_GED
+			psid use || `var' [85]V12300 [86]V13503 [87]V14550 [88]V16024 [89]V17421 [90]V18752 [91]V20052 [92]V21358 [93]V23215 [94]ER3887 [95]ER6757 [96]ER9003 [97]ER11766 [99]ER15845 [01]ER19906 [03]ER23343 [05]ER27306 [07]ER40481 [09]ER46458 [11]ER51819 [13]ER57559 [15]ER64682 [17]ER70755 [19]ER76763	///
+			using "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear		
+			
+			keep	x11101ll	`var'*
+			save	"${SNAP_dtInt}/Fam_vars/`var'", replace
+			
+			*	Attend college (RP)
+			local	var	rp_colattend
+			psid use || `var'  	[85]V11956 [86]V13579 [87]V14626 [88]V16100 [89]V17497 [90]V18828 [91]V20128 [92]V21434 [93]V23290 [94]ER3959 [95]ER6829 [96]ER9075 [97]ER11865 [99]ER15948 [01]ER20009 [03]ER23446 [05]ER27413 [07]ER40585 [09]ER46563 [11]ER51924 [13]ER57680 [15]ER64832 [17]ER70904 [19]ER76919	///
+			using "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear		
+			
+			keep	x11101ll	`var'*
+			save	"${SNAP_dtInt}/Fam_vars/`var'", replace
+			
+			*	Attend college (Spouse)
+			local	var	sp_colattend
+			psid use || `var'   	[85]V12311 [86]V13510 [87]V14557 [88]V16031 [89]V17428 [90]V18759 [91]V20059 [92]V21365 [93]V23222 [94]ER3894 [95]ER6764 [96]ER9010 [97]ER11777 [99]ER15856 [01]ER19917 [03]ER23354 [05]ER27317 [07]ER40492 [09]ER46469 [11]ER51830 [13]ER57570 [15]ER64693 [17]ER70766 [19]ER76774	///
+			using "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear		
+			
+			keep	x11101ll	`var'*
+			save	"${SNAP_dtInt}/Fam_vars/`var'", replace
+			
+			*	Received College degree (RP)
+			local	var	rp_coldeg
+			psid use || `var'   [75]V4099 [76]V4690 [77]V5614 [78]V6163 [79]V6760 [80]V7393 [81]V8045 [82]V8669 [83]V9355 [84]V11002 [85]V11960 [86]V13583 [87]V14630 [88]V16104 [89]V17501 [90]V18832 [91]V20132 [92]V21438 [93]V23294 [94]ER3963 [95]ER6833 [96]ER9079 [97]ER11869 [99]ER15952 [01]ER20013 [03]ER23450 [05]ER27417 [07]ER40589 [09]ER46567 [11]ER51928 [13]ER57684 [15]ER64836 [17]ER70908 [19]ER76923	///
+			using "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear		
+			
+			keep	x11101ll	`var'*
+			save	"${SNAP_dtInt}/Fam_vars/`var'", replace
+			 	
+			
 		*	Disability
-		
-			*	Disability (RP)
-			**	Note: I combind three differenet series of variables: (1) "disability" (1968) (2) "Disability now" (1969-1971) (3) "Any physical or nervous condition" (1972-2019). Need to harmonize them
-			local	var	rp_disable
+				
+			*	Work disability (amount)
+			**	Note: I combine three different differenet series of variables: (1) "Disability" (1968) (2)  Disability "amount"  (1969-1971) (3) (1972-2019)
+			**	This variable will be the basis of determining disability. 
+			local	var	rp_disable_amt
 			psid use || `var'	[68]V216	///
-									[69]V745 [70]V1411 [71]V2123	///
+									[69]V744 [70]V1410 [71]V2122	///
 									[72]V2718 [73]V3244 [74]V3666 [75]V4145 [76]V4625 [77]V5560 [78]V6102 [79]V6710 [80]V7343 [81]V7974 [82]V8616 [83]V9290 [84]V10879 [85]V11993 [86]V13427 [87]V14515 [88]V15994 [89]V17391 [90]V18722 [91]V20022 [92]V21322 [93]V23181 [94]ER3854 [95]ER6724 [96]ER8970 [97]ER11724 [99]ER15449 [01]ER19614 [03]ER23014 [05]ER26995 [07]ER38206 [09]ER44179 [11]ER49498 [13]ER55248 [15]ER62370 [17]ER68424 [19]ER74432	///
+			using "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear		
+			
+			keep	x11101ll	`var'*
+			save	"${SNAP_dtInt}/Fam_vars/`var'", replace
+			
+			*	Work disability (type) (1969-1971)
+			**	During 1969-1971 "amount" and "type" of disability are separately collected. This is "type" varable
+			**	RP will be coded as disabled if either amount or type has issue.
+			
+			local	var	rp_disable_type
+			psid use || `var'	[69]V743 [70]V1409 [71]V2121	///
 			using "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear		
 			
 			keep	x11101ll	`var'*
@@ -302,7 +368,7 @@
 			keep	x11101ll	`var'*
 			save	"${SNAP_dtInt}/Fam_vars/`var'", replace
 			
-			*	Value of food stamp "received" (previous yr, varying period) (1994-2019)
+			*	Value of food stamp "used" (previous yr, varying period) (1994-2019)
 			*	This series come with different time periods, so need to manually to compute annual food stamp value received
 			**	Note: It also exists in 1993 I disable 1993 as I will use the one from the other series above(V21727). We can modify it later if I use this one instead.
 			loc	var	stamp_recamt
@@ -334,6 +400,15 @@
 			*	This variable collects the number of months food stamp is used. We can use this variable to see whether family used food stamp or not. (ex. used if months>=1)
 			loc	var	stamp_monthsused
 			psid use || `var'  	 	[76]V4367 [77]V5279 [78]V5778 [79]V6384 [80]V6978 [81]V7570 [82]V8262 [83]V8870 [84]V10241 [85]V11381 [86]V12780 [87]V13882 [88]V14897 [89]V16397 [90]V17813 [91]V19113 [92]V20413 [93]V21729	///
+			using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
+			
+			keep	x11101ll	`var'*
+			save	"${SNAP_dtInt}/Fam_vars/`var'", replace
+			
+			*	Used food stamp last MONTH
+			*	This variable is important as households' food expenditure are separately collected based on this response.
+			loc	var	stamp_lastmonth
+			psid use || `var'  	 	[94]ER3074 [95]ER6073 [96]ER8170 [97]ER11064 [09]ER42707 [11]ER48023 [13]ER53720 [15]ER60735 [17]ER66782 [19]ER72786	///
 			using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
 			
 			keep	x11101ll	`var'*
@@ -504,9 +579,12 @@
 	*	Create panel structure
 	if	`cr_panel'==1		{
 		
-		*	Merge ID with unique vars 
+		*	Merge ID with unique vars as well as other survey variables needed for panel data creation
 		use	"${SNAP_dtInt}/Ind_vars/ID", clear
 		merge	1:1	x11101ll	using	"${SNAP_dtInt}/Ind_vars/unique_vars.dta",	nogen	assert(3)
+		merge	1:1	x11101ll	using	"${SNAP_dtInt}/Ind_vars/wgt_long_ind.dta",	nogen	assert(3)	//	Individual weight
+		merge	1:1	x11101ll	using	"${SNAP_dtInt}/Fam_vars/wgt_long_fam.dta",	nogen	assert(3)	//	Family weight
+		
 		
 		*	Generate a 1968 sequence number variable from person number variable
 		**	Note: 1968 sequence number is used to determine whether an individual was head/RP in 1968 or not. Don't use it for other purposes, unless it is not consistent with other sequence variables.
@@ -532,6 +610,14 @@
 		global	sample_years_comma	1968,	1969,	1970,	1971,	1972,	1974,	1975,	1976,	1977,	1978,	1979,	1980,	1981,	1982,	1983,	1984,	///
 									1985,	1986,	1987,	1990,	1991,	1992,	1993,	1994,	1995,	1996,	1997,	1999,	2001,	2003,	2005,	2007,	///
 									2009,	2011,	2013,	2015,	2017,	2019
+									
+		global	sample_years_no1968		1969	1970	1971	1972	1974	1975	1976	1977	1978	1979	1980	1981	1982	1983	1984	///
+										1985	1986	1987	1990	1991	1992	1993	1994	1995	1996	1997	1999	2001	2003	2005	2007	///
+										2009	2011	2013	2015	2017	2019
+		
+		global	sample_years__no1968_comma	1969,	1970,	1971,	1972,	1974,	1975,	1976,	1977,	1978,	1979,	1980,	1981,	1982,	1983,	1984,	///
+											1985,	1986,	1987,	1990,	1991,	1992,	1993,	1994,	1995,	1996,	1997,	1999,	2001,	2003,	2005,	2007,	///
+											2009,	2011,	2013,	2015,	2017,	2019
 
 		
 		*save	"${SNAP_dtInt}/SNAP_raw_merged.dta", replace
@@ -540,6 +626,8 @@
 		*	Create a panel structre
 		*	This study covers 50-year period with different family composition changes, thus we need to carefully consider that.
 		*	First, we create a individual-level aggregated data using "psid use command" with necessary variables to further investigate family change.
+	
+		br	x11101ll 
 	
 				
 		*	Generate a household id which uniquely identifies a combination of household wave IDs.
@@ -554,6 +642,59 @@
 		drop	if	rp_any!=1
 		drop	rp_any
 		
+		
+		
+		*	Second, we drop individuals who were non-Sample members
+		*	It is because non-Sample members become household member via marriage or adoption in the middle of the waves, causing break in the panel data.
+		*	Even if drop them, we still have family-level variable information from Sample, non-RP member in family
+		
+			*	First, generate sample indicator
+			cap	drop	Sample
+			gen		Sample=0	if	inlist(sampstat,0,5,6)	//	Non-sample, followable non-sample parent and nonsample elderydrop
+			replace	Sample=1	if	inlist(sampstat,1,2,3,4)	//	Original, born-in, moved and join inclusion sample
+			label	var	Sample "=1 if PSID Sample member"
+			
+			*	Then drop the non-Sample members
+			drop	if	Sample==0
+			
+		*	Third, we adjust family weight by the number of valid individuals in each wave
+		*	If there are multiple Sample individuals who has ever been an RP within a family at certain wave, their family variables will be counted multiple times (duplicate)
+		*	Thus we need to divide the family weight by the number of Sample individuals who were living in a family unit 
+		
+			cap	drop	living_Sample*
+			cap	drop	tot_living_Sample*
+			cap	drop	tot_living_Sample*
+			cap	drop	wgt_long_fam_adj*
+			
+		
+			foreach	year	of	global	sample_years	{
+				
+				cap	drop	living_Sample`year'	num_living_Sample`1968='
+				
+				if	`year'==1968	{	
+					
+					*	In 1968, invididuals with pn b/w 1 and 20 are living in the family unit (and automatically born-in Sample)
+					gen		living_Sample`year'=1	if	inrange(pn,1,20)	
+					
+				}
+				
+				else	{
+					
+					*	For all other years, use sequence number
+					gen		living_Sample`year'=1	if	inrange(xsqnr_`year',1,20)
+					
+				}
+
+				*	Count the number of Sample members living in FU in each wave
+				bys	x11102_`year':	egen	tot_living_Sample`year'=count(living_Sample`year')
+				
+				*	Divide family weight in each wave by the number of Sample members living in FU in each wave
+				gen	wgt_long_fam_adj`year'	=	wgt_long_fam`year'	/	tot_living_Sample`year'
+				
+			}
+		
+		/*
+		*	(2021-11-19: The following code is dropped after discussing with Chris)
 		*	Second, we replace household id with missing(or zero) of the individuals when they were not head/RP
 		*	For example, in case of pn=2002 above, her values will be replaced with zero when she were not head/RP (ex. 1968, 1969, 1978, 1979, 1980) so her own household doesn't exist during that period
 		***	But this can be problematic, especially during 1978-1980 in the example above. Need to think about how I deal with it.
@@ -563,6 +704,7 @@
 			replace	x11102_`year'=.	if	xsqnr_`year'!=1
 			
 		}
+		*/
 		
 		*	Drop FUs which were observed only once, as it does not provide sufficient information.
 		egen	fu_nonmiss=rownonmiss(${hhid_all})
@@ -570,7 +712,7 @@
 		drop	if	fu_nonmiss==1	//	Drop if there's only 1 observation per household.
 		
 		*	Generate the final household id which uniquely identifies a combination of household wave IDs.
-		egen hhid_agg = group(x11102_1968-x11102_2019), missing
+		*egen hhid_agg = group(x11102_1968-x11102_2019), missing	//	This variable is no longer needed. Can bring it back if needed.
 		drop	hhid_agg_1st
 		
 		save	"${SNAP_dtInt}/Ind_vars/ID_sample.dta", replace
@@ -585,7 +727,7 @@
 		*	Merge individual variables
 		cd "${SNAP_dtInt}/Ind_vars"
 		
-		global	varlist_ind	age_ind	wgt_long_ind	relrp	origfu_id	noresp_why
+		global	varlist_ind	age_ind	/*wgt_long_ind*/	relrp	origfu_id	noresp_why
 		
 		foreach	var	of	global	varlist_ind	{
 			
@@ -593,13 +735,31 @@
 			
 		}
 		
+		*	Sample source
+		cap	drop	sample_source
+		gen		sample_source=.
+		replace	sample_source=1	if	inrange(x11101ll,1000,2930999)	//	SRC
+		replace	sample_source=2	if	inrange(x11101ll,5001000,6872999)	//	SEO
+		replace	sample_source=3	if	inrange(x11101ll,3001000,3511999)	//	Immgrant Regresher (1997,1999)
+		replace	sample_source=4	if	inrange(x11101ll,4001000,4462999)	|	inrange(x11101ll,4700000,4851999)	//	Immigrant Refresher (2017)
+		replace	sample_source=5	if	inrange(x11101ll,7001000,9308999)	//	Latino Sample (1990-1992)
 		
+		label	define	sample_source		1	"SRC(Survey Research Center)"	///
+											2	"SEO(Survey of Economic Opportunity)"	///
+											3	"Immigrant Refresher (1997,1999)"	///
+											4	"Immigrant Refresher (2017)"	///
+											5	"Latino Sample (1990-1992)"
+		label	values		sample_source		sample_source
+		label	variable	sample_source	"Source of Sample"	
+		
+				
 		*	Merge family variables
 		cd "${SNAP_dtInt}/Fam_vars"
 	
 		global	varlist_fam	splitoff	///		/*survey info*/
 							rp_gender	rp_age	rp_marital	rp_race	///		/*	Demographics	*/
-							rp_state	rp_employed	rp_gradecomp	rp_disable	///	/*	Other RP information	*/
+							rp_gradecomp	rp_HS_GED	sp_HS_GED	rp_colattend	sp_colattend	rp_coldeg	///	/*	Education	*/
+							rp_state	rp_employment_status	rp_disable_amt	rp_disable_type		///	/*	Other RP/spouse information	*/
 							famnum	childnum	///	/*	Family composition	*/
 							fam_income	///	/*	Income	*/
 							HFSM_raw	HFSM_scale	HFSM_cat	///	/*	HFSM_cat*/
@@ -610,22 +770,391 @@
 	
 		foreach	var	of	global	varlist_fam	{
 			
-			merge 1:1 x11101ll using "`var'", keepusing(`var'*) nogen assert(2 3)	keep(3)	//	Longitudinal weight
+			merge 1:1 x11101ll using "`var'", keepusing(`var'*) nogen assert(2 3)	keep(3)	
 			
 		}
 		
-		*	Save (wide-format)
 		
-		order	hhid_agg,	before(x11101ll)
+		*	Save (wide-format)	
+		*order	hhid_agg,	before(x11101ll)
 		order	pn-fu_nonmiss,	after(x11101ll)
 		save	"${SNAP_dtInt}/SNAP_Merged_wide",	replace
 		
 		*	Re-shape it into long format	
-		reshape long x11102_	xsqnr_	${varlist_ind}	${varlist_fam}, i(hhid_agg) j(year)
+		reshape long x11102_	xsqnr_	wgt_long_ind	wgt_long_fam	wgt_long_fam_adj	living_Sample tot_living_Sample	${varlist_ind}	${varlist_fam}, i(x11101ll) j(year)
+		order	x11101ll pn sampstat Sample year x11102_ xsqnr_ 
+		drop	if	inlist(year,1973,1988,1989)	//	These years seem to be re-created during "reshape." Thus drop it again.
+		
+		*	Rename variables
+		rename	x11102_	surveyid
+		rename	xsqnr_	seqnum
+		
+		
+		*	Label variables
+		*	It would be better to do this after preparing all variables
+		
+		label	var	year			"Survey Wave"
+		label 	var	surveyid		"Survey	ID"
+		label	var	seqnum			"Sequence Number"
+		label	var	wgt_long_ind	"Longitudinal individual Weight"
+		label	var	wgt_long_fam	"Longitudinal family Weight"
+		label	var	living_Sample	"=1 if Sample member living in FU"
+		label	var	tot_living_Sample	"# of Sample members living in FU"
+		label	var	wgt_long_fam_adj	"Longitudianl family weight, adjusted"
+		label	var	age_ind			"Age of individual"
+		label 	var	relrp		"Relation to RP"
+		label	var	origfu_id	"Original FU ID splitted from"
+		label	var	noresp_why	"Reason for non-response"
+		label	var	splitoff	"=1 if split-off"
+		label	var	rp_gender	"Gender of RP"
+
+		save	"${SNAP_dtInt}/SNAP_Merged_long",	replace
+		
 		
 	}
 	
+	*	Clean variables
+	if	`clean_vars'==1	{
+		
+		use	"${SNAP_dtInt}/SNAP_Merged_long",	clear
+		
+		label	define	yes1no0	0	"No"	1	"Yes",	replace
+		
+		*	Gender
+		*	Uses same code over the waves. Very few observations have wild code neither male nor female. Treat them as missing
+		loc	var	rp_female
+		cap	drop	`var'
+		gen		`var'=0	if	rp_gender==1
+		replace	`var'=1	if	rp_gender==2
+		label	value	`var'	yes1no0
+		label	var		`var'	"Female"
+		
+		order	`var',	after(rp_gender)
+		drop	rp_gender
+		
+		*	Marital status
+		*	I use variable that are consistent across wave. If I need further distinction (ex. b/w legal marriage and merely living together), I need to check other variables
+		loc	var	rp_married
+		cap	drop	`var'
+		gen		`var'=0	if	inlist(rp_marital,2,3,4,5,9)
+		replace	`var'=1	if	rp_marital==1 // Single, widow, separated, divorced.
+		label	value	`var'	yes1no0
+		label	var		`var'	"Married"
+		
+		*	Race
+		*	Codes are different over waves, but White always has value=1 so we can use simple categorization (White vs non-White) without further harmonization
+		*	For years with multiple responses, we use the first reponse only (over the entire PSID data less than 5% gave multiple answers.)
+		*	For DK/Refusal, we categorize them as non-White
+		loc	var	rp_White
+		cap	drop	`var'
+		gen		`var'=0	if	inrange(rp_race,2,9)	//	Black, Asian, Native American, etc.
+		replace	`var'=1	if	rp_race==1 // Single, widow, separated, divorced.
+		label	value	`var'	yes1no0
+		label	var		`var'	"White"
+		
+		*	State of Residence
+		label define	statecode	0	"Inap.: U.S. territory or foreign country"	99	"D.K; N.A"	///
+									1	"Alabama"		2	"Arizona"			3	"Arkansas"	///
+									4	"California"	5	"Colorado"			6	"Connecticut"	///
+									7	"Delaware"		8	"D.C."				9	"Florida"	///
+									10	"Georgia"		11	"Idaho"				12	"Illinois"	///
+									13	"Indiana"		14	"Iowa"				15	"Kansas"	///
+									16	"Kentucky"		17	"Lousiana"			18	"Maine"		///
+									19	"Maryland"		20	"Massachusetts"		21	"Michigan"	///
+									22	"Minnesota"		23	"Mississippi"		24	"Missouri"	///
+									25	"Montana"		26	"Nebraska"			27	"Nevada"	///
+									28	"New Hampshire"	29	"New Jersey"		30	"New Mexico"	///
+									31	"New York"		32	"North Carolina"	33	"North Dakota"	///
+									34	"Ohio"			35	"Oklahoma"			36	"Oregon"	///
+									37	"Pennsylvania"	38	"Rhode Island"		39	"South Carolina"	///
+									40	"South Dakota"	41	"Tennessee"			42	"Texas"	///
+									43	"Utah"			44	"Vermont"			45	"Virginia"	///
+									46	"Washington"	47	"West Virginia"		48	"Wisconsin"	///
+									49	"Wyoming"		50	"Alaska"			51	"Hawaii"
+		lab	val	rp_state statecode
+				
+		*	Employment Status
+		*	Two different variables over time, and even single series changes variable over waves. Need to harmonize them.
+		loc	var	rp_employed
+		cap	drop	`var'
+		gen		`var'=.
+		
+		replace	`var'=0	if	inrange(year,1968,1975)	&	inrange(rp_employment_status,2,6)	//	I treat "Other" as "unemployed". In the raw PSID data less than 0.2% HH answer "other" during these waves
+		replace	`var'=1	if	inrange(year,1968,1975)	&	inrange(rp_employment_status,1,1)	//	Include temporarily laid off/maternity leave/etc.
+		
+		replace	`var'=0	if	inrange(year,1976,1996)	&	inrange(rp_employment_status,3,9)	//	I treat "Other" as "unemployed". In the raw PSID data less than 0.2% HH answer "other" during these waves
+		replace	`var'=1	if	inrange(year,1976,1996)	&	inrange(rp_employment_status,1,2)	//	Include temporarily laid off/maternity leave/etc.
+		
+		replace	`var'=0	if	inrange(year,1997,2019)	&	inrange(rp_employment_status,3,99)	|	rp_employment_status==0	//	Include other, "workfare", "DK/refusal"
+		replace	`var'=1	if	inrange(year,1997,2019)	&	inrange(rp_employment_status,1,2)	//	Include temporarily laid off/maternity leave/etc.
+		
+		
+		label	value	`var'	yes1no0
+		label	var		`var'	"Employed"
+		
+		*	Grades completed
+		*	We split grade completion into four categories; No HS, HS, some college, College+
+		*	For households who didn't respond, I will create a separate category as "NA/DK/Refusal/Inapp"
+			
+		
+		loc	var	rp_edu_cat
+		cap	drop	`var'
+		gen		`var'=.
+		
+			*	No High school (Less than 12 degree)
+			*	Includes "cannot read or write"
+			replace	`var'=1	if	inrange(year,1968,1990)	&	inrange(rp_gradecomp,0,3)	// Includes 0 coded as "cannot read or write"
+			replace	`var'=1	if	inrange(year,1991,2019)	&	inrange(rp_gradecomp,0,11)	//	Less than 12 grade
+			
+			*	High School
+			replace	`var'=2	if	inrange(year,1968,1990)	&	inrange(rp_gradecomp,4,5)	//	12 grade and higher
+			replace	`var'=2	if	inrange(year,1991,2019)	&	inrange(rp_gradecomp,12,12)	//	12 grade and higher
+			replace	`var'=2	if	inrange(year,1985,2019)	&	inlist(rp_HS_GED,1,2) 	//	HS or GED
+			
+			*	Some college (College without degree)
+			replace	`var'=3	if	inrange(year,1968,1990)	&	rp_gradecomp==6	//	College, but no degree
+			replace	`var'=3	if	inrange(year,1991,2019)	&	inrange(rp_gradecomp,13,15)	//	13-15 grades
+			
+			*	College or greater
+			replace	`var'=4	if	inrange(year,1968,1990)	&	inrange(rp_gradecomp,7,8)	//	College
+			replace	`var'=4	if	inrange(year,1991,2019)	&	inrange(rp_gradecomp,16,17)	//	College, but no degree
+			replace	`var'=4	if	inrange(year,1991,2019)	&	rp_coldeg==1	//	Answered "yes" to "has college degree"
+			
+			*	NA/DK (excluding "cannot read/write in early years")
+			replace	`var'=99	if	inrange(year,1968,1990)	&	inrange(rp_gradecomp,9,9)
+			replace	`var'=99	if	inrange(year,1991,2019)	&	inrange(rp_gradecomp,99,99)
+			
+			label	define	`var'	1	"Less than HS"	2	"High School/GED"	3	"Some college"	4	"College"	99	"NA/DK",	replace
+			label	value	`var'	`var'
+			label 	variable	`var'	"Education category (RP)"
+			
+			cap	drop	rp_edu?		rp_NoHS	rp_HS	rp_somecol	rp_col
+			tab `var', gen(rp_edu)
+			rename	(rp_edu1	rp_edu2	rp_edu3	rp_edu4	rp_edu5)	(rp_NoHS	rp_HS	rp_somecol	rp_col	rp_NADK)
+			
+			lab	value	rp_NoHS	rp_HS	rp_somecol	rp_col	rp_NADK	yes1no0
+			
+			label	var	rp_NoHS	"Less than High School"
+			label	var	rp_HS	"High School"
+			label	var	rp_somecol	"College (w/o degree)"
+			label	var	rp_col	"College Degree"
+			label	var	rp_NADK	"Education (NA/DK)"
+			
+		*	Disability
+		*	I categorize RP as disabled if RP has either "amount" OR "type" of work limitation
+		loc	var	rp_disabled
+		cap	drop	`var'
+		gen		`var'=.
+			
+			*	NOT disabled, or no problem on work (including NA/DK)
+			replace	`var'=0	if	!mi(rp_disable_amt)	|	!mi(rp_disable_type)
+			replace	`var'=0	if	inrange(year,1968,1968)	&	inlist(rp_disable_amt,4,5,7,9)	
+			replace	`var'=0	if	inrange(year,1969,1971)	&	(inlist(rp_disable_amt,5,9)	&	inlist(rp_disable_type,5,9))	//	both "amount" AND "type" have no restriction
+			replace	`var'=0	if	inrange(year,1972,2019)	&	inrange(rp_disable_amt,5,9)	
+			
+			*	Disabled
+			replace	`var'=1	if	inrange(year,1968,1968)	&	inlist(rp_disable_amt,1,2,3)	
+			replace	`var'=1	if	inrange(year,1969,1971)	&	(inlist(rp_disable_amt,1,3)	|	inlist(rp_disable_type,1,3))	//	either "amount" OR "type" has an issue
+			replace	`var'=1	if	inrange(year,1972,2019)	&	inlist(rp_disable_amt,1,1)	
+			
+			label	value	`var'	yes1no0
+			label	var	`var'	"Disabled"
+		
+		*	Family composition
+		
+			label	var	famnum		"FU size"		//	FU size
+			label	var	childnum	"# of child"	//	Child size
+			
+			*	Ratio of child
+			loc	var	ratio_child
+			cap	drop	`var'
+			gen		`var'=	childnum	/	famnum
+			label	var	`var'	"\% of children"
+		
+		
+		*	HFSM
+			
+			lab	var	HFSM_raw	"HFSM (raw score)"
+			lab	var	HFSM_scale	"HFSM (scale score)"
+			lab	var	HFSM_cat	"HFSM (category)"
+			
+			*	FI indicator
+			loc	var	HFSM_FI
+			cap	drop	`var'
+			gen		`var'=0	if	inlist(HFSM_cat,0,1)
+			replace	`var'=0	if	inlist(HFSM_cat,2,3)
+			
+			label	value	`var'	yes1no0
+			
+			label	var	`var'	"HFSM FI"
+		
+		*	Family income
+		
+			lab	var	fam_income	"Total family income"
+			
+		*	Food stamp amount "used", recall period
+		*	I start with recall period for easier annualization of food stamp amount later
+		
+		loc	var	FS_rec_amt_recall
+		cap	drop	`var'
+		gen	`var'=.
+		
+			*	Set recall period to "inapp (0)" for those with zero amount (didn't receive any)
+			replace	`var'=0	if	inrange(year,1968,1979)	&	stamp_useamt==0
+			replace	`var'=0	if	inrange(year,1980,1993)	&	stamp_recamt_annual==0
+			replace	`var'=0	if	inrange(year,1994,2019)	&	stamp_recamt==0
+			
+			*	1968 to 1993
+			*	During this period recall period is fixed to yearly recall.
+			replace	`var'=1	if	inrange(year,1968,1979)	&	!mi(stamp_useamt)	&	stamp_useamt>0
+			replace	`var'=1	if	inrange(year,1980,1993)	&	!mi(stamp_useamt)	&	stamp_useamt>0
+			
+			*	1994 and onward
+			*	For 1994, there's no "year" recall period option. I regard "other" as "year" in 1994 because the proportion of those household anwered "other" in 1994 is similar to those who answered "year" in other periods (b/w 1-2%)
+			replace	`var'=1	if	inrange(year,1994,1994)	&	stamp_recamt_period==4	//	Year, 1994
+			replace	`var'=1	if	inrange(year,1995,2019)	&	stamp_recamt_period==6	//	Year, 1995-2019
+			
+			replace	`var'=2	if	inrange(year,1994,1995)	&	stamp_recamt_period==1	//	Month, 1994-1995
+			replace	`var'=2	if	inrange(year,1996,2019)	&	stamp_recamt_period==5	//	Month, 1996-2019		
+			
+			replace	`var'=3	if	inrange(year,1994,1995)	&	stamp_recamt_period==2	//	Two-week, 1994-1995
+			replace	`var'=3	if	inrange(year,1996,2019)	&	stamp_recamt_period==4	//	Two-week, 1996-2019
+			
+			replace	`var'=4	if	inrange(year,1994,2019)	&	stamp_recamt_period==3	//	Week, 1994-2019
+			
+			replace	`var'=5	if	inrange(year,1995,2019)	&	stamp_recamt_period==7	//	Other, 1995-2019
+			
+			replace	`var'=6	if	inrange(year,1994,2019)	&	stamp_recamt_period==8	//	DK, 1994-2019
+			replace	`var'=7	if	inrange(year,1994,2019)	&	stamp_recamt_period==9	//	NA/refusal, 1994-2019
+			
+			lab	define	`var'	0	"Inapp"		1	"Year"	2	"Month"	3	"Two-week"	4	"Week"	5	"Other"	6	"DK"	7	"NA/refusal", replace
+			label	value	`var'	`var'
+			label	var	`var'	"FS/SNAP amount received (recall)"
+			
+
+		
+		*	Food stamp amount received
+		loc	var	FS_rec_amt
+		cap	drop	`var'
+		gen	double	`var'=.	if	inrange(year,1968,1779)	&	!mi(stamp_useamt)
+		
+			replace	`var'=stamp_useamt			if	inrange(year,1968,1979)	//	From 1968 to 1976, we dont have value "Received", but have value "used(saved)." (we have one in 1970, but use this one instead for consistency) We use this value instead.
+			replace	`var'=stamp_recamt_annual	if	inrange(year,1980,1993)	//	Annual
+			replace	`var'=stamp_recamt			if	inrange(year,1994,2019)	//	Varying time period. Need to harmonize
+			
+			*	Harmonize variables into annual amount
+			*	We treat "other" as "zero amount" for now as they account for very little obserations (less than 10 per each wave). We can impute some other values later
+			***	One important exception is 1994 where there are over a hundred of households answered as "other." I treat them as "yearly" redemption for the following reasons: (1) No "year" period option available (2) Proportion of those household anwered "other" in 1994 is similar to those who answered "year" in other periods (b/w 1-2%)
+			replace	`var'=`var'*12.000	if	FS_rec_amt_recall==2	//	If monthly value, multiply by 12
+			replace	`var'=`var'*26.072	if	FS_rec_amt_recall==3	//	If two-week value, multiply by 26.072
+			replace	`var'=`var'*52.143	if	FS_rec_amt_recall==4	//	If weekly value, multiply by 52
+			
+			
+			*	For Other/DK/NA/refusal (both in amount and recall period), I impute the annualized yearly average from other categories and assign the mean value
+			foreach	year	in	1994	1995	1996	1997	1999	2001	2003	2005	2007	2009	2011	2013	2015	2017	2019	{
+			    
+				if	inrange(`year',1994,1997)	{	//	1994 to 1997 which have different outside category values
+				
+					summ	FS_rec_amt	if	year==`year'	&	stamp_recamt>0	&	!inlist(stamp_recamt,99998,99999)	//	I use raw variable's category
+					replace	FS_rec_amt=r(mean) if year==`year'	&	(inlist(FS_rec_amt_recall,6,7) | inlist(stamp_recamt,99998,99999))
+				
+				}	//	if
+				
+				else	{	//	1998 to 2019
+				    
+					summ	FS_rec_amt	if	year==`year'	&	stamp_recamt>0	&	!inlist(stamp_recamt,999998,999999)	//	I use raw variable's category
+					replace	FS_rec_amt=r(mean) if year==`year'	&	(inlist(FS_rec_amt_recall,6,7) | inlist(stamp_recamt,999998,999999))
+					
+				}	//	else
+					
+				
+			}
+			
+		label	var	`var'	"FS/SNAP amount received"
+
+			
+		*	Food stamp used or not
+		loc	var	FS_used
+		cap	drop	`var'
+		gen	`var'=.	
+		
+			*	For years when we directly asked food samp redemption (1976,1977,1994-2019), use that variables.
+			**	Note: 1969 also has this value, but I use "amount used" for that year for consistency with nearby years
+			*	I treat (DK/NA/refused) as "didn't use." Very small amount of households account for these values
+			
+			replace	`var'=0	if	inlist(year,1976,1977)	&	!mi(stamp_used)	&	stamp_used!=1
+			replace	`var'=1	if	inlist(year,1976,1977)	&	stamp_used==1
+			
+			replace	`var'=0	if	inrange(year,1994,2019)	&	!mi(stamp_used)	&	stamp_used!=1
+			replace	`var'=1	if	inrange(year,1994,2019)	&	stamp_used==1
+			
+			*	For years when we don't have direct information, use "amount" variable or "number of months"
+				
+				*	For 1968, we categorize household used food stamp if non-zero amount is redeemed.
+				replace	`var'=0	if	year==1968	&	FS_rec_amt==0
+				replace	`var'=1	if	year==1968	&	!mi(FS_rec_amt)	&	FS_rec_amt>0
+				
+				replace	`var'=0	if	year==1968	&	FS_rec_amt==0
+				replace	`var'=1	if	year==1968	&	!mi(FS_rec_amt)	&	FS_rec_amt>0
+			
+				*	For 1968 to 1975, we use "amount used" as proxy
+				replace	`var'=0	if	inrange(year,1968,1975)	&	!mi(FS_rec_amt)	&	FS_rec_amt==0
+				replace	`var'=1	if	inrange(year,1968,1975)	&	!mi(FS_rec_amt)	&	FS_rec_amt!=0
+				
+				*	For 1978 to 1993, we use "the number of months" as proxy
+				replace	`var'=0	if	inrange(year,1978,1993)	&	!mi(stamp_monthsused)	&	!inrange(stamp_monthsused,1,12)
+				replace	`var'=1	if	inrange(year,1978,1993)	&	!mi(stamp_monthsused)	&	inrange(stamp_monthsused,1,12)
+			
+			lab	value	`var'	yes1no0
+			lab	var		`var'	"FS/SNAP used"
+		
+		
+		*	Food expenditure recall periods (1994-2019)
+		*	Some years use different category value for recall period. Need to harmonize it.
+		recode	foodexp_home_nostamp_recall	foodexp_home_stamp_recall	(1=3)	(2=4)	(3=5)	(4=6)	if	year==1994	//	In 1994, we treat "other" as "year" for the same reason I mentioned earlier.
+		recode	foodexp_home_nostamp_recall	foodexp_home_stamp_recall	(2=1)	if	year==2001	//	use different wild code in 2001.
 	
+		label	define	foodexp_recall	0	"Inapp"	1	"Wide code"	2	"Day"	3	"Week"	4	"Two weeks"	5	"Month"	6	"Year"	7	"Other"	8	"DK"	9	"NA/refused", replace
+		label	value	foodexp_home_nostamp_recall	foodexp_home_stamp_recall	foodexp_recall
+		label	var	foodexp_home_nostamp_recall	"Food exp recall period (w/o stamp)"
+		label	var	foodexp_home_nostamp_recall	"Add. food exp recall period (with stamp)"
+		
+		*	Food expenditure
+		
+			*	At-home
+			loc	var	foodexp_home
+			cap	drop	`var'
+			gen	double	`var'=.	
+			
+				*	1968-1993
+				*	Note: at-homme expenditure includes "delivered" during these period.
+				*	NOTE: IT SEEMS FOOD EXPENDITURE OF "PREVIOUS YEAR" IS COLLECTED, WHILE FOOD EXPENDITURE OF "FREE PERIOD"
+				replace	`var'=foodexp_home_annual	if	inrange(year,1968,1993)
+				
+				*	1994-2019
+				*	Here food exp are collected differently from "who used food stamp last month" and "who didn't use food stamp last month'"  (NOT last "year!")
+				
+					*	For those who didn't use food stamp, just annualize the value
+					replace	`var'	=	foodexp_home_nostamp	if	inrange(year,1994,2019)	&	
+				
+				
+			
+			
+		*	Split the year? - pre-1993 and post-1993
+			*	Exogenous variation availability
+			*	Food stamp and expenditure data (previous year vs current year/month)
+		*	Import TFP value from the link
+		*	Import survey month to see seasonality of food expenditure reported.
+		*	Replace expenditure values to zero if that member didn't exist in that wave (i.e. sequence number outside 0-20)
+		*	Generate indicator if PSID RP is not equal to person
+		*	Include School meal/WIC variables to see the ratio of school meal/WIC received also receive SNAP
+		*	Create real dollars of nominal value variables (don't replace them. Just create new ones)
+		*	Check food stamp value reported vs recall period (to see the over- or under- reporting based on )
+	}
+	
+	
+	
+/*
 	*	Drop years not in the sample
 	
 *	Unpacks zipped raw PSID file into .dta file, with cleaning. Need to be done only once
