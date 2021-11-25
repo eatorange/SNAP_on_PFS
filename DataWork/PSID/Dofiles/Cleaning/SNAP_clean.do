@@ -65,10 +65,10 @@
 		SECTION 1: Retrieve variables on interest and construct a panel data
 	****************************************************************/	
 	
-	local	ind_agg		1	//	Aggregate individual-level variables across waves
-	local	fam_agg		1	//	Aggregate family-level variables across waves
-	local	cr_panel	1	//	Create panel structure from ID variable
-	local	merge_data	1	//	Merge ind- and family- variables into panel structure
+	local	ind_agg		0	//	Aggregate individual-level variables across waves
+	local	fam_agg		0	//	Aggregate family-level variables across waves
+	local	cr_panel	0	//	Create panel structure from ID variable
+	local	merge_data	0	//	Merge ind- and family- variables into panel structure
 	local	clean_vars	1	//	Clean variables and construct consistent variables
 	
 	*	Aggregate individual-level variables
@@ -349,6 +349,40 @@
 		
 		
 		*	Food stamp usage & amount
+		*	Previusoly I planned to use previous year's food stamp redemption amount, but I decided to use previous "MONTH" amount for more accurate match with expenditure
+			*	Expenditure questions differ based on previosu "MONTH" redemption, and food expenditure recall period are often "WEEKLY" or "MONTHLY"
+			
+			*	Used food stamp last MONTH
+			*	I combine three series of variables: (1) Amount saved last month (1975-1997) (2) Current year with free recall period (so I can convert it to monthly amount) (1999-2007) (3) Last month (2009-2019)
+			*	This variable is important as households' food expenditure are separately collected based on this response.
+			loc	var	stamp_useamt_month
+			psid use || `var'		[75]V3846 [76]V4359 [77]V5269 [78]V5768 [79]V6374 [80]V6970 [81]V7562 [82]V8254 [83]V8862 [84]V10233 [85]V11373 [86]V12772 [87]V13874 [90]V17805 [91]V19105 [92]V20405 [93]V21703 [94]ER3076 [95]ER6075 [96]ER8172 [97]ER11066	///	/* first series*/
+									[99]ER14285 [01]ER18417 [03]ER21682 [05]ER25684 [07]ER36702	///	/*	Second series. Should be combind with recall period variable	*/
+									[09]ER42709 [11]ER48025 [13]ER53722 [15]ER60737 [17]ER66784 [19]ER72788, keepnotes design(any) clear		/*	Third series*/
+			keep	x11101ll	`var'*
+			save	"${SNAP_dtInt}/Fam_vars/`var'", replace						
+			
+			*	Stamp amount used recall periods
+			*	Should be combined with the amount redeemed this year ([99]ER14285...)
+			loc	var	stamp_cntyr_recall
+			psid use || `var'  [99]ER14286 [01]ER18418 [03]ER21683 [05]ER25685 [07]ER36703	///
+			using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
+			
+			keep	x11101ll	`var'*
+			save	"${SNAP_dtInt}/Fam_vars/`var'", replace
+			
+			*	Whether food stamp is used last monthly
+			*	I will keep it just in case, as redemption status can be found from amount used
+			loc	var	stamp_usewth_month
+			psid use || `var'  [94]ER3074 [95]ER6073 [96]ER8170 [97]ER11064 [09]ER42707 [11]ER48023 [13]ER53720 [15]ER60735 [17]ER66782 [19]ER72786	///
+			using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
+			
+			keep	x11101ll	`var'*
+			save	"${SNAP_dtInt}/Fam_vars/`var'", replace
+			
+			*	The variables below are food stamp information of "previous" year
+			*	I was planning to use it, but decided to use last month information due to the reason I stated above.
+			*	I will keep it for now, but it won't be used.
 			
 			*	Value of food stamp "used" (previous yr, annual)
 			*	This variable is particularly important for early periods (1968-1979), as these periods have no variables of "food stamp value received" so we can use these variables as a proxy of "value received"
@@ -404,16 +438,7 @@
 			
 			keep	x11101ll	`var'*
 			save	"${SNAP_dtInt}/Fam_vars/`var'", replace
-			
-			*	Used food stamp last MONTH
-			*	This variable is important as households' food expenditure are separately collected based on this response.
-			loc	var	stamp_lastmonth
-			psid use || `var'  	 	[94]ER3074 [95]ER6073 [96]ER8170 [97]ER11064 [09]ER42707 [11]ER48023 [13]ER53720 [15]ER60735 [17]ER66782 [19]ER72786	///
-			using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
-			
-			keep	x11101ll	`var'*
-			save	"${SNAP_dtInt}/Fam_vars/`var'", replace
-			
+						
 		
 		*	Food expenditure
 
@@ -615,7 +640,7 @@
 										1985	1986	1987	1990	1991	1992	1993	1994	1995	1996	1997	1999	2001	2003	2005	2007	///
 										2009	2011	2013	2015	2017	2019
 		
-		global	sample_years__no1968_comma	1969,	1970,	1971,	1972,	1974,	1975,	1976,	1977,	1978,	1979,	1980,	1981,	1982,	1983,	1984,	///
+		global	sample_years_no1968_comma	1969,	1970,	1971,	1972,	1974,	1975,	1976,	1977,	1978,	1979,	1980,	1981,	1982,	1983,	1984,	///
 											1985,	1986,	1987,	1990,	1991,	1992,	1993,	1994,	1995,	1996,	1997,	1999,	2001,	2003,	2005,	2007,	///
 											2009,	2011,	2013,	2015,	2017,	2019
 
@@ -763,13 +788,14 @@
 							famnum	childnum	///	/*	Family composition	*/
 							fam_income	///	/*	Income	*/
 							HFSM_raw	HFSM_scale	HFSM_cat	///	/*	HFSM_cat*/
-							stamp_useamt	stamp_recamt_annual		stamp_recamt	stamp_recamt_period	stamp_used	stamp_monthsused	///	/*	FS/SNAP usage*/
+							stamp_useamt_month	stamp_cntyr_recall	stamp_usewth_month		stamp_useamt	stamp_recamt_annual		stamp_recamt	stamp_recamt_period	stamp_used	stamp_monthsused	///	/*	FS/SNAP usage*/
 							foodexp_home_annual	foodexp_home_grown	foodexp_home_nostamp	foodexp_home_nostamp_recall	foodexp_home_spent_extra	foodexp_home_stamp	foodexp_home_stamp_recall	foodexp_home_imputed	///	/* At-home food exp */	///
 							foodexp_away_cat	foodexp_away_annual	foodexp_away_nostamp	foodexp_away_nostamp_recall	foodexp_away_imputed	foodexp_atwork	foodexp_atwork_saved	///	/*	Away/at work food expenditure	*/
 							foodexp_deliv_nostamp	foodexp_deliv_nostamp_recall	foodexp_deliv_stamp	foodexp_deliv_stamp_recall	/*	devliered food expenditure	*/
 	
 		foreach	var	of	global	varlist_fam	{
 			
+			di	"current var is `var'"
 			merge 1:1 x11101ll using "`var'", keepusing(`var'*) nogen assert(2 3)	keep(3)	
 			
 		}
@@ -784,6 +810,7 @@
 		reshape long x11102_	xsqnr_	wgt_long_ind	wgt_long_fam	wgt_long_fam_adj	living_Sample tot_living_Sample	${varlist_ind}	${varlist_fam}, i(x11101ll) j(year)
 		order	x11101ll pn sampstat Sample year x11102_ xsqnr_ 
 		drop	if	inlist(year,1973,1988,1989)	//	These years seem to be re-created during "reshape." Thus drop it again.
+		drop	if	inrange(year,1968,1974)	//	Drop years which don't have last month food stamp information exist.
 		
 		*	Rename variables
 		rename	x11102_	surveyid
@@ -991,7 +1018,76 @@
 		*	Family income
 		
 			lab	var	fam_income	"Total family income"
+				
+		
+		*	Food stamp recall period
+		loc	var	FS_rec_amt_recall
+		cap	drop	`var'
+		gen		`var'=.
+		replace	`var'=stamp_cntyr_recall	if	inrange(year,1999,2007)
+		
+		lab	define	`var'	0	"Inapp"		2	"Wild code"	3	"Week"	4	"Two-Week"	5	"Month"	6	"Year"	7	"Other"	8	"DK"	9	"NA/refused", replace
+		label	value	`var'	`var'
+		label	var	`var'	"FS/SNAP amount received (recall) (1999-2007)"
+		
+		*	Food stamp amount received
+		local	var	FS_rec_amt
+		cap	drop	`var'
+		gen		double	`var'=.	
+		replace	`var'=	stamp_useamt_month	if	inrange(year,1975,2019)	&	!mi(stamp_useamt_month)
+		
+		
+			*	Harmonize variables into monthly amount (1999-2007)
+			*	We treat "wild code" and "other" as "zero amount" for now as there are very small number of observations
+			replace	`var'=`var'*4.35	if	FS_rec_amt_recall==3			&	inrange(year,1999,2007)	//	If weekly value, multiply by 4.35
+			replace	`var'=`var'*2.17	if	FS_rec_amt_recall==4			&	inrange(year,1999,2007)	//	If two-week value, multiply by 2.17
+			replace	`var'=`var'/12		if	FS_rec_amt_recall==6			&	inrange(year,1999,2007)	//	If yearly value, divide by 12
+			replace	`var'=0				if	inlist(FS_rec_amt_recall,2,7)	&	inrange(year,1999,2007)	//	If wild code, replace it with zero
+						
+			*	For Other/DK/NA/refusal (both in amount and recall period), I impute the annualized yearly average from other categories and assign the mean value
+			foreach	year	in	1994	1995	1996	1997	1999	2001	2003	2005	2007	2009	2011	2013	2015	2017	2019	{
+			    
+				if	inrange(`year',1994,1997)	{	//	1994 to 1997
+				
+					summ	FS_rec_amt			if	year==`year'	&	stamp_useamt_month>0	&	!inlist(stamp_useamt_month,997,998,999)	//	I use raw variable's category 
+					replace	FS_rec_amt=r(mean) 	if	year==`year'	&	inlist(stamp_useamt_month,998,999)
+				
+				}	//	if
+				
+				else	if	inrange(`year',1999,2007)	{	//	1999 to 2007
+				    
+					summ	FS_rec_amt			if	year==`year'	&	stamp_useamt_month>0	&	(!inlist(stamp_useamt_month,999998,999999)	|	!inlist(FS_rec_amt_recall,7,8,9))	//	Check both amount and recall period
+					replace	FS_rec_amt=r(mean)	if	year==`year'	&	(inlist(FS_rec_amt_recall,7,8,9) | inlist(stamp_useamt_month,999998,999999))
+					
+				}	//	else	if
+				
+				else	{	//	2009 to 2017
+					
+					summ	FS_rec_amt			if	year==`year'	&	stamp_useamt_month>0	&	!inlist(stamp_useamt_month,999998,999999)	//	Check both amount and recall period
+					replace	FS_rec_amt=r(mean)	if	year==`year'	&	inlist(stamp_useamt_month,999998,999999)
+					
+				}	//	else
+					
+			}	//	year
 			
+		label	var	`var'	"FS/SNAP amount received last month"
+		
+		
+		*	Whether FS/SNAP received last month
+		*	If 0, then didn't receive. Otherwise, received
+		loc	var	FS_rec_wth
+		cap	drop	`var'
+		gen		`var'=.
+		replace	`var'=0	if	inrange(year,1975,2019)	&	FS_rec_amt==0
+		replace	`var'=1	if	inrange(year,1975,2019)	&	!mi(FS_rec_amt)	&	FS_rec_amt!=0
+		
+		label	value	`var'	yes1no0
+		label	var	`var'	"Received FS/SNAP last month"
+		
+
+		/*
+		
+		*	The code below is written for "previosu year" stamp information. Since we no longer use it, we will disable it for now. We can re-use the code once found it useful.
 		*	Food stamp amount "used", recall period
 		*	I start with recall period for easier annualization of food stamp amount later
 		
@@ -1036,7 +1132,7 @@
 		*	Food stamp amount received
 		loc	var	FS_rec_amt
 		cap	drop	`var'
-		gen	double	`var'=.	if	inrange(year,1968,1779)	&	!mi(stamp_useamt)
+		gen	double	`var'=.	if	inrange(year,1968,1979)	&	!mi(stamp_useamt)
 		
 			replace	`var'=stamp_useamt			if	inrange(year,1968,1979)	//	From 1968 to 1976, we dont have value "Received", but have value "used(saved)." (we have one in 1970, but use this one instead for consistency) We use this value instead.
 			replace	`var'=stamp_recamt_annual	if	inrange(year,1980,1993)	//	Annual
@@ -1069,10 +1165,10 @@
 					
 				
 			}
-			
+				
 		label	var	`var'	"FS/SNAP amount received"
-
-			
+		
+		
 		*	Food stamp used or not
 		loc	var	FS_used
 		cap	drop	`var'
@@ -1118,6 +1214,8 @@
 		label	value	foodexp_home_nostamp_recall	foodexp_home_stamp_recall	foodexp_recall
 		label	var	foodexp_home_nostamp_recall	"Food exp recall period (w/o stamp)"
 		label	var	foodexp_home_nostamp_recall	"Add. food exp recall period (with stamp)"
+		*/
+		
 		
 		*	Food expenditure
 		
@@ -1140,6 +1238,10 @@
 				
 			
 			
+		*	Modify V4366 (FS used last year) in 1976
+			*	This question actually asks if FS is use ALL THE TIME in previous year. So both "yes" and "no" should be coded as "yes" (Those who didn't use FS at all are coded as "inapp(0)")
+		*	Until 1971, it is ambiguous whether food stamp amount was included in food expenditure (they are NOT included since 1972)
+			*	We might need to assume that food expenditure amount is included, or drop those periods in worst case.
 		*	Split the year? - pre-1993 and post-1993
 			*	Exogenous variation availability
 			*	Food stamp and expenditure data (previous year vs current year/month)
