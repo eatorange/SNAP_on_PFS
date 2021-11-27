@@ -78,29 +78,34 @@
 	global	numNov=11
 	global	numDec=12
 	
-	global	sample_years	/*1968	1969	1970	1971	1972	1974*/	1975	1976	1977	1978	1979	1980	1981	1982	1983	1984	///
+	global	sample_years	/*1968	1969	1970	1971	1972	1974	1975*/	1976	1977	1978	1979	1980	1981	1982	1983	1984	///
 								1985	1986	1987	1990	1991	1992	1993	1994	1995	1996	1997	1999	2001	2003	2005	2007	///
 								2009	2011	2013	2015	2017	2019
 		
-	global	sample_years_comma	/*1968,	1969,	1970,	1971,	1972,	1974,,*/	1975	1976,	1977,	1978,	1979,	1980,	1981,	1982,	1983,	1984,	///
+	global	sample_years_comma	/*1968,	1969,	1970,	1971,	1972,	1974,	1975,*/	1976,	1977,	1978,	1979,	1980,	1981,	1982,	1983,	1984,	///
 									1985,	1986,	1987,	1990,	1991,	1992,	1993,	1994,	1995,	1996,	1997,	1999,	2001,	2003,	2005,	2007,	///
 									2009,	2011,	2013,	2015,	2017,	2019
 									
-	global	sample_years_no1968		/*1969	1970	1971	1972	1974*/	1975	1976	1977	1978	1979	1980	1981	1982	1983	1984	///
+	global	sample_years_no1968		/*1969	1970	1971	1972	1974	1975*/	1976	1977	1978	1979	1980	1981	1982	1983	1984	///
 										1985	1986	1987	1990	1991	1992	1993	1994	1995	1996	1997	1999	2001	2003	2005	2007	///
 										2009	2011	2013	2015	2017	2019
 		
-	global	sample_years_no1968_comma	/*1969,	1970,	1971,	1972,	1974,*/	1975,	1976,	1977,	1978,	1979,	1980,	1981,	1982,	1983,	1984,	///
+	global	sample_years_no1968_comma	/*1969,	1970,	1971,	1972,	1974,	1975,*/	1976,	1977,	1978,	1979,	1980,	1981,	1982,	1983,	1984,	///
 											1985,	1986,	1987,	1990,	1991,	1992,	1993,	1994,	1995,	1996,	1997,	1999,	2001,	2003,	2005,	2007,	///
 											2009,	2011,	2013,	2015,	2017,	2019
 	
-	local	ind_agg		1	//	Aggregate individual-level variables across waves
-	local	fam_agg		1	//	Aggregate family-level variables across waves
-	local	ext_data	1	//	Prepare external data (CPI, TFP, etc.)
-	local	cr_panel	1	//	Create panel structure from ID variable
-	local	merge_data	1	//	Merge ind- and family- variables into panel structure
-	local	clean_vars	1	//	Clean variables and construct consistent variables
-	local	summ_stats	0	//	Generate summary statistics (will be moved to another file later)
+	label	define	yes1no0	0	"No"	1	"Yes",	replace
+	
+	local	ind_agg			0	//	Aggregate individual-level variables across waves
+	local	fam_agg			0	//	Aggregate family-level variables across waves
+	local	ext_data		0	//	Prepare external data (CPI, TFP, etc.)
+	local	cr_panel		0	//	Create panel structure from ID variable
+	local	merge_data		1	//	Merge ind- and family- variables and import it into ID variable
+		local	raw_reshape	0		//	Merge raw variables and reshape into long data (takes time)
+		local	add_clean	0		//	Do additional cleaning and import external data (CPI, TFP)
+		local	import_dta	0		//	Import aggregated variables into ID data. 
+	local	clean_vars		1	//	Clean variables and construct consistent variables
+	local	summ_stats		0	//	Generate summary statistics (will be moved to another file later)
 	
 	*	Aggregate individual-level variables
 	if	`ind_agg'==1	{
@@ -831,36 +836,50 @@
 		
 		*	Thrifty Food Plan data
 		
-		foreach year	of	global	sample_years	{
-				
-				
+			*	Create year data from raw data
+			foreach year	of	global	sample_years	{
+							
 				if	`year'==1975 continue
 				di	"year is `year'"
 				
-				/*
-				import excel "${clouldfolder}/DataWork/USDA/Cost of Food Reports/Food Plans_Cost of Food Reports.xlsx", sheet("thrifty_`year'") firstrow clear
-						
-				reshape long foodcost_, i(gender state age) j(month)
+				import excel "${clouldfolder}/DataWork/USDA/DataSets/Raw/Food Plans_Cost of Food Reports.xlsx", sheet("thrifty_`year'") firstrow clear
 				
-				isid	gender	age	state month
+				cap	drop	if	state!=1
+				cap	drop	state
+				reshape long foodcost_, i(gender age) j(month)
+				
+				isid	gender	age	month
 
-				rename	gender	indiv_gender
-				rename	age		age_ind`year'
-				rename	state	state_region_temp`year'
-				rename	month	interview_month`year'
-				rename	foodcost_	foodcost_monthly_`year'
-				keep	indiv_gender	age_ind`year'	state_region_temp`year'	interview_month`year'	foodcost_monthly_`year'
+				gen		year=`year'
+				rename	age		age_ind
+				rename	month	svy_month
+				rename	foodcost_	TFP_monthly_cost
+				lab	var	TFP_monthly_cost	"Monthly TFP cost"
+				order	year	gender	age_ind	svy_month	TFP_monthly_cost
+				keep	year	gender	age_ind	svy_month	TFP_monthly_cost
 				
-				tempfile foodcost_`year'
-				save	`foodcost_`year''
-				*/
+				save	"${SNAP_dtInt}/TFP cost/TFP_`year'", replace
+				
 			}
-
-		
+			
+			*	Combine yearly data
+			use	"${SNAP_dtInt}/TFP cost/TFP_1976", clear
+			
+			foreach year	of	global	sample_years	{
+				
+				if	`year'==1976 continue
+				append	using	"${SNAP_dtInt}/TFP cost/TFP_`year'"
+			
+			}
+			
+			isid year gender age_ind svy_month
+			
+			save	"${SNAP_dtInt}/TFP cost/TFP_costs_all", replace
+			
 	}
 	
 	*	Create panel structure
-	if	`cr_panel'==1		{
+	if	`cr_panel'==1	{
 		
 		*	Merge ID with unique vars as well as other survey variables needed for panel data creation
 		use	"${SNAP_dtInt}/Ind_vars/ID", clear
@@ -868,6 +887,25 @@
 		merge	1:1	x11101ll	using	"${SNAP_dtInt}/Ind_vars/wgt_long_ind.dta",	nogen	assert(3)	//	Individual weight
 		merge	1:1	x11101ll	using	"${SNAP_dtInt}/Fam_vars/wgt_long_fam.dta",	nogen	assert(3)	//	Family weight
 		
+
+		*	Construct additional variable
+				
+			*	Sample source
+			cap	drop	sample_source
+			gen		sample_source=.
+			replace	sample_source=1	if	inrange(x11101ll,1000,2930999)		//	SRC
+			replace	sample_source=2	if	inrange(x11101ll,5001000,6872999)	//	SEO
+			replace	sample_source=3	if	inrange(x11101ll,3001000,3511999)	//	Immgrant Regresher (1997,1999)
+			replace	sample_source=4	if	inrange(x11101ll,4001000,4462999)	|	inrange(x11101ll,4700000,4851999)	//	Immigrant Refresher (2017)
+			replace	sample_source=5	if	inrange(x11101ll,7001000,9308999)	//	Latino Sample (1990-1992)
+			
+			label	define	sample_source		1	"SRC(Survey Research Center)"	///
+												2	"SEO(Survey of Economic Opportunity)"	///
+												3	"Immigrant Refresher (1997,1999)"	///
+												4	"Immigrant Refresher (2017)"	///
+												5	"Latino Sample (1990-1992)",	replace
+			label	values		sample_source		sample_source
+			label	variable	sample_source	"Source of Sample"	
 		
 		*	Generate a 1968 sequence number variable from person number variable
 		**	Note: 1968 sequence number is used to determine whether an individual was head/RP in 1968 or not. Don't use it for other purposes, unless it is not consistent with other sequence variables.
@@ -887,16 +925,11 @@
 		
 		qui	ds	xsqnr_1975-xsqnr_2019
 		global	seqnum_all	`r(varlist)'
-		
-		
-		*save	"${SNAP_dtInt}/SNAP_raw_merged.dta", replace
-		*use	"${SNAP_dtInt}/SNAP_raw_merged.dta", clear
+
 		
 		*	Create a panel structre
 		*	This study covers 50-year period with different family composition changes, thus we need to carefully consider that.
 		*	First, we create a individual-level aggregated data using "psid use command" with necessary variables to further investigate family change.
-	
-		br	x11101ll 
 	
 				
 		*	Generate a household id which uniquely identifies a combination of household wave IDs.
@@ -984,223 +1017,234 @@
 		*egen hhid_agg = group(x11102_1968-x11102_2019), missing	//	This variable is no longer needed. Can bring it back if needed.
 		drop	hhid_agg_1st
 		
-		save	"${SNAP_dtInt}/Ind_vars/ID_sample.dta", replace
+		*	Save
+			
+			*	Wide-format
+			order	pn sampstr sampcls gender sampstat Sample fu_nonmiss,	after(x11101ll)
+			save	"${SNAP_dtInt}/Ind_vars/ID_sample_wide.dta", replace
 		
+			*	Re-shape it into long format and save it
+			reshape long x11102_	xsqnr_	wgt_long_ind	wgt_long_fam	wgt_long_fam_adj	living_Sample tot_living_Sample	/*${varlist_ind}	${varlist_fam}*/, i(x11101ll) j(year)
+			order	x11101ll pn sampstat Sample year x11102_ xsqnr_ 
+			*drop	if	inlist(year,1973,1988,1989)	//	These years seem to be re-created during "reshape." Thus drop it again.
+			*drop	if	inrange(year,1968,1974)	//	Drop years which don't have last month food stamp information exist.
+			
+			*	Rename variables
+			rename	x11102_	surveyid
+			rename	xsqnr_	seqnum
+			
+			label	var	year		"Year"
+			label	var	surveyid	"Survey ID"
+			label	var	seqnum		"Sequence No."
+			
+			label	var	wgt_long_ind	"Longitudinal individual Weight"
+			label	var	wgt_long_fam	"Longitudinal family Weight"
+			label	var	living_Sample	"=1 if Sample member living in FU"
+			label	var	tot_living_Sample	"# of Sample members living in FU"
+			label	var	wgt_long_fam_adj	"Longitudianl family weight, adjusted"	
+			
+			save	"${SNAP_dtInt}/Ind_vars/ID_sample_long.dta",	replace
 	}
-
+	
 	*	Merge variables
 	if	`merge_data'==1	{
 		
-		use	"${SNAP_dtInt}/Ind_vars/ID_sample.dta",	clear
-		
-		*	Merge individual variables
-		cd "${SNAP_dtInt}/Ind_vars"
-		
-		global	varlist_ind	age_ind	/*wgt_long_ind*/	relrp	origfu_id	noresp_why
-		
-		foreach	var	of	global	varlist_ind	{
+		if	`raw_reshape'==1	{
 			
-			merge 1:1 x11101ll using "`var'", keepusing(`var'*) nogen assert(2 3)	keep(3)	//	Longitudinal weight
+			*	Start with ID variables
+			use	"${SNAP_dtInt}/Ind_vars/ID", clear
+			merge	1:1	x11101ll	using	"${SNAP_dtInt}/Ind_vars/unique_vars.dta",	nogen assert(3) keepusing(gender)	//	
+			*merge	1:1	x11101ll	using	"${SNAP_dtInt}/Ind_vars/wgt_long_ind.dta",	nogen	assert(3)	//	Individual weight
+			*merge	1:1	x11101ll	using	"${SNAP_dtInt}/Fam_vars/wgt_long_fam.dta",	nogen	assert(3)	//	Family weight
 			
-		}
-		
-		*	Sample source
-		cap	drop	sample_source
-		gen		sample_source=.
-		replace	sample_source=1	if	inrange(x11101ll,1000,2930999)	//	SRC
-		replace	sample_source=2	if	inrange(x11101ll,5001000,6872999)	//	SEO
-		replace	sample_source=3	if	inrange(x11101ll,3001000,3511999)	//	Immgrant Regresher (1997,1999)
-		replace	sample_source=4	if	inrange(x11101ll,4001000,4462999)	|	inrange(x11101ll,4700000,4851999)	//	Immigrant Refresher (2017)
-		replace	sample_source=5	if	inrange(x11101ll,7001000,9308999)	//	Latino Sample (1990-1992)
-		
-		label	define	sample_source		1	"SRC(Survey Research Center)"	///
-											2	"SEO(Survey of Economic Opportunity)"	///
-											3	"Immigrant Refresher (1997,1999)"	///
-											4	"Immigrant Refresher (2017)"	///
-											5	"Latino Sample (1990-1992)"
-		label	values		sample_source		sample_source
-		label	variable	sample_source	"Source of Sample"	
-		
+			*	Merge individual variables
+			cd "${SNAP_dtInt}/Ind_vars"
+			
+			global	varlist_ind	age_ind	/*wgt_long_ind*/	relrp	origfu_id	noresp_why
+			
+			foreach	var	of	global	varlist_ind	{
 				
-		*	Merge family variables
-		cd "${SNAP_dtInt}/Fam_vars"
-	
-		global	varlist_fam	svydate	svymonth	svyday	splitoff	///		/*survey info*/
-							rp_gender	rp_age	rp_marital	rp_race	///		/*	Demographics	*/
-							rp_gradecomp	rp_HS_GED	sp_HS_GED	rp_colattend	sp_colattend	rp_coldeg	///	/*	Education	*/
-							rp_state	rp_employment_status	rp_disable_amt	rp_disable_type		///	/*	Other RP/spouse information	*/
-							famnum	childnum	///	/*	Family composition	*/
-							fam_income	///	/*	Income	*/
-							HFSM_raw	HFSM_scale	HFSM_cat	///	/*	HFSM_cat*/
-							stamp_useamt_month	stamp_cntyr_recall	stamp_usewth_month	stamp_usewth_crtyear	stamp_useamt	stamp_recamt_annual		stamp_recamt	stamp_recamt_period	stamp_used	stamp_monthsused	///	/*	FS/SNAP usage*/							
-							stamp_usewth_crtJan	stamp_usewth_crtFeb	stamp_usewth_crtMar	stamp_usewth_crtApr	stamp_usewth_crtMay	stamp_usewth_crtJun		///	/*	FS/SNAP usage*/
-							stamp_usewth_crtJul	stamp_usewth_crtAug	stamp_usewth_crtSep	stamp_usewth_crtOct	stamp_usewth_crtNov	stamp_usewth_crtDec		///	/*	FS/SNAP usage*/						
-							foodexp_home_annual	foodexp_home_grown	foodexp_home_nostamp	foodexp_home_nostamp_recall	foodexp_home_spent_extra	foodexp_home_stamp	foodexp_home_stamp_recall	foodexp_home_imputed	///	/* At-home food exp */	///
-							foodexp_away_cat	foodexp_away_annual	foodexp_away_stamp	foodexp_away_stamp_recall	foodexp_away_nostamp	foodexp_away_nostamp_recall	foodexp_away_imputed	///	/*	Away food expenditure	*/
-							foodexp_atwork	foodexp_atwork_saved	///	/*	At work food expenditure	*/
-							foodexp_deliv_nostamp_wth	foodexp_deliv_nostamp	foodexp_deliv_nostamp_recall	foodexp_deliv_stamp_wth	foodexp_deliv_stamp	foodexp_deliv_stamp_recall	///	/*	devliered food expenditure	*/
-							foodexp_tot_imputed	/*	total (imputed) food expenditure	*/
-	
-		foreach	var	of	global	varlist_fam	{
+				merge 1:1 x11101ll using "`var'", keepusing(`var'*) nogen assert(2 3)	keep(3)	//	Longitudinal weight
+					
+			}
 			
-			di	"current var is `var'"
-			merge 1:1 x11101ll using "`var'", keepusing(`var'*) nogen assert(2 3)	keep(3)	
+					
+			*	Merge family variables
+			cd "${SNAP_dtInt}/Fam_vars"
+		
+			global	varlist_fam	svydate	svymonth	svyday	splitoff	///		/*survey info*/
+								rp_gender	rp_age	rp_marital	rp_race	///		/*	Demographics	*/
+								rp_gradecomp	rp_HS_GED	sp_HS_GED	rp_colattend	sp_colattend	rp_coldeg	///	/*	Education	*/
+								rp_state	rp_employment_status	rp_disable_amt	rp_disable_type		///	/*	Other RP/spouse information	*/
+								famnum	childnum	///	/*	Family composition	*/
+								fam_income	///	/*	Income	*/
+								HFSM_raw	HFSM_scale	HFSM_cat	///	/*	HFSM_cat*/
+								stamp_useamt_month	stamp_cntyr_recall	stamp_usewth_month	stamp_usewth_crtyear	stamp_useamt	stamp_recamt_annual		stamp_recamt	stamp_recamt_period	stamp_used	stamp_monthsused	///	/*	FS/SNAP usage*/							
+								stamp_usewth_crtJan	stamp_usewth_crtFeb	stamp_usewth_crtMar	stamp_usewth_crtApr	stamp_usewth_crtMay	stamp_usewth_crtJun		///	/*	FS/SNAP usage*/
+								stamp_usewth_crtJul	stamp_usewth_crtAug	stamp_usewth_crtSep	stamp_usewth_crtOct	stamp_usewth_crtNov	stamp_usewth_crtDec		///	/*	FS/SNAP usage*/						
+								foodexp_home_annual	foodexp_home_grown	foodexp_home_nostamp	foodexp_home_nostamp_recall	foodexp_home_spent_extra	foodexp_home_stamp	foodexp_home_stamp_recall	foodexp_home_imputed	///	/* At-home food exp */	///
+								foodexp_away_cat	foodexp_away_annual	foodexp_away_stamp	foodexp_away_stamp_recall	foodexp_away_nostamp	foodexp_away_nostamp_recall	foodexp_away_imputed	///	/*	Away food expenditure	*/
+								foodexp_atwork	foodexp_atwork_saved	///	/*	At work food expenditure	*/
+								foodexp_deliv_nostamp_wth	foodexp_deliv_nostamp	foodexp_deliv_nostamp_recall	foodexp_deliv_stamp_wth	foodexp_deliv_stamp	foodexp_deliv_stamp_recall	///	/*	devliered food expenditure	*/
+								foodexp_tot_imputed	/*	total (imputed) food expenditure	*/
+		
+			foreach	var	of	global	varlist_fam	{
+				
+				di	"current var is `var'"
+				merge 1:1 x11101ll using "`var'", keepusing(`var'*) nogen assert(2 3)	keep(3)	
+				
+			}
 			
-		}
-		
-		
-		*	Save (wide-format)	
-		*order	hhid_agg,	before(x11101ll)
-		order	pn-fu_nonmiss,	after(x11101ll)
-		save	"${SNAP_dtInt}/SNAP_Merged_wide",	replace
-		
-		*	Re-shape it into long format	
-		reshape long x11102_	xsqnr_	wgt_long_ind	wgt_long_fam	wgt_long_fam_adj	living_Sample tot_living_Sample	${varlist_ind}	${varlist_fam}, i(x11101ll) j(year)
-		order	x11101ll pn sampstat Sample year x11102_ xsqnr_ 
-		drop	if	inlist(year,1973,1988,1989)	//	These years seem to be re-created during "reshape." Thus drop it again.
-		drop	if	inrange(year,1968,1974)	//	Drop years which don't have last month food stamp information exist.
-		
-		*	Rename variables
-		rename	x11102_	surveyid
-		rename	xsqnr_	seqnum
-		
-		
-		*	Label variables
-		*	It would be better to do this after preparing all variables
-		
-		label	var	year			"Survey Wave"
-		label 	var	surveyid		"Survey	ID"
-		label	var	seqnum			"Sequence Number"
-		label	var	wgt_long_ind	"Longitudinal individual Weight"
-		label	var	wgt_long_fam	"Longitudinal family Weight"
-		label	var	living_Sample	"=1 if Sample member living in FU"
-		label	var	tot_living_Sample	"# of Sample members living in FU"
-		label	var	wgt_long_fam_adj	"Longitudianl family weight, adjusted"
-		label	var	age_ind			"Age of individual"
-		label 	var	relrp		"Relation to RP"
-		label	var	origfu_id	"Original FU ID splitted from"
-		label	var	noresp_why	"Reason for non-response"
-		label	var	splitoff	"(raw) Split-off status"
-		label	var	rp_gender	"Gender of RP"
 
-		save	"${SNAP_dtInt}/SNAP_Merged_long",	replace
-		
-		
-	}
-	
-	*	Clean variables
-	if	`clean_vars'==1	{
-		
-		use	"${SNAP_dtInt}/SNAP_Merged_long",	clear
-		
-		label	define	yes1no0	0	"No"	1	"Yes",	replace
-		
-		
-		*	Survey info
-		
-			*	Month of interview
-		
-			loc	var	svy_month
-			cap	drop	`var'
-			gen		`var'=.
+
 			
-				local	year=1968
-				replace	`var'=3	if	year==`year'	&	inrange(svydate,1,2)	//	March
-				replace	`var'=4	if	year==`year'	&	inrange(svydate,3,4)	//	Apr
-				replace	`var'=5	if	year==`year'	&	inrange(svydate,5,6)	//	May
-				replace	`var'=6	if	year==`year'	&	inrange(svydate,7,9)	//	June (include 0.02% "NA")
+			*	Save (wide-format)	
+			*order	hhid_agg,	before(x11101ll)
+			*order	pn-fu_nonmiss,	after(x11101ll)
+			save	"${SNAP_dtInt}/SNAP_RawMerged_wide",	replace
+			
+			*	Re-shape it into long format	
+			reshape long x11102_	xsqnr_	wgt_long_ind	wgt_long_fam	wgt_long_fam_adj	living_Sample tot_living_Sample	${varlist_ind}	${varlist_fam}, i(x11101ll) j(year)
+			order	x11101ll /*pn sampstat Sample*/ year x11102_ xsqnr_ 
+			*drop	if	inlist(year,1973,1988,1989)	//	These years seem to be re-created during "reshape." Thus drop it again.
+			*drop	if	inrange(year,1968,1974)	//	Drop years which don't have last month food stamp information exist.
+			
+			*	Rename variables
+			rename	x11102_	surveyid
+			rename	xsqnr_	seqnum
+			
+			
+			*	Label variables
+			*	It would be better to do this after preparing all variables
+			
+			label	var	year			"Survey Wave"
+			label 	var	surveyid		"Survey	ID"
+			label	var	seqnum			"Sequence Number"
+			label	var	wgt_long_ind	"Longitudinal individual Weight"
+			label	var	wgt_long_fam	"Longitudinal family Weight"
+			label	var	living_Sample	"=1 if Sample member living in FU"
+			label	var	tot_living_Sample	"# of Sample members living in FU"
+			label	var	wgt_long_fam_adj	"Longitudianl family weight, adjusted"
+			label	var	age_ind			"Age of individual"
+			label 	var	relrp		"Relation to RP"
+			label	var	origfu_id	"Original FU ID splitted from"
+			label	var	noresp_why	"Reason for non-response"
+			label	var	splitoff	"(raw) Split-off status"
+			label	var	rp_gender	"Gender of RP"
+
+			save	"${SNAP_dtInt}/SNAP_RawMerged_long",	replace
+		
+		}
+			
+		if	`add_clean'==1	{
+		
+		*	Before constructing panel structure, we first construct TFP cost per FU in each unit.
+		*	This must be done before constructing, because it requires individual observations which will later be dropped.
+		
+			use	"${SNAP_dtInt}/SNAP_RawMerged_long",	clear
+			
+			*	Survey info
+			
+				*	Month of interview
+			
+				loc	var	svy_month
+				cap	drop	`var'
+				gen		`var'=.
 				
-				local	year=1969
-				replace	`var'=2	if	year==`year'	&	inrange(svydate,1,1)	//	Before March 10
-				replace	`var'=3	if	year==`year'	&	inrange(svydate,2,3)	//	March
-				replace	`var'=4	if	year==`year'	&	inrange(svydate,4,6)	//	Apr
-				replace	`var'=5	if	year==`year'	&	inrange(svydate,7,9)	//	May and after (include 1% "NA")
+					local	year=1968
+					replace	`var'=3	if	year==`year'	&	inrange(svydate,1,2)	//	March
+					replace	`var'=4	if	year==`year'	&	inrange(svydate,3,4)	//	Apr
+					replace	`var'=5	if	year==`year'	&	inrange(svydate,5,6)	//	May
+					replace	`var'=6	if	year==`year'	&	inrange(svydate,7,9)	//	June (include 0.02% "NA")
+					
+					local	year=1969
+					replace	`var'=2	if	year==`year'	&	inrange(svydate,1,1)	//	Before March 10
+					replace	`var'=3	if	year==`year'	&	inrange(svydate,2,3)	//	March
+					replace	`var'=4	if	year==`year'	&	inrange(svydate,4,6)	//	Apr
+					replace	`var'=5	if	year==`year'	&	inrange(svydate,7,9)	//	May and after (include 1% "NA")
+					
+					local	year=1970
+					replace	`var'=2	if	year==`year'	&	inrange(svydate,1,1)	//	Before March 1
+					replace	`var'=3	if	year==`year'	&	inrange(svydate,2,3)	//	March
+					replace	`var'=4	if	year==`year'	&	inrange(svydate,4,5)	//	Apr
+					replace	`var'=5	if	year==`year'	&	inrange(svydate,6,7)	//	May
+					replace	`var'=6	if	year==`year'	&	inrange(svydate,8,9)	//	June and after (include 0.37% "NA")
+					
+					local	year=1971
+					replace	`var'=2	if	year==`year'	&	inrange(svydate,0,0)	//	Before March 1
+					replace	`var'=3	if	year==`year'	&	inrange(svydate,1,2)	//	March
+					replace	`var'=4	if	year==`year'	&	inrange(svydate,3,4)	//	Apr
+					replace	`var'=5	if	year==`year'	&	inrange(svydate,5,6)	//	May
+					replace	`var'=6	if	year==`year'	&	inrange(svydate,7,7)	//	June
+					replace	`var'=7	if	year==`year'	&	inrange(svydate,8,9)	//	July and after (include 0.21% NA/DK)
+					
+					local	year=1972
+					replace	`var'=2	if	year==`year'	&	inrange(svydate,0,0)	//	Before March 1
+					replace	`var'=3	if	year==`year'	&	inrange(svydate,1,2)	//	March
+					replace	`var'=4	if	year==`year'	&	inrange(svydate,3,4)	//	Apr
+					replace	`var'=5	if	year==`year'	&	inrange(svydate,5,6)	//	May
+					replace	`var'=6	if	year==`year'	&	inrange(svydate,7,7)	//	June
+					replace	`var'=7	if	year==`year'	&	inrange(svydate,8,9)	//	July and after (include 0.34% NA/DK)
+					
+					local	startyear=1973
+					local	endyear=1979
+					replace	`var'=3	if	inrange(year,`startyear',`endyear')	&	inrange(svydate,1,2)	//	March
+					replace	`var'=4	if	inrange(year,`startyear',`endyear')	&	inrange(svydate,3,4)	//	Apr
+					replace	`var'=5	if	inrange(year,`startyear',`endyear')	&	inrange(svydate,5,6)	//	May
+					replace	`var'=6	if	inrange(year,`startyear',`endyear')	&	inrange(svydate,7,7)	//	June
+					replace	`var'=7	if	inrange(year,`startyear',`endyear')	&	inrange(svydate,8,9)	//	July and after (include 0.34% NA/DK)
+					
+					*	1980-1996
+					*	Treat missing month as "0"
+					local	startyear=1980
+					local	endyear=1996
 				
-				local	year=1970
-				replace	`var'=2	if	year==`year'	&	inrange(svydate,1,1)	//	Before March 1
-				replace	`var'=3	if	year==`year'	&	inrange(svydate,2,3)	//	March
-				replace	`var'=4	if	year==`year'	&	inrange(svydate,4,5)	//	Apr
-				replace	`var'=5	if	year==`year'	&	inrange(svydate,6,7)	//	May
-				replace	`var'=6	if	year==`year'	&	inrange(svydate,8,9)	//	June and after (include 0.37% "NA")
+					replace	`var'=floor(svydate/100)	if	inrange(year,`startyear',`endyear')	
+					replace	`var'=0						if	inrange(year,`startyear',`endyear')	&	svydate==9999	//	NA/mail interview
+					replace	`var'=0						if	inrange(year,`startyear',`endyear')	&	svydate==6	//	Wild code (1 obs in 1994)
+					
+					*	1997-2019
+					local	startyear=1997
+					local	endyear=2019
+					replace	`var'=svymonth	if	inrange(year,`startyear',`endyear')
 				
-				local	year=1971
-				replace	`var'=2	if	year==`year'	&	inrange(svydate,0,0)	//	Before March 1
-				replace	`var'=3	if	year==`year'	&	inrange(svydate,1,2)	//	March
-				replace	`var'=4	if	year==`year'	&	inrange(svydate,3,4)	//	Apr
-				replace	`var'=5	if	year==`year'	&	inrange(svydate,5,6)	//	May
-				replace	`var'=6	if	year==`year'	&	inrange(svydate,7,7)	//	June
-				replace	`var'=7	if	year==`year'	&	inrange(svydate,8,9)	//	July and after (include 0.21% NA/DK)
+				lab	define	`var'	0	"NA/DK"	1	"Jan"	2	"Feb"	3	"Mar"	4	"Apr"	5	"May"	6	"Jun"	///
+												7	"Jul"	8	"Aug"	9	"Sep"	10	"Oct"	11	"Nov"	12	"Dec", replace
+				lab	val	`var'	`var'
 				
-				local	year=1972
-				replace	`var'=2	if	year==`year'	&	inrange(svydate,0,0)	//	Before March 1
-				replace	`var'=3	if	year==`year'	&	inrange(svydate,1,2)	//	March
-				replace	`var'=4	if	year==`year'	&	inrange(svydate,3,4)	//	Apr
-				replace	`var'=5	if	year==`year'	&	inrange(svydate,5,6)	//	May
-				replace	`var'=6	if	year==`year'	&	inrange(svydate,7,7)	//	June
-				replace	`var'=7	if	year==`year'	&	inrange(svydate,8,9)	//	July and after (include 0.34% NA/DK)
+				label	var	`var'	"Survey Month"
 				
-				local	startyear=1973
-				local	endyear=1979
-				replace	`var'=3	if	inrange(year,`startyear',`endyear')	&	inrange(svydate,1,2)	//	March
-				replace	`var'=4	if	inrange(year,`startyear',`endyear')	&	inrange(svydate,3,4)	//	Apr
-				replace	`var'=5	if	inrange(year,`startyear',`endyear')	&	inrange(svydate,5,6)	//	May
-				replace	`var'=6	if	inrange(year,`startyear',`endyear')	&	inrange(svydate,7,7)	//	June
-				replace	`var'=7	if	inrange(year,`startyear',`endyear')	&	inrange(svydate,8,9)	//	July and after (include 0.34% NA/DK)
+				*	Previous year+month
+				*	This variable will be used to import CPI, to impute real value (FS amount, food expenditures)
+				loc	var	prev_yrmonth
+				cap	drop	`var'
+				gen		`var'	=	year*100+(svy_month-1)
+				replace	`var'	=	(year-1)*100+12	if	svy_month==1	//	For janury
+				replace	`var'	=.	if	svy_month==0	|	mi(svy_month)	//	NA/DK or missing survey month(seqnum==0)
+				label	var	`var'	"Previous year/month"
+			
+				*	Survey date	(1980-2019)
+				**	Date prior to 1980 is available only in categorical value.
+				loc	var	svy_day
+				cap	drop	`var'
+				gen		`var'=.
+			
+					*	1980-1996
+					*	Treat missing month as "0"
+					local	startyear=1980
+					local	endyear=1996
 				
-				*	1980-1996
-				*	Treat missing month as "0"
-				local	startyear=1980
-				local	endyear=1996
+					replace	`var'=mod(svydate,100)	if	inrange(year,`startyear',`endyear')	
+					replace	`var'=0					if	inrange(year,`startyear',`endyear')	&	svydate==9999	//	NA/mail interview
+					replace	`var'=0					if	inrange(year,`startyear',`endyear')	&	svydate==6		//	Wild code (1 obs in 1994)
 			
-				replace	`var'=floor(svydate/100)	if	inrange(year,`startyear',`endyear')	
-				replace	`var'=0						if	inrange(year,`startyear',`endyear')	&	svydate==9999	//	NA/mail interview
-				replace	`var'=0						if	inrange(year,`startyear',`endyear')	&	svydate==6	//	Wild code (1 obs in 1994)
+					*	1997-2019
+					local	startyear=1997
+					local	endyear=2019
+					replace	`var'=svyday	if	inrange(year,`startyear',`endyear')
 				
-				*	1997-2019
-				local	startyear=1997
-				local	endyear=2019
-				replace	`var'=svymonth	if	inrange(year,`startyear',`endyear')
-			
-			lab	define	`var'	0	"NA/DK"	1	"Jan"	2	"Feb"	3	"Mar"	4	"Apr"	5	"May"	6	"Jun"	///
-											7	"Jul"	8	"Aug"	9	"Sep"	10	"Oct"	11	"Nov"	12	"Dec", replace
-			lab	val	`var'	`var'
-			
-			label	var	`var'	"Survey Month"
-			
-			*	Previous year+month
-			*	This variable will be used to import CPI, to impute real value (FS amount, food expenditures)
-			loc	var	prev_yrmonth
-			cap	drop	`var'
-			gen		`var'	=	year*100+(svy_month-1)
-			replace	`var'	=	(year-1)*100+12	if	svy_month==1	//	For janury
-			replace	`var'	=.	if	svy_month==0	|	mi(svy_month)	//	NA/DK or missing survey month(seqnum==0)
-			label	var	`var'	"Previous year/month"
-			
-			*	Import CPI data
-			merge	m:1	prev_yrmonth	using	"${SNAP_dtInt}/CPI_1913_2021" , nogen	keep(1 3) keepusing(CPI)		
-		
-			*	Survey date	(1980-2019)
-			**	Date prior to 1980 is available only in categorical value.
-			loc	var	svy_day
-			cap	drop	`var'
-			gen		`var'=.
-		
-				*	1980-1996
-				*	Treat missing month as "0"
-				local	startyear=1980
-				local	endyear=1996
-			
-				replace	`var'=mod(svydate,100)	if	inrange(year,`startyear',`endyear')	
-				replace	`var'=0					if	inrange(year,`startyear',`endyear')	&	svydate==9999	//	NA/mail interview
-				replace	`var'=0					if	inrange(year,`startyear',`endyear')	&	svydate==6		//	Wild code (1 obs in 1994)
-		
-				*	1997-2019
-				local	startyear=1997
-				local	endyear=2019
-				replace	`var'=svyday	if	inrange(year,`startyear',`endyear')
-			
-			label	var	`var'	"Survey Day"
-			
+				label	var	`var'	"Survey Day"
+				
 			*	Member status
 			*	For now(2021-11-25) I include only (1) RP (2) Living together. We can add more status (ex. relat to HH) later
 			
@@ -1243,7 +1287,66 @@
 				label	value	`var'	yes1no0
 				
 				label var	`var'	"Reference person(RP)"
+		
+			*	Calulate family-level TFP cost
 			
+				*	Import TFP cost data
+				merge m:1	year	age_ind gender svy_month using "${SNAP_dtInt}/TFP cost/TFP_costs_all", keep(1 3) keepusing(TFP_monthly_cost)
+			
+				*	Validate if merge was properly done
+				*	Only observations in PSID data with invalid age/survey month/gender are not matched
+				local	age_invalid		inlist(age_ind,0,999)
+				local	svymon_invalid	svy_month==0
+				local	gender_invalid	!inlist(gender,1,2)
+				
+				assert `age_invalid' | `svymon_invalid'	|	`gender_invalid'	///
+					 if inlist(year,${sample_years_comma}) & _merge==1
+				drop	_merge	//	drop after validation
+				
+				*	Sum all individual costs to calculate total monthly cost 
+				loc	var	foodexp_W_TFP
+				
+				bys	year	surveyid:	egen `var'	=	 total(TFP_monthly_cost)	 if !mi(surveyid)	&	live_in_FU // Total household monthly TFP cost 
+				
+				*	Adjust by the number of families
+				replace	`var'	=	`var'*1.2	if	famnum==1	//	1 person family
+				replace	`var'	=	`var'*1.1	if	famnum==2	//	2 people family
+				replace	`var'	=	`var'*1.05	if	famnum==3	//	3 people family
+				replace	`var'	=	`var'*0.95	if	inlist(famnum,5,6)	//	5-6 people family
+				replace	`var'	=	`var'*0.90	if	famnum>=7	//	7+ people family
+								
+				*	Construct per capita TFP cost (thousands) variable
+				**	CAUTION: In the original PFS paper I replaced it instead of creating a new one, but here I will create a new one
+				**	Make sure to have this in mind when constructing PFS later.
+				gen	`var'_pc_th	=	((`var'/famnum)/1000)
+				
+				label	var	`var'		"Total monthly TFP cost"
+				label	var	`var'_pc_th	"Total monthly TFP cost per capita (K)"
+		
+			*	Save
+			save	"${SNAP_dtInt}/SNAP_ExtMerged_long",	replace
+		
+		}	//	add_clean
+		
+		if	`import_dta'==1	{
+		    				
+			use	"${SNAP_dtInt}/Ind_vars/ID_sample_long.dta",	clear
+			merge	1:1	x11101ll	year	using "${SNAP_dtInt}/SNAP_ExtMerged_long", nogen assert(2 3) keep(3) 	
+								
+			*	Import CPI data
+			merge	m:1	prev_yrmonth	using	"${SNAP_dtInt}/CPI_1913_2021" , nogen	keep(1 3) keepusing(CPI)		
+			
+			compress
+			save	"${SNAP_dtInt}/SNAP_Merged_long",	replace
+		}
+		
+	}	//	merge_data
+	
+	*	Clean variables
+	if	`clean_vars'==1	{
+		
+		use	"${SNAP_dtInt}/SNAP_Merged_long",	clear
+					
 			*	Split-off indicator
 			*	General rule of treating re-contact family is that, we treat it as "non split-off"
 			loc	var	split_off
