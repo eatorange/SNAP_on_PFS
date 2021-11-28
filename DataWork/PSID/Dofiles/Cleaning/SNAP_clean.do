@@ -1334,8 +1334,15 @@
 			merge	1:1	x11101ll	year	using "${SNAP_dtInt}/SNAP_ExtMerged_long", nogen assert(2 3) keep(3) 	
 								
 			*	Import CPI data
-			merge	m:1	prev_yrmonth	using	"${SNAP_dtInt}/CPI_1913_2021" , nogen	keep(1 3) keepusing(CPI)		
+			merge	m:1	prev_yrmonth	using	"${SNAP_dtInt}/CPI_1913_2021", keep(1 3) keepusing(CPI)
 			
+				*	Validate merge
+				local	zero_seqnum	seqnum==0
+				local	invalid_mth	svy_month==0
+				
+				assert	`zero_seqnum'	|	`invalid_mth'	if	_merge==1
+				drop	_merge
+				
 			compress
 			save	"${SNAP_dtInt}/SNAP_Merged_long",	replace
 		}
@@ -1497,8 +1504,22 @@
 		lab	var	rp_state "State of Residence"
 		
 		*	Drop Alaska and Hawaii
-		drop	if	inlist(rp_state,50,51)
-		
+			*	NOTE: dropping only observations without dropping the entire indiv's obs causes unbalanced panel for some indivdiuals (ex. x11101ll==13031, who were grown in CA and formed her own FU in AL)
+			*	However, dropping all observations of individual who have ever lived in AL/CA will drop well-balanced indiv (ex. x11101==18041, who lived there only once)
+			*	For now (2021-11-27), I will leave them as they are, BUT KEEP IN MIND HAT TFP cost here does NOT consider AL/HA costs in this file (unlike PFS where we did)
+			
+			/*
+			*	If I want to drop all observations of individual who ever lived there once...
+			cap drop	live_in_AL_HA
+			cap	drop	ever_in_AL_HA
+			gen	live_in_AL_HA=1	if	inlist(rp_state,50,51)
+			bys	x11101ll:	egen	ever_in_AL_HA	=	max(live_in_AL_HA)
+			drop	if	ever_in_AL_HA==1
+			drop	live_in_AL_HA	ever_in_AL_HA
+			
+			*	If I want to drop only the period lived in AL/HA...
+			drop	if	inlist(rp_state,50,51)
+			*/
 		
 		*	Employment Status
 		*	Two different variables over time, and even single series changes variable over waves. Need to harmonize them.
@@ -2287,6 +2308,46 @@
 				cap	drop	foodexp_tot_imp_month
 			*/	
 			
+			
+		*	Create constant dollars of monetary variables  (ex. food exp, TFP)
+		*	Unit is 1982-1984=100 (1982-1984 chained)
+		qui	ds	FS_rec_amt foodexp_home_inclFS foodexp_home_exclFS foodexp_home_extramt foodexp_out foodexp_deliv foodexp_tot_exclFS foodexp_tot_inclFS TFP_monthly_cost foodexp_W_TFP foodexp_W_TFP_pc_th
+		global	money_vars_current	`r(varlist)'
+		
+		foreach	var of global money_vars_current	{
+		    
+			cap	drop	`var'_real
+			gen	double	`var'_real	=	`var'* (CPI/100)
+			
+		}
+		
+		ds	*_real
+		global	money_vars_real	`r(varlist)'
+		global	money_vars	${money_vars_current}	${money_vars_real}
+		
+		*	Create lagged variables needed
+		*	(2021-11-27) I start with monetary variables (current, real)
+			
+			*	Set it as panel data
+			xtset	x11101ll year, yearly
+		
+			*	Create lagged vars
+			foreach	var	of	global	money_vars	{
+				
+				cap	drop	l1_`var'
+				gen	double	l1_`var'	=	l.`var'
+				
+			}
+		
+		*	Drop 1975 and 1990
+		*	I only need those years for 1967 and 1991, which I just imported above (so no longer needed)
+		drop	if	inlist(year,1975,1990)
+					
+		*	Drop variables no longer needed
+		*	(This part will be added later)
+		
+		*	Save
+		sort	x11101ll	year
 		save	"${SNAP_dtInt}/SNAP_long_const",	replace	
 	
 	}
@@ -2297,13 +2358,19 @@
 		use    "${SNAP_dtInt}/SNAP_long_const",	clear
 		
 		*	Sample information
-		count	if	!inlist(year,1975,1990)	//	Total sample size (excluding 1975 and 1990)
-		unique	x11101ll	if	!inlist(year,1975,1990)	//	Total individuals
-		unique	year		if	!inlist(year,1975,1990)	//	Total waves
+			di _N	//	Sample size
+			unique	x11101ll	//	Total individuals
+			unique	year		//	Total waves
 		
 		*	Individual-level stats
 		*	To do this, we need to crate a variable which is non-missing only one obs per individual
 		*	For now, I use `_uniq' suffix to create such variables
+			
+		*	Generate cohort
+		*	Trying to use de 
+		*	Generate age group
+		*	Age-group can be tested 
+		
 			
 		*	Sample stats
 			
@@ -2321,22 +2388,40 @@
 				bys x11101ll:	gen `var'_uniq=`var' if _n==1
 				summ	`var'_uniq		
 									
-				*	Ever-used FS over stuy period
-				loc	var	FS_ever_used
-				cap	drop	`var'
-				bys	x11101ll:	egen	`var'=	max(FS_rec_wth)
-				summ	`var'
-				br	x11101ll year	seqnum		FS_rec_wth	`var'
-				
-				bys x11101ll:	gen temp=FS_ever_used if _n==1
-				
-				*	Number of FS redeemed	
-				
 				*	Number of waves living in FU
 				loc	var	num_waves_in_FU
 				cap	drop	`var'
-				bys	x11101ll:	egen	`var'=total(live_in_FU)
-				summ	`var'
+				cap	drop	`var'_uniq
+				bys	x11101ll:	egen	`var'=total(live_in_FU)	if	live_in_FU==1
+				bys	x11101ll	live_in_FU:	gen		`var'_uniq	=`var'	if	_n==1	&	live_in_FU==1
+				summ	`var'_uniq,d
+				
+				/*
+				*	Number of waves surveyed
+				local	var	num_surveyed
+				cap	drop 	`var'
+				cap	drop	`var'_uniq
+				bys	x11101ll:	egen	`var'	=	count(live_in_FU)
+				bys x11101ll:	gen 	`var'_uniq=`var' if _n==1
+				summ	`var'_uniq,d
+				*/
+				
+				*	Ever-used FS over stuy period
+				loc	var	FS_ever_used
+				cap	drop	`var'
+				cap	drop	`var'_uniq
+				bys	x11101ll:	egen	`var'=	max(FS_rec_wth)	if	live_in_FU==1
+				bys x11101ll	live_in_FU:	gen `var'_uniq	=	`var' if _n==1	&	live_in_FU==1
+				summ	`var'_uniq,d
+				
+				*	# of waves FS redeemed	(if ever used)
+				loc	var	total_FS_used
+				cap	drop	`var'
+				cap	drop	`var'_uniq
+				bys	x11101ll:	egen	`var'=	total(FS_rec_wth)	if	live_in_FU==1
+				bys x11101ll	live_in_FU:	gen `var'_uniq	=	`var' if _n==1
+				summ	`var'_uniq if `var'_uniq>=1,d
+				
 			
 			
 		*	Observation-level (FU-level, RP information)
@@ -2361,7 +2446,7 @@
 			
 			*	FS amount (real dollars)
 		
-		
+		*	Change in TFP costs over time (real-dollars, 4-ppl FU as an example), to show trends in TFP
 		
 		
 		*	Whether FS is used last month at once over the study period
