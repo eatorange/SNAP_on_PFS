@@ -96,16 +96,73 @@
 	
 	label	define	yes1no0	0	"No"	1	"Yes",	replace
 	
+	
+	*	States
+	*	Note: state codes here are slightly different from that in PFS paper, as Rhode Island (rp_state_enum39) exists here while it didnt exist in PFS paper...
+		
+		*	Reference state
+		global	state_bgroup	rp_state_enum32	//	NY
+		
+		*	Excluded states (Alaska, Hawaii, U.S. territory, DK/NA)
+		global	state_group0	rp_state_enum1	rp_state_enum52	///	//	Inapp, DK/NA
+								rp_state_enum51	rp_state_enum51	//	AK, HA
+		global	state_group_ex	${state_group0}
+		
+		*	Northeast
+		global	state_group1	rp_state_enum19 rp_state_enum29 rp_state_enum45	///	//	ME, NH, VT
+								rp_state_enum21 rp_state_enum7	rp_state_enum39	//	MA, CT, RI
+		global	state_group_NE	${state_group1}
+			
+		*	Mid-atlantic
+		global	state_group2	rp_state_enum38	//	PA
+		global	state_group3	rp_state_enum30	//	NJ
+		global	state_group4	rp_state_enum9	rp_state_enum8	rp_state_enum20	//	DC, DE, MD
+		global	state_group5	rp_state_enum46	//	VA
+		global	state_group_MidAt	${state_group2}	${state_group3}	${state_group4}	${state_group5}
+		
+		*	South
+		global	state_group6	rp_state_enum33	rp_state_enum40	//	NC, SC
+		global	state_group7	rp_state_enum11	//	GA
+		global	state_group8	rp_state_enum17	rp_state_enum41	rp_state_enum48	//	KT, TN, WV
+		global	state_group9	rp_state_enum10	//	FL
+		global	state_group10	rp_state_enum2	rp_state_enum4	rp_state_enum24 rp_state_enum18	//	AL, AR, MS, LA
+		global	state_group11	rp_state_enum43	//	TX
+		global	state_group_South	${state_group6}	${state_group7}	${state_group8}	${state_group9}	${state_group10}	${state_group11}
+		
+		*	Mid-west
+		global	state_group12	rp_state_enum35	//	OH
+		global	state_group13	rp_state_enum14	//	IN
+		global	state_group14	rp_state_enum22 	//	MI
+		global	state_group15	rp_state_enum13	//	IL
+		global	state_group16	rp_state_enum23 rp_state_enum49	//	MN, WI
+		global	state_group17	rp_state_enum15	rp_state_enum25	//	IA, MO
+		global	state_group_MidWest	${state_group12}	${state_group13}	${state_group14}	${state_group15}	${state_group16}	${state_group17}
+		
+		*	West
+		global	state_group18	rp_state_enum16	rp_state_enum27	///	//	KS, NE
+								rp_state_enum34	rp_state_enum41	///	//	ND, SD
+								rp_state_enum36	//	OK
+		global	state_group19	rp_state_enum3	rp_state_enum6	///	//	AZ, CO
+								rp_state_enum12	rp_state_enum26	///	//	ID, MT
+								rp_state_enum28	rp_state_enum31	///	//	NV, NM
+								rp_state_enum44	rp_state_enum50		//	UT, WY
+		global	state_group20	rp_state_enum37	rp_state_enum47	//	OR, WA
+		global	state_group21	rp_state_enum5	//	CA						
+		global	state_group_West	${state_group18}	${state_group19}	${state_group20}	${state_group21}	
+		
+	
 	local	ind_agg			0	//	Aggregate individual-level variables across waves
 	local	fam_agg			0	//	Aggregate family-level variables across waves
 	local	ext_data		0	//	Prepare external data (CPI, TFP, etc.)
 	local	cr_panel		0	//	Create panel structure from ID variable
-	local	merge_data		1	//	Merge ind- and family- variables and import it into ID variable
+	local	merge_data		0	//	Merge ind- and family- variables and import it into ID variable
 		local	raw_reshape	0		//	Merge raw variables and reshape into long data (takes time)
 		local	add_clean	0		//	Do additional cleaning and import external data (CPI, TFP)
 		local	import_dta	0		//	Import aggregated variables into ID data. 
 	local	clean_vars		1	//	Clean variables and construct consistent variables
+	local	PFS_const		0	//	Construct PFS
 	local	summ_stats		0	//	Generate summary statistics (will be moved to another file later)
+	
 	
 	*	Aggregate individual-level variables
 	if	`ind_agg'==1	{
@@ -1318,9 +1375,11 @@
 				*	Construct per capita TFP cost (thousands) variable
 				**	CAUTION: In the original PFS paper I replaced it instead of creating a new one, but here I will create a new one
 				**	Make sure to have this in mind when constructing PFS later.
+				gen	`var'_pc	=	(`var'/famnum)
 				gen	`var'_pc_th	=	((`var'/famnum)/1000)
 				
 				label	var	`var'		"Total monthly TFP cost"
+				label	var	`var'_pc	"Total monthly TFP cost per capita"
 				label	var	`var'_pc_th	"Total monthly TFP cost per capita (K)"
 		
 			*	Save
@@ -1354,6 +1413,9 @@
 		
 		use	"${SNAP_dtInt}/SNAP_Merged_long",	clear
 					
+			*	Survey year dummies
+			tab	year, gen(year_enum)
+			
 			*	Split-off indicator
 			*	General rule of treating re-contact family is that, we treat it as "non split-off"
 			loc	var	split_off
@@ -1436,7 +1498,13 @@
 			replace	rp_age=24	if	x11101ll==6589030	&	year==2007	//	From individual age data (this RP is dropped sample)
 			replace	rp_age=35	if	x11101ll==6129032	&	year==2013	//	From individual age data (this RP is dropped sample)
 			
-
+			label	var	`var'	"Age (RP)"
+			
+			*	Square age to capture non-linear effect
+			loc	var	rp_age_sq
+			cap	drop	`var'
+			gen	`var'	=	rp_age*rp_age
+			label	var	`var'	"Age^2 (RP)"
 
 		
 		*	Gender
@@ -1477,9 +1545,16 @@
 		loc	var	rp_White
 		cap	drop	`var'
 		gen		`var'=0	if	inrange(rp_race,2,9)	//	Black, Asian, Native American, etc.
-		replace	`var'=1	if	rp_race==1 // Single, widow, separated, divorced.
+		replace	`var'=1	if	rp_race==1 // White
 		label	value	`var'	yes1no0
-		label	var		`var'	"White"
+		label	var		`var'	"White (RP)"
+		
+		local	var	rp_nonWhte
+		cap	drop	`var'
+		gen		`var'=rp_White
+		recode	`var'	(1=0) (0=1) 
+		label	value	`var'	yes1no0
+		label	var		`var'	"non-White (RP)"
 		
 		*	State of Residence
 		label define	statecode	0	"Inap.: U.S. territory or foreign country"	99	"D.K; N.A"	///
@@ -1503,7 +1578,10 @@
 		lab	val	rp_state statecode
 		lab	var	rp_state "State of Residence"
 		
-		*	Drop Alaska and Hawaii
+			*	Create a dummy of (group of states)
+			tab rp_state, gen(rp_state_enum)
+		
+			*	Drop Alaska and Hawaii
 			*	NOTE: dropping only observations without dropping the entire indiv's obs causes unbalanced panel for some indivdiuals (ex. x11101ll==13031, who were grown in CA and formed her own FU in AL)
 			*	However, dropping all observations of individual who have ever lived in AL/CA will drop well-balanced indiv (ex. x11101==18041, who lived there only once)
 			*	For now (2021-11-27), I will leave them as they are, BUT KEEP IN MIND HAT TFP cost here does NOT consider AL/HA costs in this file (unlike PFS where we did)
@@ -1520,6 +1598,15 @@
 			*	If I want to drop only the period lived in AL/HA...
 			drop	if	inlist(rp_state,50,51)
 			*/
+			
+			*	Generate indicator that FU is in one of 48 states
+			local	var	rp_state_48states
+			cap	drop	`var'
+			gen	`var'	=.
+			replace	`var'=0	if	inlist(rp_state,0,50,51,99) // Inapp, AL, HA, DK/NA/DK
+			replace	`var'=1	if	!mi(rp_state)	&	!inlist(rp_state,0,50,51,59)
+			label	value	`var'	yes1no0
+			label var	`var'	"FU in 48 states"
 		
 		*	Employment Status
 		*	Two different variables over time, and even single series changes variable over waves. Need to harmonize them.
@@ -1635,9 +1722,20 @@
 			label	var	`var'	"HFSM FI"
 		
 		*	Family income
-		
-			lab	var	fam_income	"Total family income"
-				
+		lab	var	fam_income	"Total family income"
+			
+			*	Per capita income
+			loc	var	fam_income_pc
+			cap	drop	`var'
+			gen		double	`var'	=	fam_income/famnum
+			label	var	`var'	"Family income per capita"	
+			
+			*	Log of per capita income
+			loc	var	ln_fam_income_pc
+			cap	drop	`var'
+			gen		double	`var'	=	log(fam_income_pc)
+			label	var	`var'	"Family income per capita (log)"	
+			
 		
 		*	Food stamp recall period
 		loc	var	FS_rec_amt_recall
@@ -2292,6 +2390,54 @@
 			replace	`var'=.	if	live_in_FU==0	//	Replace it as missing if not living in FU (ex. institution, moved out, etc.)
 			lab	var	`var'	"Total monthly food exp (FS incl)"	
 			
+						
+			*	Divide total exp by family number to get per capita value, and then divide by thousand to make unit as thousand
+				
+				*	Food exp (w/o FS)
+				loc	var	foodexp_tot_exclFS
+				cap	drop	`var'_pc
+				gen		double	`var'_pc	=	`var'/famnum
+				gen		double	`var'_pc_th	=	(`var'/famnum)/1000
+				label	var	`var'_pc	"Monthly food exp per capita (FS excl)"
+				label	var	`var'_pc_th	"Monthly food exp per capita (FS excl) (K)"
+				
+				*	Food exp (with FS)
+				loc	var	foodexp_tot_inclFS
+				cap	drop	`var'_pc
+				gen		double	`var'_pc	=	`var'/famnum
+				gen		double	`var'_pc_th	=	(`var'/famnum)/1000
+				label	var	`var'_pc	"Monthly food exp per capita (FS incl)"
+				label	var	`var'_pc_th	"Monthly food exp per capita (FS incl) (K)"
+			
+				*	Generate polynomial degree up to 5
+				forval	i=1/5	{
+				    
+					cap	drop	foodexp_tot_exclFS_pc_`i'
+					gen	double	foodexp_tot_exclFS_pc_`i'=(foodexp_tot_exclFS_pc)^`i'
+					gen	double	foodexp_tot_exclFS_pc_th_`i'=(foodexp_tot_exclFS_pc_th)^`i'
+					
+					label	var	foodexp_tot_exclFS_pc_`i'	"Total monhtly food exp per capita (FS incl) - `i'th order"
+					label	var	foodexp_tot_exclFS_pc_`i'	"Total monhtly food exp per capita (FS incl) - `i'th order"
+					
+				}
+				
+			*	Construct a indicator whether total food exp (per capita) exceeds TFP (per capita)
+			loc	var	overTFP_inclFS
+			cap drop `var'
+			gen		`var'=0 	if foodexp_tot_inclFS_pc<foodexp_W_TFP_pc
+			replace	`var'=1 	if foodexp_tot_inclFS_pc>=foodexp_W_TFP_pc
+			replace	`var'=.		if mi(foodexp_tot_inclFS_pc)
+			label	value	`var'	yes1no0
+			label var	`var'	"Food exp(with FS) exceeds TFP cost"
+
+			loc	var	overTFP_exclFS
+			cap drop `var'
+			gen		`var'=0 	if foodexp_tot_exclFS_pc<foodexp_W_TFP_pc
+			replace	`var'=1 	if foodexp_tot_exclFS_pc>=foodexp_W_TFP_pc
+			replace	`var'=.		if mi(foodexp_tot_exclFS_pc)
+			label	value	`var'	yes1no0
+			label var	`var'	"Food exp(w/o FS) exceeds TFP cost"
+			
 			*	Summary stat
 			/*	
 				cap drop diff_total
@@ -2311,7 +2457,8 @@
 			
 		*	Create constant dollars of monetary variables  (ex. food exp, TFP)
 		*	Unit is 1982-1984=100 (1982-1984 chained)
-		qui	ds	FS_rec_amt foodexp_home_inclFS foodexp_home_exclFS foodexp_home_extramt foodexp_out foodexp_deliv foodexp_tot_exclFS foodexp_tot_inclFS TFP_monthly_cost foodexp_W_TFP foodexp_W_TFP_pc_th
+		qui	ds	FS_rec_amt foodexp_home_inclFS foodexp_home_exclFS foodexp_home_extramt foodexp_out foodexp_deliv foodexp_tot_exclFS foodexp_tot_inclFS TFP_monthly_cost foodexp_W_TFP foodexp_W_TFP_pc_th	///
+				foodexp_tot_exclFS_pc foodexp_tot_inclFS_pc	foodexp_tot_exclFS_pc_1 foodexp_tot_exclFS_pc_2 foodexp_tot_exclFS_pc_3 foodexp_tot_exclFS_pc_4 foodexp_tot_exclFS_pc_5
 		global	money_vars_current	`r(varlist)'
 		
 		foreach	var of global money_vars_current	{
@@ -2325,23 +2472,33 @@
 		global	money_vars_real	`r(varlist)'
 		global	money_vars	${money_vars_current}	${money_vars_real}
 		
+		di "${money_vars_real}"
 		*	Create lagged variables needed
 		*	(2021-11-27) I start with monetary variables (current, real)
 			
-			*	Set it as panel data
-			xtset	x11101ll year, yearly
+			*	Set it as survey panel data
+					   
+			svyset	sampcls [pweight=wgt_long_fam_adj], strata(sampstr)	singleunit(scaled)
+				
+				*	Generate time variable which increases by 1 over wave ("year" ") // can be used to construct panel data (we can't directly use "year" because PSID was collected bieenially since 1997, thus data will treat it as gap period)
+				cap	drop	time
+				gen		time	=	year-1974
+				replace	time	=	year-1974
+			xtset x11101ll year,	delta(1)
 		
 			*	Create lagged vars
 			foreach	var	of	global	money_vars	{
 				
 				cap	drop	l1_`var'
-				gen	double	l1_`var'	=	l.`var'
+				gen		double	l1_`var'	=	l.`var'	if	year<=1997	//	When PSID was collected annually
+				replace		l1_`var'	=	l2.`var'	if	year>=1999	//	When PSID was collected bieenially
 				
 			}
 		
 		*	Drop 1975 and 1990
 		*	I only need those years for 1967 and 1991, which I just imported above (so no longer needed)
-		drop	if	inlist(year,1975,1990)
+		*	(2021-11-28) Let's not do this for now, as we still need lagged information for purposes (ex. PT assumption testing, etc.)
+		*drop	if	inlist(year,1975,1990)
 					
 		*	Drop variables no longer needed
 		*	(This part will be added later)
@@ -2351,12 +2508,90 @@
 		save	"${SNAP_dtInt}/SNAP_long_const",	replace	
 	
 	}
+			
+	*	Construct PFS
+	if	`PFS_const'==1	{
+	 
+		use    "${SNAP_dtInt}/SNAP_long_const",	clear
+		
+		*	Set globals
+		global	statevars		l1_foodexp_tot_exclFS_pc_1 l1_foodexp_tot_exclFS_pc_2 l1_foodexp_tot_exclFS_pc_3
+		global	demovars		rp_age rp_age_sq	rp_nonWhte	rp_married	rp_female	
+		global	econvars		ln_fam_income_pc
+		global	healthvars		rp_disabled
+		global	familyvars		famnum	ratio_child
+		global	empvars			rp_employed
+		global	eduvars			rp_NoHS rp_somecol rp_col
+		global	foodvars		FS_rec_wth
+		global	regionvars		rp_state_enum1-rp_state_enum31 rp_state_enum33-rp_state_enum50 	//	Exclusing NY (rp_state_enum32) and outside 48 states (1, 52, 53). The latter should be excluded when running regression
+		global	timevars		year_enum2-year_enum32
+
+		
+		*	Declare variables
+		local	depvar		foodexp_tot_inclFS_pc
+		
+		*	Step 1
+		*	Exclude year 10 (to calculate RMPSE)	
+		svy: glm 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	${foodvars}	${regionvars}	${timevars}, family(gamma)	link(log)
+		est	sto	glm_step1
+	
+		*	Predict fitted value and residual
+		gen	glm_step1_sample=1	if	e(sample)==1 & `=e(subpop)'	//	We need =`e(subpop)' condition, as e(sample) includes both subpopulation and non-subpopulation.
+		predict double mean1_foodexp_glm	if	glm_step1_sample==1
+		predict double e1_foodexp_glm	if	glm_step1_sample==1,r
+		gen e1_foodexp_sq_glm = (e1_foodexp_glm)^2
+		
+		*	Step 2
+		local	depvar	e1_foodexp_sq_glm
+		
+		*	For now (2021-11-28) GLM in step 2 does not converge. Will use OLS for now.
+		*svy: glm 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	${foodvars}	${regionvars}	${timevars}	, family(gamma)	link(log)
+		svy: reg 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	${foodvars}	${regionvars}	${timevars}
+		
+	
+		est store glm_step2
+		gen	glm_step2_sample=1	if	e(sample)==1 & `=e(subpop)'
+		*svy:	reg `e(depvar)' `e(selected)'
+		predict	double	var1_foodexp_glm	if	glm_step2_sample==1	
+		
+		
+		*	Output
+		**	For AER manuscript, we omit asterisk(*) to display significance as AER requires not to use.
+		**	If we want to diplay star, renable "star" option inside "cells" and "star(* 0.10 ** 0.05 *** 0.01)"
+		
+			esttab	glm_step1	glm_step2	using "${SNAP_outRaw}/GLM_pooled.csv", ///
+					cells(b(star fmt(%8.2f)) se(fmt(2) par)) stats(N_sub /*r2*/) label legend nobaselevels star(* 0.10 ** 0.05 *** 0.01)	///
+					title(Conditional Mean and Variance of Food Expenditure per capita) 	replace
+					
+			esttab	glm_step1	glm_step2	using "${SNAP_outRaw}/GLM_pooled.tex", ///
+					cells(b(nostar fmt(%8.3f)) & se(fmt(2) par)) stats(N_sub, fmt(%8.0fc)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(_cons)*/	///
+					title(Conditional Mean and Variance of Food Expenditure per capita)		replace		
+		
+		
+		
+		*	Step 3
+		*	Assume the outcome variable follows the Gamma distribution
+		*	(2021-11-28) I temporarily don't use expected residual (var1_foodexp_glm) as it goes crazy. I will temporarily use expected residual from step 1 (e1_foodexp_sq_glm)
+		*gen alpha1_foodexp_pc_glm	= (mean1_foodexp_glm)^2 / var1_foodexp_glm	//	shape parameter of Gamma (alpha)
+		*gen beta1_foodexp_pc_glm	= var1_foodexp_glm / mean1_foodexp_glm		//	scale parameter of Gamma (beta)
+		
+		*	The  code below is a temporary code to see what is going wrong in the original code. I replaced expected value of residual squared with residual squared
+		gen alpha1_foodexp_pc_glm	= (mean1_foodexp_glm)^2 / e1_foodexp_sq_glm	//	shape parameter of Gamma (alpha)
+		gen beta1_foodexp_pc_glm	= e1_foodexp_sq_glm / mean1_foodexp_glm		//	scale parameter of Gamma (beta)
+		*	Generate PFS by constructing CDF
+		gen PFS_glm = gammaptail(alpha1_foodexp_pc_glm, foodexp_W_TFP_pc/beta1_foodexp_pc_glm)	//	gammaptail(a,(x-g)/b)=(1-gammap(a,(x-g)/b)) where g is location parameter (g=0 in this case)
+		label	var	PFS_glm "PFS"
+		
+	
+		
+	}
 	
 	*	Summary stats	
 	if	`summ_stats'==1	{
-		
+	    
 		use    "${SNAP_dtInt}/SNAP_long_const",	clear
 		
+			
 		*	Sample information
 			di _N	//	Sample size
 			unique	x11101ll	//	Total individuals
@@ -2370,6 +2605,7 @@
 		*	Trying to use de 
 		*	Generate age group
 		*	Age-group can be tested 
+		
 		
 			
 		*	Sample stats
@@ -2422,7 +2658,27 @@
 				bys x11101ll	live_in_FU:	gen `var'_uniq	=	`var' if _n==1
 				summ	`var'_uniq if `var'_uniq>=1,d
 				
+		*	Test parallel trend assumption
+		*	For now (2021-11-28) I am testing only never-treated vs treated-once. I can update it later
+		
+			*	Standardize event time
+			sort	x11101ll	year
+			cap	drop	relat_time
+			gen		relat_time=0	if	total_FS_used==1	&	FS_rec_wth==1
+			replace	relat_time=-1	if	total_FS_used==1	&	FS_rec_wth==0	&	f1.FS_rec_wth==1
+			replace	relat_time=-2	if	total_FS_used==1	&	FS_rec_wth==0	&	f2.FS_rec_wth==1
+			replace	relat_time=-3	if	total_FS_used==1	&	FS_rec_wth==0	&	f3.FS_rec_wth==1
+			replace	relat_time=1	if	total_FS_used==1	&	FS_rec_wth==0	&	l1.FS_rec_wth==1
+			replace	relat_time=2	if	total_FS_used==1	&	FS_rec_wth==0	&	l2.FS_rec_wth==1
+			replace	relat_time=3	if	total_FS_used==1	&	FS_rec_wth==0	&	l3.FS_rec_wth==1
 			
+			cap	drop	relat_time_enum*
+			tab	relat_time, gen(relat_time_enum)
+			
+			svy: reg PFS_glm ${regionvars} ${timevars}
+			
+			*global	regionvars		rp_state_enum1-rp_state_enum31 rp_state_enum33-rp_state_enum50 	//	Exclusing NY (rp_state_enum32) and outside 48 states (1, 52, 53). The latter should be excluded when running regression
+			*global	timevars		year_enum2-year_enum32
 			
 		*	Observation-level (FU-level, RP information)
 		
@@ -2470,7 +2726,7 @@
 		*	(V) Replace expenditure values to zero if that member didn't exist in that wave (i.e. sequence number outside 0-20)
 		*	(V) Generate indicator if PSID RP is not equal to person
 		*	Include School meal/WIC variables to see the ratio of school meal/WIC received also receive SNAP
-		*	Create real dollars of nominal value variables (don't replace them. Just create new ones)
+		*	(V) Create real dollars of nominal value variables (don't replace them. Just create new ones)
 		*	Check food stamp value reported vs recall period (to see the over- or under- reporting based on )
 		*	Make a summary stat of (1) observation level (2) individual level
 		
@@ -2478,8 +2734,6 @@
 		*	Modeling
 	
 	}
-	
-	
 	
 /*
 	*	Drop years not in the sample
