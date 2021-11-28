@@ -2675,7 +2675,22 @@
 			cap	drop	relat_time_enum*
 			tab	relat_time, gen(relat_time_enum)
 			
-			svy: reg PFS_glm ${regionvars} ${timevars}
+			*	Make value of never-treated group as non-missing and zero for each relative time indicator, so this group can be included in the regression
+			forvalues	i=1/7	{
+			    
+				replace	relat_time_enum`i'=0	if	total_FS_used==0
+				
+			}
+			
+			*	Seems leads are significant, meaning PT is violated...... is specification wrong?
+			svy, subpop(if inrange(year,1975,1997)): reg PFS_glm relat_time_enum1 relat_time_enum2 relat_time_enum4 relat_time_enum5 relat_time_enum6 relat_time_enum7 ${regionvars} ${timevars} 
+			reg	PFS_glm relat_time_enum1 relat_time_enum2 relat_time_enum4 relat_time_enum5 relat_time_enum6 relat_time_enum7 ${regionvars} ${timevars} if year<=1997
+			svy: reg	foodexp_tot_exclFS_pc_real	relat_time_enum1 relat_time_enum2 relat_time_enum4 relat_time_enum5 relat_time_enum6 relat_time_enum7 ${regionvars} ${timevars}
+			reg	foodexp_tot_exclFS_pc_real	relat_time_enum1 relat_time_enum2 relat_time_enum4 relat_time_enum5 relat_time_enum6 relat_time_enum7 ${regionvars} ${timevars}
+			
+			*	Real dollars of food expenditure over time
+			bys year: egen foodexp_tot_exclFS_pc_real_m = mean(foodexp_tot_exclFS_pc_real)
+			bys year: egen foodexp_tot_exclFS_pc_real_m = mean(foodexp_tot_exclFS_pc_real)
 			
 			*global	regionvars		rp_state_enum1-rp_state_enum31 rp_state_enum33-rp_state_enum50 	//	Exclusing NY (rp_state_enum32) and outside 48 states (1, 52, 53). The latter should be excluded when running regression
 			*global	timevars		year_enum2-year_enum32
