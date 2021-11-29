@@ -153,12 +153,12 @@
 	
 	local	ind_agg			0	//	Aggregate individual-level variables across waves
 	local	fam_agg			0	//	Aggregate family-level variables across waves
-	local	ext_data		0	//	Prepare external data (CPI, TFP, etc.)
-	local	cr_panel		0	//	Create panel structure from ID variable
-	local	merge_data		0	//	Merge ind- and family- variables and import it into ID variable
-		local	raw_reshape	0		//	Merge raw variables and reshape into long data (takes time)
-		local	add_clean	0		//	Do additional cleaning and import external data (CPI, TFP)
-		local	import_dta	0		//	Import aggregated variables into ID data. 
+	local	ext_data		1	//	Prepare external data (CPI, TFP, etc.)
+	local	cr_panel		1	//	Create panel structure from ID variable
+	local	merge_data		1	//	Merge ind- and family- variables and import it into ID variable
+		local	raw_reshape	1		//	Merge raw variables and reshape into long data (takes time)
+		local	add_clean	1		//	Do additional cleaning and import external data (CPI, TFP)
+		local	import_dta	1		//	Import aggregated variables into ID data. 
 	local	clean_vars		1	//	Clean variables and construct consistent variables
 	local	PFS_const		1	//	Construct PFS
 	local	summ_stats		0	//	Generate summary statistics (will be moved to another file later)
@@ -2696,7 +2696,7 @@
 			xtreg PFS_glm 	relat_time_enum2	relat_time_enum3	relat_time_enum4	relat_time_enum5	relat_time_enum6	relat_time_enum7	relat_time_enum8	 if inlist(total_FS_used,0,1) & inrange(relat_time,-4,3), fe
 			est	store	PT_never_once
 			
-			coefplot	PT_never_once,	graphregion(color(white)) bgcolor(white) vertical drop(_cons) xtitle(Event time) ytitle(Coefficient) cionly	///
+			coefplot	PT_never_once,	graphregion(color(white)) bgcolor(white) vertical drop(_cons) xtitle(Event time) ytitle(Coefficient) 	///
 										title(PFS Pre-trend)	name(PFS_pretrend, replace)
 			graph	export	"${SNAP_outRaw}/PFS_pretrend.png", replace
 			graph	close
