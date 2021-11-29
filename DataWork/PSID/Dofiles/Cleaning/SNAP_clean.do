@@ -160,7 +160,7 @@
 		local	add_clean	0		//	Do additional cleaning and import external data (CPI, TFP)
 		local	import_dta	0		//	Import aggregated variables into ID data. 
 	local	clean_vars		1	//	Clean variables and construct consistent variables
-	local	PFS_const		0	//	Construct PFS
+	local	PFS_const		1	//	Construct PFS
 	local	summ_stats		0	//	Generate summary statistics (will be moved to another file later)
 	
 	
@@ -1455,6 +1455,7 @@
 			label	var	`var'	"Split-off FU"
 		
 		*	Age
+		local	var	
 		
 			*	Individual age
 			*	Fix age=999 from manually observed result.
@@ -1498,13 +1499,13 @@
 			replace	rp_age=24	if	x11101ll==6589030	&	year==2007	//	From individual age data (this RP is dropped sample)
 			replace	rp_age=35	if	x11101ll==6129032	&	year==2013	//	From individual age data (this RP is dropped sample)
 			
-			label	var	`var'	"Age (RP)"
+			label	var	rp_age	"Age (RP)"
 			
 			*	Square age to capture non-linear effect
 			loc	var	rp_age_sq
 			cap	drop	`var'
 			gen	`var'	=	rp_age*rp_age
-			label	var	`var'	"Age^2 (RP)"
+			label	var	rp_age	"Age^2 (RP)"
 
 		
 		*	Gender
@@ -2533,6 +2534,7 @@
 		*	Step 1
 		*	Exclude year 10 (to calculate RMPSE)	
 		svy: glm 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	${foodvars}	${regionvars}	${timevars}, family(gamma)	link(log)
+		*svy: reg 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	${foodvars}	${regionvars}	${timevars}
 		est	sto	glm_step1
 	
 		*	Predict fitted value and residual
@@ -2547,8 +2549,7 @@
 		*	For now (2021-11-28) GLM in step 2 does not converge. Will use OLS for now.
 		*svy: glm 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	${foodvars}	${regionvars}	${timevars}	, family(gamma)	link(log)
 		svy: reg 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	${foodvars}	${regionvars}	${timevars}
-		
-	
+			
 		est store glm_step2
 		gen	glm_step2_sample=1	if	e(sample)==1 & `=e(subpop)'
 		*svy:	reg `e(depvar)' `e(selected)'
@@ -2578,19 +2579,19 @@
 		*	The  code below is a temporary code to see what is going wrong in the original code. I replaced expected value of residual squared with residual squared
 		gen alpha1_foodexp_pc_glm	= (mean1_foodexp_glm)^2 / e1_foodexp_sq_glm	//	shape parameter of Gamma (alpha)
 		gen beta1_foodexp_pc_glm	= e1_foodexp_sq_glm / mean1_foodexp_glm		//	scale parameter of Gamma (beta)
+		
 		*	Generate PFS by constructing CDF
 		gen PFS_glm = gammaptail(alpha1_foodexp_pc_glm, foodexp_W_TFP_pc/beta1_foodexp_pc_glm)	//	gammaptail(a,(x-g)/b)=(1-gammap(a,(x-g)/b)) where g is location parameter (g=0 in this case)
 		label	var	PFS_glm "PFS"
 		
-	
+		save    "${SNAP_dtInt}/SNAP_long_PFS",	replace
 		
 	}
 	
 	*	Summary stats	
 	if	`summ_stats'==1	{
 	    
-		use    "${SNAP_dtInt}/SNAP_long_const",	clear
-		
+		use    "${SNAP_dtInt}/SNAP_long_PFS",	clear	
 			
 		*	Sample information
 			di _N	//	Sample size
@@ -2664,37 +2665,108 @@
 			*	Standardize event time
 			sort	x11101ll	year
 			cap	drop	relat_time
-			gen		relat_time=0	if	total_FS_used==1	&	FS_rec_wth==1
-			replace	relat_time=-1	if	total_FS_used==1	&	FS_rec_wth==0	&	f1.FS_rec_wth==1
-			replace	relat_time=-2	if	total_FS_used==1	&	FS_rec_wth==0	&	f2.FS_rec_wth==1
-			replace	relat_time=-3	if	total_FS_used==1	&	FS_rec_wth==0	&	f3.FS_rec_wth==1
-			replace	relat_time=1	if	total_FS_used==1	&	FS_rec_wth==0	&	l1.FS_rec_wth==1
-			replace	relat_time=2	if	total_FS_used==1	&	FS_rec_wth==0	&	l2.FS_rec_wth==1
-			replace	relat_time=3	if	total_FS_used==1	&	FS_rec_wth==0	&	l3.FS_rec_wth==1
 			
-			cap	drop	relat_time_enum*
-			tab	relat_time, gen(relat_time_enum)
+			gen		relat_time=-4	if	total_FS_used==1	&	FS_rec_wth==0	&	f4.FS_rec_wth==1	//	3 year before FS
+			replace	relat_time=-3	if	total_FS_used==1	&	FS_rec_wth==0	&	f3.FS_rec_wth==1	//	2 year before FS
+			replace	relat_time=-2	if	total_FS_used==1	&	FS_rec_wth==0	&	f2.FS_rec_wth==1	//	2 year before FS
+			replace	relat_time=-1	if	total_FS_used==1	&	FS_rec_wth==0	&	f1.FS_rec_wth==1	//	1 year before FS
+			replace	relat_time=0	if	total_FS_used==1	&	FS_rec_wth==1							//	Year of FS
+			replace	relat_time=1	if	total_FS_used==1	&	FS_rec_wth==0	&	l1.FS_rec_wth==1	//	1 year after FS
+			replace	relat_time=2	if	total_FS_used==1	&	FS_rec_wth==0	&	l2.FS_rec_wth==1	//	2 year after FS
+			replace	relat_time=3	if	total_FS_used==1	&	FS_rec_wth==0	&	l3.FS_rec_wth==1	//	3 year after FS			
 			
 			*	Make value of never-treated group as non-missing and zero for each relative time indicator, so this group can be included in the regression
-			forvalues	i=1/7	{
-			    
-				replace	relat_time_enum`i'=0	if	total_FS_used==0
+			replace	relat_time=4	if	total_FS_used==0
+			
+			*	Creat dummy for each indicator (never-treated group will be zero in all indicator)
+			cap	drop	relat_time_enum*
+			tab	relat_time, gen(relat_time_enum)
+			drop	relat_time_enum9	//	We should not use it, as it is a dummy for never-treated group
+			
+			label	var	relat_time_enum1	"t-4"
+			label	var	relat_time_enum2	"t-3"
+			label	var	relat_time_enum3	"t-2"
+			label	var	relat_time_enum4	"t-1"
+			label	var	relat_time_enum5	"t=0"
+			label	var	relat_time_enum6	"t+1"
+			label	var	relat_time_enum7	"t+2"
+			label	var	relat_time_enum8	"t+3"
+			
+			
+			xtreg PFS_glm 	relat_time_enum2	relat_time_enum3	relat_time_enum4	relat_time_enum5	relat_time_enum6	relat_time_enum7	relat_time_enum8	 if inlist(total_FS_used,0,1) & inrange(relat_time,-4,3), fe
+			est	store	PT_never_once
+			
+			coefplot	PT_never_once,	graphregion(color(white)) bgcolor(white) vertical drop(_cons) xtitle(Event time) ytitle(Coefficient) cionly	///
+										title(PFS Pre-trend)	name(PFS_pretrend, replace)
+			graph	export	"${SNAP_outRaw}/PFS_pretrend.png", replace
+			graph	close
+			
+			/*
+			*	Genenerate average PFS per each group
+			cap	drop	PFS_glm_avg
+			bys	relat_time	total_FS_used:	egen PFS_glm_avg = mean(PFS_glm) if inlist(total_FS_used,0,1)
+			*/
+			
+			
+			*	Plot graph
+			
+				/*
+			graph twoway 		(kdensity HFSM_rescale	if	inlist(year,1999,2001,2003,2015,2017,2019)	&	!mi(PFS_glm))	///
+								(kdensity PFS_glm		if	inlist(year,1999,2001,2003,2015,2017,2019)	&	!mi(HFSM_rescale)),	///
+								/*title (Density Estimates of the USDA scale and the PFS)*/	xtitle(Scale) ytitle(Density)		///
+								name(thrifty, replace) graphregion(color(white)) bgcolor(white)		///
+								legend(lab (1 "HFSM (rescaled)") lab(2 "PFS") rows(1))					
+			graph	export	"${PSID_outRaw}/Fig_A2_Density_HFSM_PFS.png", replace
+				*/
 				
-			}
+				
+				*	FWL
+				/*
+				cap drop uhat1
+				cap drop uhat2
+				reg PFS_glm relat_time_enum1 relat_time_enum7	//	Regress Y on X1 X2 is equal to...
+				reg PFS_glm relat_time_enum1	//	Regress Y on X1
+				predict uhat1, resid			//	Get resid1
+				reg relat_time_enum7 relat_time_enum1	//	Pregress X2 on X1
+				predict uhat2, resid	//	Get resid2
+				reg uhat1 uhat2	//	regressing resid1 on resid2!
+				*/
 			
+			
+			/*
 			*	Seems leads are significant, meaning PT is violated...... is specification wrong?
-			svy, subpop(if inrange(year,1975,1997)): reg PFS_glm relat_time_enum1 relat_time_enum2 relat_time_enum4 relat_time_enum5 relat_time_enum6 relat_time_enum7 ${regionvars} ${timevars} 
-			reg	PFS_glm relat_time_enum1 relat_time_enum2 relat_time_enum4 relat_time_enum5 relat_time_enum6 relat_time_enum7 ${regionvars} ${timevars} if year<=1997
-			svy: reg	foodexp_tot_exclFS_pc_real	relat_time_enum1 relat_time_enum2 relat_time_enum4 relat_time_enum5 relat_time_enum6 relat_time_enum7 ${regionvars} ${timevars}
-			reg	foodexp_tot_exclFS_pc_real	relat_time_enum1 relat_time_enum2 relat_time_enum4 relat_time_enum5 relat_time_enum6 relat_time_enum7 ${regionvars} ${timevars}
+			svy, subpop(if inrange(year,1975,1997)): reg PFS_glm relat_time_enum1-relat_time_enum7 ${regionvars} ${timevars} 
+			reg	PFS_glm relat_time_enum1-relat_time_enum7 ${regionvars} ${timevars} if year<=1997
+			svy: reg	foodexp_tot_exclFS_pc_real	relat_time_enum1-relat_time_enum7 ${regionvars} ${timevars}
+			reg	foodexp_tot_exclFS_pc_real	relat_time_enum1-relat_time_enum7 ${regionvars} ${timevars}
+			*/
 			
+			
+			/*
 			*	Real dollars of food expenditure over time
 			bys year: egen foodexp_tot_exclFS_pc_real_m = mean(foodexp_tot_exclFS_pc_real)
 			bys year: egen foodexp_tot_exclFS_pc_real_m = mean(foodexp_tot_exclFS_pc_real)
 			
-			*global	regionvars		rp_state_enum1-rp_state_enum31 rp_state_enum33-rp_state_enum50 	//	Exclusing NY (rp_state_enum32) and outside 48 states (1, 52, 53). The latter should be excluded when running regression
-			*global	timevars		year_enum2-year_enum32
+			preserve
 			
+			collapse foodexp_tot_exclFS_pc_real foodexp_tot_inclFS_pc_real	[iweight=wgt_long_fam_adj], by(year)
+			
+			graph	twoway	(line	fs_insecure year, lpattern(dash_dot) yaxis(1))	///
+							(line	fs_insecure_vlfs year, lpattern(dash) yaxis(1))	///
+							(line	fs_snap year, lpattern(dot) yaxis(1))	///
+							(connected	fs_snap_novdec year	if	year!=1996, lpattern(dash_dot) yaxis(2)),	///					
+							legend(label(1 "FI") label(2 "Very low FS") label(3 "SNAP (year)")	label(4 "SNAP (Nov/Dec)") rows(1)) ///
+							ytitle(FI, axis(1))	ytitle(SNAP, axis(2)) title(Food Insecurity(FI) Prevalence and SNAP usage)	///
+							note(This figure replicates Figure 3 in USDA 2019 report)
+							
+			graph	export	"${figures}/FSS_FI_SNAP.png", replace	
+			graph	close
+			
+			restore
+			*/
+			
+			
+		
 		*	Observation-level (FU-level, RP information)
 		
 			*	Age
