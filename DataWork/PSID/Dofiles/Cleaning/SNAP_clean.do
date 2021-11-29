@@ -2696,6 +2696,8 @@
 			xtreg PFS_glm 	relat_time_enum2	relat_time_enum3	relat_time_enum4	relat_time_enum5	relat_time_enum6	relat_time_enum7	relat_time_enum8	 if inlist(total_FS_used,0,1) & inrange(relat_time,-4,3), fe
 			est	store	PT_never_once
 			
+			test (relat_time_enum2=0)  (relat_time_enum3=0) (relat_time_enum4=0) 
+			
 			coefplot	PT_never_once,	graphregion(color(white)) bgcolor(white) vertical drop(_cons) xtitle(Event time) ytitle(Coefficient) 	///
 										title(PFS Pre-trend)	name(PFS_pretrend, replace)
 			graph	export	"${SNAP_outRaw}/PFS_pretrend.png", replace
