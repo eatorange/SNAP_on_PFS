@@ -153,11 +153,11 @@
 	
 	local	ind_agg			0	//	Aggregate individual-level variables across waves
 	local	fam_agg			0	//	Aggregate family-level variables across waves
-	local	ext_data		1	//	Prepare external data (CPI, TFP, etc.)
+	local	ext_data		0	//	Prepare external data (CPI, TFP, etc.)
 	local	cr_panel		1	//	Create panel structure from ID variable
 	local	merge_data		1	//	Merge ind- and family- variables and import it into ID variable
-		local	raw_reshape	1		//	Merge raw variables and reshape into long data (takes time)
-		local	add_clean	1		//	Do additional cleaning and import external data (CPI, TFP)
+		local	raw_reshape	0		//	Merge raw variables and reshape into long data (takes time)
+		local	add_clean	0		//	Do additional cleaning and import external data (CPI, TFP)
 		local	import_dta	1		//	Import aggregated variables into ID data. 
 	local	clean_vars		1	//	Clean variables and construct consistent variables
 	local	PFS_const		1	//	Construct PFS
@@ -975,6 +975,9 @@
 			drop	*1973	*1988	*1989	//	Years without food expenditures (1973, 1988, 1989)
 			drop	*1968	*1969	*1970	*1971	//	Years which I cannot separate FS amount from food expenditure
 			drop	*1972	*1974	//	Years without previous FS status
+			
+		*	Drop Latino sample
+			drop	if	sample_source==5
 		
 		*	Set globals
 		qui	ds	x11102_1975-x11102_2019
@@ -2410,18 +2413,7 @@
 				label	var	`var'_pc	"Monthly food exp per capita (FS incl)"
 				label	var	`var'_pc_th	"Monthly food exp per capita (FS incl) (K)"
 			
-				*	Generate polynomial degree up to 5
-				forval	i=1/5	{
-				    
-					cap	drop	foodexp_tot_exclFS_pc_`i'
-					gen	double	foodexp_tot_exclFS_pc_`i'=(foodexp_tot_exclFS_pc)^`i'
-					gen	double	foodexp_tot_exclFS_pc_th_`i'=(foodexp_tot_exclFS_pc_th)^`i'
-					
-					label	var	foodexp_tot_exclFS_pc_`i'	"Total monhtly food exp per capita (FS incl) - `i'th order"
-					label	var	foodexp_tot_exclFS_pc_`i'	"Total monhtly food exp per capita (FS incl) - `i'th order"
-					
-				}
-				
+
 			*	Construct a indicator whether total food exp (per capita) exceeds TFP (per capita)
 			loc	var	overTFP_inclFS
 			cap drop `var'
@@ -2454,12 +2446,50 @@
 				cap	drop	diff_total
 				cap	drop	foodexp_tot_imp_month
 			*/	
+						
+		*	Winsorize per capita value for every year (except TFP)
+		local	pcvars	fam_income_pc ln_fam_income_pc foodexp_tot_exclFS_pc foodexp_tot_exclFS_pc_th foodexp_tot_inclFS_pc foodexp_tot_inclFS_pc_th	// fam_income_pc_real foodexp_tot_exclFS_pc_real foodexp_tot_inclFS_pc_real
+		local	years	1975	${sample_years}
+		foreach	var	of	local	pcvars	{
 			
+			cap	drop	`var'_wins
+			cap	drop	outlier_`var'
+			gen	double	`var'_wins=`var'
 			
+			foreach	year	of	local	years	{
+				
+				di "var is `var', year is `year'"
+				qui	summarize	`var' 				if	year==`year' & seqnum!=0,d
+				replace 	`var'_wins=r(p99)	if	year==`year' & seqnum!=0	& `var'>=r(p99)
+				
+			}
+			
+			order	`var'_wins, after(`var')
+			drop	`var'
+			rename	`var'_wins	`var'
+			
+		}
+		
+		*	Generate polynomial degree of per capita expenditure up to 5
+		forval	i=1/5	{
+			
+			cap	drop	foodexp_tot_exclFS_pc_`i'
+			gen	double	foodexp_tot_exclFS_pc_`i'=(foodexp_tot_exclFS_pc)^`i'
+			cap	drop	foodexp_tot_inclFS_pc_`i'
+			gen	double	foodexp_tot_inclFS_pc_`i'=(foodexp_tot_inclFS_pc)^`i'
+			*gen	double	foodexp_tot_exclFS_pc_th_`i'=(foodexp_tot_exclFS_pc_th)^`i'
+			
+			label	var	foodexp_tot_exclFS_pc_`i'	"Total monthly food exp pc (FS excl) - `i'th order"
+			label	var	foodexp_tot_inclFS_pc_`i'	"Total monthly food exp pc (FS incl) - `i'th order"
+			
+		}
+			
+		
+		
 		*	Create constant dollars of monetary variables  (ex. food exp, TFP)
 		*	Unit is 1982-1984=100 (1982-1984 chained)
-		qui	ds	FS_rec_amt foodexp_home_inclFS foodexp_home_exclFS foodexp_home_extramt foodexp_out foodexp_deliv foodexp_tot_exclFS foodexp_tot_inclFS TFP_monthly_cost foodexp_W_TFP foodexp_W_TFP_pc_th	///
-				foodexp_tot_exclFS_pc foodexp_tot_inclFS_pc	foodexp_tot_exclFS_pc_1 foodexp_tot_exclFS_pc_2 foodexp_tot_exclFS_pc_3 foodexp_tot_exclFS_pc_4 foodexp_tot_exclFS_pc_5
+		qui	ds	fam_income_pc	FS_rec_amt foodexp_home_inclFS foodexp_home_exclFS foodexp_home_extramt foodexp_out foodexp_deliv foodexp_tot_exclFS foodexp_tot_inclFS TFP_monthly_cost foodexp_W_TFP foodexp_W_TFP_pc_th	///
+				foodexp_tot_exclFS_pc foodexp_tot_inclFS_pc	foodexp_tot_exclFS_pc_? foodexp_tot_inclFS_pc_?
 		global	money_vars_current	`r(varlist)'
 		
 		foreach	var of global money_vars_current	{
@@ -2472,6 +2502,9 @@
 		ds	*_real
 		global	money_vars_real	`r(varlist)'
 		global	money_vars	${money_vars_current}	${money_vars_real}
+		
+
+			
 		
 		di "${money_vars_real}"
 		*	Create lagged variables needed
@@ -2491,8 +2524,8 @@
 			foreach	var	of	global	money_vars	{
 				
 				cap	drop	l1_`var'
-				gen		double	l1_`var'	=	l.`var'	if	year<=1997	//	When PSID was collected annually
-				replace		l1_`var'	=	l2.`var'	if	year>=1999	//	When PSID was collected bieenially
+				gen		double	l1_`var'	=	l.`var'		if	year<=1997	//	When PSID was collected annually
+				replace		l1_`var'		=	l2.`var'	if	year>=1999	//	When PSID was collected bieenially
 				
 			}
 		
@@ -2516,7 +2549,7 @@
 		use    "${SNAP_dtInt}/SNAP_long_const",	clear
 		
 		*	Set globals
-		global	statevars		l1_foodexp_tot_exclFS_pc_1 l1_foodexp_tot_exclFS_pc_2 l1_foodexp_tot_exclFS_pc_3
+		global	statevars		l1_foodexp_tot_inclFS_pc_1 l1_foodexp_tot_inclFS_pc_2 l1_foodexp_tot_inclFS_pc_3
 		global	demovars		rp_age rp_age_sq	rp_nonWhte	rp_married	rp_female	
 		global	econvars		ln_fam_income_pc
 		global	healthvars		rp_disabled
@@ -2573,12 +2606,13 @@
 		*	Step 3
 		*	Assume the outcome variable follows the Gamma distribution
 		*	(2021-11-28) I temporarily don't use expected residual (var1_foodexp_glm) as it goes crazy. I will temporarily use expected residual from step 1 (e1_foodexp_sq_glm)
-		*gen alpha1_foodexp_pc_glm	= (mean1_foodexp_glm)^2 / var1_foodexp_glm	//	shape parameter of Gamma (alpha)
-		*gen beta1_foodexp_pc_glm	= var1_foodexp_glm / mean1_foodexp_glm		//	scale parameter of Gamma (beta)
+		*	(2021-11-30) It kinda works after additional cleaning (ex. dropping Latino sample), but its distribution is kinda different from what we saw in PFS paper.
+		gen alpha1_foodexp_pc_glm	= (mean1_foodexp_glm)^2 / var1_foodexp_glm	//	shape parameter of Gamma (alpha)
+		gen beta1_foodexp_pc_glm	= var1_foodexp_glm / mean1_foodexp_glm		//	scale parameter of Gamma (beta)
 		
 		*	The  code below is a temporary code to see what is going wrong in the original code. I replaced expected value of residual squared with residual squared
-		gen alpha1_foodexp_pc_glm	= (mean1_foodexp_glm)^2 / e1_foodexp_sq_glm	//	shape parameter of Gamma (alpha)
-		gen beta1_foodexp_pc_glm	= e1_foodexp_sq_glm / mean1_foodexp_glm		//	scale parameter of Gamma (beta)
+		*gen alpha1_foodexp_pc_glm	= (mean1_foodexp_glm)^2 / e1_foodexp_sq_glm	//	shape parameter of Gamma (alpha)
+		*gen beta1_foodexp_pc_glm	= e1_foodexp_sq_glm / mean1_foodexp_glm		//	scale parameter of Gamma (beta)
 		
 		*	Generate PFS by constructing CDF
 		gen PFS_glm = gammaptail(alpha1_foodexp_pc_glm, foodexp_W_TFP_pc/beta1_foodexp_pc_glm)	//	gammaptail(a,(x-g)/b)=(1-gammap(a,(x-g)/b)) where g is location parameter (g=0 in this case)
@@ -2594,19 +2628,14 @@
 		use    "${SNAP_dtInt}/SNAP_long_PFS",	clear	
 			
 		*	Sample information
-			di _N	//	Sample size
-			unique	x11101ll	//	Total individuals
-			unique	year		//	Total waves
+			count if !mi(PFS_glm)	//	Sample size
+			unique	x11101ll	if	!mi(PFS_glm)	//	Total individuals
+			unique	year		if	!mi(PFS_glm)		//	Total waves
+	
 		
 		*	Individual-level stats
 		*	To do this, we need to crate a variable which is non-missing only one obs per individual
 		*	For now, I use `_uniq' suffix to create such variables
-			
-		*	Generate cohort
-		*	Trying to use de 
-		*	Generate age group
-		*	Age-group can be tested 
-		
 		
 			
 		*	Sample stats
@@ -2616,15 +2645,10 @@
 				*	Gender
 				local	var	ind_female
 				cap	drop	`var'_uniq
-				bys x11101ll:	gen `var'_uniq=`var' if _n==1
-				summ	`var'_uniq
-				
-				*	Race
-				local	var	rp_White
-				cap	drop	`var'_uniq
-				bys x11101ll:	gen `var'_uniq=`var' if _n==1
-				summ	`var'_uniq		
-									
+				bys x11101ll	live_in_FU:	gen `var'_uniq=`var' if _n==1	&	live_in_FU==1
+				summ `var'_uniq	
+				label	var	`var'_uniq "Gender (ind)"
+								
 				*	Number of waves living in FU
 				loc	var	num_waves_in_FU
 				cap	drop	`var'
@@ -2632,6 +2656,7 @@
 				bys	x11101ll:	egen	`var'=total(live_in_FU)	if	live_in_FU==1
 				bys	x11101ll	live_in_FU:	gen		`var'_uniq	=`var'	if	_n==1	&	live_in_FU==1
 				summ	`var'_uniq,d
+				label	var	`var'_uniq "\# of waves surveyed"
 				
 				/*
 				*	Number of waves surveyed
@@ -2647,61 +2672,226 @@
 				loc	var	FS_ever_used
 				cap	drop	`var'
 				cap	drop	`var'_uniq
-				bys	x11101ll:	egen	`var'=	max(FS_rec_wth)	if	live_in_FU==1
-				bys x11101ll	live_in_FU:	gen `var'_uniq	=	`var' if _n==1	&	live_in_FU==1
+				bys	x11101ll:	egen	`var'=	max(FS_rec_wth)	/*if	live_in_FU==1*/ // including "if live_in_FU==1" will create missing vlaues if sequence number is zero. I don't think we need to do that.
+				bys x11101ll	/*live_in_FU*/:	gen `var'_uniq	=	`var' if _n==1	/*&	live_in_FU==1*/
 				summ	`var'_uniq,d
+				label var	`var'		"FS ever used throughouth the period"
+				label var	`var'_uniq	"FS ever used throughouth the period"
 				
 				*	# of waves FS redeemed	(if ever used)
 				loc	var	total_FS_used
 				cap	drop	`var'
 				cap	drop	`var'_uniq
-				bys	x11101ll:	egen	`var'=	total(FS_rec_wth)	if	live_in_FU==1
-				bys x11101ll	live_in_FU:	gen `var'_uniq	=	`var' if _n==1
+				bys	x11101ll:	egen	`var'=	total(FS_rec_wth)	/*if	live_in_FU==1*/ // including "if live_in_FU==1" will create missing vlaues if sequence number is zero. I don't think we need to do that.
+				bys x11101ll	/*live_in_FU*/:	gen `var'_uniq	=	`var' if _n==1
 				summ	`var'_uniq if `var'_uniq>=1,d
+				label var	`var'		"Total FS used throughouth the period"
+				label var	`var'_uniq	"Total FS used throughouth the period"
 				
-		*	Test parallel trend assumption
-		*	For now (2021-11-28) I am testing only never-treated vs treated-once. I can update it later
+					*	Generate indicaor by the #
+					*local	var	never_treated
+					*cap	drop	`var'
+					*cap	drop	`var'_uniq
+					*gen	`var'=.
+					*replace	`var'=0	if	
+					
+				*	Generate cumulative FS redemption
+				local	var	cumul_FS_used
+				cap	drop	`var'
+				bysort x11101ll (year) : gen `var' = sum(FS_rec_wth)
+				bys x11101ll:	gen `var'_uniq	=	`var' if _n==1
+				label var	`var'		"# of cumulative FS used"
+				label var	`var'_uniq	"# of cumulative FS used"
+				
+				*	Create temporary variable for summary table (will be integrated into "clean" part)
+				cap	drop	fam_income_month_pc_real
+				gen	double	fam_income_month_pc_real	=	(fam_income_pc_real/12)
+				label	var	fam_income_month_pc_real	"Monthly family income per capita"
+				
+				label	var	foodexp_tot_inclFS_pc_real	"Monthly food exp per capia"
+				label	var	FS_rec_amt_real				"\$ Monthly FS redeemed"
+				label 	var	childnum					"\# of child"
+				
+				
+				*	For now, generate summ table separately for indvars and fam-level vars, as indvars do not represent full sample if conditiond by !mi(glm) (need to figure out why)
+				local	indvars	ind_female_uniq num_waves_in_FU_uniq FS_ever_used_uniq total_FS_used_uniq
+				local	rpvars	rp_female	rp_age	rp_White	rp_married	rp_NoHS rp_HS rp_somecol rp_col		rp_employed rp_disabled
+				local	famvars	fam_income_month_pc_real	foodexp_tot_inclFS_pc_real	FS_rec_amt_real	famnum	childnum	FS_rec_wth
+				
+				
+				estpost summ	`indvars'	/*`rpvars'	`famvars' if !mi(PFS_glm)*/
+				
+				esttab using "${SNAP_outRaw}/Tab_1_Sumstats_ind.csv", replace ///
+				cells("mean(fmt(2)) sd(fmt(2)) min(fmt(0)) max(fmt(0))") label	///
+				nonumbers mtitles("Total" ) ///
+				title (Summary Statistics_ind)	csv 
+				
+				esttab using "${SNAP_outRaw}/Tab_1_Sumstats_ind.tex", replace ///
+				cells("mean(fmt(2)) sd(fmt(2)) min(fmt(0)) max(fmt(0))") label	///
+				nonumbers mtitles("Total" ) ///
+				title (Summary Statistics_ind)	tex 
+				
+				estpost summ	`rpvars'	`famvars' if !mi(PFS_glm)
+				esttab using "${SNAP_outRaw}/Tab_1_Sumstats_fam.csv", replace ///
+				cells("mean(fmt(2)) sd(fmt(2)) min(fmt(0)) max(fmt(0))") label	///
+				nonumbers mtitles("Total" ) ///
+				title (Summary Statistics_fam)	csv
+				
+				esttab using "${SNAP_outRaw}/Tab_1_Sumstats_fam.tex", replace ///
+				cells("mean(fmt(2)) sd(fmt(2)) min(fmt(0)) max(fmt(0))") label	///
+				nonumbers mtitles("Total" ) ///
+				title (Summary Statistics_fam)	tex 
+				
+	
+			*	Split-off
+			
+		*	Histogram of FS redemption frequency
+			histogram	total_FS_used_uniq	if	total_FS_used_uniq>=1
+			graph	export "${SNAP_outRaw}/FS_redemption_his.png", replace
+			graph	close
+	
+		/*
+			cap drop	_seq	_spell	_end
+			tsspell, cond(year>=2 & PFS_FI_glm==1)
+		*/
 		
-			*	Standardize event time
+		*	Change in TFP costs over time (real-dollars, 4-ppl FU as an example), to show trends in TFP
+		
+		
+		*	Test parallel trend assumption
+			
+			*	Never-treated vs Treated-once
 			sort	x11101ll	year
 			cap	drop	relat_time
+			cap	drop	relat_time*
 			
-			gen		relat_time=-4	if	total_FS_used==1	&	FS_rec_wth==0	&	f4.FS_rec_wth==1	//	3 year before FS
-			replace	relat_time=-3	if	total_FS_used==1	&	FS_rec_wth==0	&	f3.FS_rec_wth==1	//	2 year before FS
-			replace	relat_time=-2	if	total_FS_used==1	&	FS_rec_wth==0	&	f2.FS_rec_wth==1	//	2 year before FS
-			replace	relat_time=-1	if	total_FS_used==1	&	FS_rec_wth==0	&	f1.FS_rec_wth==1	//	1 year before FS
-			replace	relat_time=0	if	total_FS_used==1	&	FS_rec_wth==1							//	Year of FS
-			replace	relat_time=1	if	total_FS_used==1	&	FS_rec_wth==0	&	l1.FS_rec_wth==1	//	1 year after FS
-			replace	relat_time=2	if	total_FS_used==1	&	FS_rec_wth==0	&	l2.FS_rec_wth==1	//	2 year after FS
-			replace	relat_time=3	if	total_FS_used==1	&	FS_rec_wth==0	&	l3.FS_rec_wth==1	//	3 year after FS			
+				*	Standardize time
+				/*
+				gen		relat_time=-4	if	total_FS_used==1	&	FS_rec_wth==0	&	f4.FS_rec_wth==1	//	4 year before FS
+				replace	relat_time=-3	if	total_FS_used==1	&	FS_rec_wth==0	&	f3.FS_rec_wth==1	//	3 year before FS
+				replace	relat_time=-2	if	total_FS_used==1	&	FS_rec_wth==0	&	f2.FS_rec_wth==1	//	2 year before FS
+				replace	relat_time=-1	if	total_FS_used==1	&	FS_rec_wth==0	&	f1.FS_rec_wth==1	//	1 year before FS
+				replace	relat_time=0	if	total_FS_used==1	&	FS_rec_wth==1							//	Year of FS
+				replace	relat_time=1	if	total_FS_used==1	&	FS_rec_wth==0	&	l1.FS_rec_wth==1	//	1 year after FS
+				replace	relat_time=2	if	total_FS_used==1	&	FS_rec_wth==0	&	l2.FS_rec_wth==1	//	2 year after FS
+				replace	relat_time=3	if	total_FS_used==1	&	FS_rec_wth==0	&	l3.FS_rec_wth==1	//	3 year after FS			
+				*/
+				gen		relat_time=-4	if	total_FS_used==1	&	f3.cumul_FS_used==0	&	f4.FS_rec_wth==1	//	4 year before first FS redemption
+				replace	relat_time=-3	if	total_FS_used==1	&	f2.cumul_FS_used==0	&	f3.FS_rec_wth==1	//	3 year before first FS redemption
+				replace	relat_time=-2	if	total_FS_used==1	&	f1.cumul_FS_used==0	&	f2.FS_rec_wth==1	//	2 year before first FS redemption
+				replace	relat_time=-1	if	total_FS_used==1	&	cumul_FS_used==0	&	f1.FS_rec_wth==1	//	1 year before first FS redemption
+				replace	relat_time=-0	if	total_FS_used==1	&	cumul_FS_used==1	&	FS_rec_wth==1		//	Year of first FS redemption
+				replace	relat_time=1	if	total_FS_used==1	&	cumul_FS_used==1	&	l1.FS_rec_wth==1	//	1 year after first FS redemption
+				replace	relat_time=2	if	total_FS_used==1	&	cumul_FS_used==1	&	l2.FS_rec_wth==1	//	2 year after first FS redemption
+				replace	relat_time=3	if	total_FS_used==1	&	cumul_FS_used==1	&	l3.FS_rec_wth==1	//	3 year after first FS redemption
+				
+				
+				*	Make value of never-treated group as non-missing and zero for each relative time indicator, so this group can be included in the regression
+				replace	relat_time=4	if	total_FS_used==0
+				
+				*	Creat dummy for each indicator (never-treated group will be zero in all indicator)
+				cap	drop	relat_time_enum*
+				tab	relat_time, gen(relat_time_enum)
+				drop	relat_time_enum9	//	We should not use it, as it is a dummy for never-treated group
+				
+				label	var	relat_time_enum1	"t-4"
+				label	var	relat_time_enum2	"t-3"
+				label	var	relat_time_enum3	"t-2"
+				label	var	relat_time_enum4	"t-1"
+				label	var	relat_time_enum5	"t=0"
+				label	var	relat_time_enum6	"t+1"
+				label	var	relat_time_enum7	"t+2"
+				label	var	relat_time_enum8	"t+3"
+				
+				*	Pre-trend plot
+				reg	PFS_glm 	relat_time_enum1	relat_time_enum2	relat_time_enum3	relat_time_enum4	relat_time_enum5	relat_time_enum6	relat_time_enum7	i.year, fe
+				xtreg PFS_glm 	relat_time_enum1	relat_time_enum2	relat_time_enum3	relat_time_enum4	relat_time_enum5	relat_time_enum6	relat_time_enum7	i.year, fe
+				est	store	PT_never_once
+				
+				coefplot	PT_never_once,	graphregion(color(white)) bgcolor(white) vertical keep(relat_time_enum*) xtitle(Event time) ytitle(Coefficient) ///
+											title(Never-treated vs Treated-once)	name(PFS_pretrend, replace)
+				graph	export	"${SNAP_outRaw}/PFS_never_once.png", replace
+				graph	close
 			
-			*	Make value of never-treated group as non-missing and zero for each relative time indicator, so this group can be included in the regression
-			replace	relat_time=4	if	total_FS_used==0
+			*	Never-treated vs ever-treated
+			*	In this comparison, all FU in this dataset will be included, and event will be "when FS used the first time"
+			**	QUESTION: but many "ever-treated" observations which don't belong to the time window below won't be included in the regression (ex. 4 years after the first FS). Should I write a code to include such obs?
+			cap	drop	relat_time relat_time*
 			
-			*	Creat dummy for each indicator (never-treated group will be zero in all indicator)
-			cap	drop	relat_time_enum*
-			tab	relat_time, gen(relat_time_enum)
-			drop	relat_time_enum9	//	We should not use it, as it is a dummy for never-treated group
+				*	Standardize event time
+				gen		relat_time=-4	if	total_FS_used>=1	&	f3.cumul_FS_used==0	&	f4.FS_rec_wth==1	//	4 year before first FS redemption
+				replace	relat_time=-3	if	total_FS_used>=1	&	f2.cumul_FS_used==0	&	f3.FS_rec_wth==1	//	3 year before first FS redemption
+				replace	relat_time=-2	if	total_FS_used>=1	&	f1.cumul_FS_used==0	&	f2.FS_rec_wth==1	//	2 year before first FS redemption
+				replace	relat_time=-1	if	total_FS_used>=1	&	cumul_FS_used==0	&	f1.FS_rec_wth==1	//	1 year before first FS redemption
+				replace	relat_time=-0	if	total_FS_used>=1	&	cumul_FS_used==1	&	FS_rec_wth==1		//	Year of first FS redemption
+				replace	relat_time=1	if	total_FS_used>=1	&	cumul_FS_used>=1	&	l1.cumul_FS_used==1	&	l1.FS_rec_wth==1	//	1 year after first FS redemption
+				replace	relat_time=2	if	total_FS_used>=1	&	cumul_FS_used>=1	&	l2.cumul_FS_used==1	&	l2.FS_rec_wth==1	//	2 year after first FS redemption
+				replace	relat_time=3	if	total_FS_used>=1	&	cumul_FS_used>=1	&	l3.cumul_FS_used==1	&	l3.FS_rec_wth==1	//	3 year after first FS redemption
+				
+				*	Make value of never-treated group as non-missing and zero for each relative time indicator, so this group can be included in the regression
+				replace	relat_time=4	if	total_FS_used==0	//	Including only never-treated as a control group
+				*replace	relat_time=4	if	mi(relat_time)			//	Including never-treated group as well as ever-treated group outside the lead-lag window (ex. 5 yrs before FS redemption) as a control group. Basically all other obs.
+				
+				*	Creat dummy for each indicator (never-treated group will be zero in all indicator)
+				cap	drop	relat_time_enum*
+				tab	relat_time, gen(relat_time_enum)
+				drop	relat_time_enum9	//	We should not use it, as it is a dummy for never-treated group
+				
+				label	var	relat_time_enum1	"t-4"
+				label	var	relat_time_enum2	"t-3"
+				label	var	relat_time_enum3	"t-2"
+				label	var	relat_time_enum4	"t-1"
+				label	var	relat_time_enum5	"t=0"
+				label	var	relat_time_enum6	"t+1"
+				label	var	relat_time_enum7	"t+2"
+				label	var	relat_time_enum8	"t+3"
+				
+				xtreg PFS_glm 	relat_time_enum1	relat_time_enum2	relat_time_enum3	relat_time_enum4	relat_time_enum5	relat_time_enum6	relat_time_enum7, fe
+				est	store	PT_never_ever
+				
+				coefplot	PT_never_ever,	graphregion(color(white)) bgcolor(white) vertical keep(relat_time_enum*) xtitle(Event time) ytitle(Coefficient) 	///
+											title(Never-treated vs Ever-treated) subtitle(Excluding ever-treated outside this window)	name(PFS_pretrend, replace)
+				graph	export	"${SNAP_outRaw}/PFS_never_ever.png", replace
+				graph	close
+
+			*	Treated-twice vs treated 3-times
+			cap	drop	relat_time relat_time*
 			
-			label	var	relat_time_enum1	"t-4"
-			label	var	relat_time_enum2	"t-3"
-			label	var	relat_time_enum3	"t-2"
-			label	var	relat_time_enum4	"t-1"
-			label	var	relat_time_enum5	"t=0"
-			label	var	relat_time_enum6	"t+1"
-			label	var	relat_time_enum7	"t+2"
-			label	var	relat_time_enum8	"t+3"
-			
-			
-			xtreg PFS_glm 	relat_time_enum2	relat_time_enum3	relat_time_enum4	relat_time_enum5	relat_time_enum6	relat_time_enum7	relat_time_enum8	 if inlist(total_FS_used,0,1) & inrange(relat_time,-4,3), fe
-			est	store	PT_never_once
-			
-			test (relat_time_enum2=0)  (relat_time_enum3=0) (relat_time_enum4=0) 
-			
-			coefplot	PT_never_once,	graphregion(color(white)) bgcolor(white) vertical drop(_cons) xtitle(Event time) ytitle(Coefficient) 	///
-										title(PFS Pre-trend)	name(PFS_pretrend, replace)
-			graph	export	"${SNAP_outRaw}/PFS_pretrend.png", replace
-			graph	close
+				*	Standardize event time
+				gen		relat_time=-4	if	total_FS_used==3	&	f3.cumul_FS_used==2	&	f4.cumul_FS_used==3	//	4 year before 3rd FS redemption
+				replace	relat_time=-3	if	total_FS_used==3	&	f2.cumul_FS_used==2	&	f3.cumul_FS_used==3	//	3 year before 3rd FS redemption
+				replace	relat_time=-2	if	total_FS_used==3	&	f1.cumul_FS_used==2	&	f2.cumul_FS_used==3	//	2 year before 3rd FS redemption
+				replace	relat_time=-1	if	total_FS_used==3	&	cumul_FS_used==2	&	f1.FS_rec_wth==1	&	f1.cumul_FS_used==3	//	1 year before 3rd FS redemption
+				replace	relat_time=-0	if	total_FS_used==3	&	cumul_FS_used==3	&	FS_rec_wth==1		//	Year of 3rd FS redemption
+				replace	relat_time=1	if	total_FS_used==3	&	cumul_FS_used==3	&	l1.FS_rec_wth==1	&	l1.cumul_FS_used==3	//	1 year after 3rd FS redemption
+				replace	relat_time=2	if	total_FS_used==3	&	cumul_FS_used==3	&	l2.FS_rec_wth==1	&	l2.cumul_FS_used==3	//	2 year after 3rd FS redemption
+				replace	relat_time=3	if	total_FS_used==3	&	cumul_FS_used==3	&	l3.FS_rec_wth==1	&	l3.cumul_FS_used==3	//	3 year after 3rd FS redemption
+				
+				*	Make value of treated-twice group as non-missing and zero for each relative time indicator, so this group can be included in the regression as a control group
+				replace	relat_time=4	if	total_FS_used==2	// &	cumul_FS_used==2
+				
+				*	Creat dummy for each indicator (never-treated group will be zero in all indicator)
+				cap	drop	relat_time_enum*
+				tab	relat_time, gen(relat_time_enum)
+				drop	relat_time_enum9	//	We should not use it, as it is a dummy forcontrol group
+				
+				label	var	relat_time_enum1	"t-4"
+				label	var	relat_time_enum2	"t-3"
+				label	var	relat_time_enum3	"t-2"
+				label	var	relat_time_enum4	"t-1"
+				label	var	relat_time_enum5	"t=0"
+				label	var	relat_time_enum6	"t+1"
+				label	var	relat_time_enum7	"t+2"
+				label	var	relat_time_enum8	"t+3"
+				
+				xtreg PFS_glm 	relat_time_enum2	relat_time_enum3	relat_time_enum4	relat_time_enum5	relat_time_enum6	relat_time_enum7	relat_time_enum8	i.year	, fe
+				est	store	PT_never_ever
+				
+				coefplot	PT_never_ever,	graphregion(color(white)) bgcolor(white) vertical keep(relat_time_enum*) xtitle(Event time) ytitle(Coefficient) 	///
+											title(Treated-twice vs Treated-3 times)	name(PFS_pretrend, replace)
+				graph	export	"${SNAP_outRaw}/PFS_twice_3times.png", replace
+				graph	close
+				
 			
 			/*
 			*	Genenerate average PFS per each group
@@ -2769,29 +2959,6 @@
 			
 			
 		
-		*	Observation-level (FU-level, RP information)
-		
-			*	Age
-			
-			*	Race
-			
-			*	Education
-			
-			*	Disability
-								
-			*	Marital status
-			
-			*	Family size
-			
-			*	Split-off
-			
-			*	FS status (HFSM)
-			
-			*	FS redeemed
-			
-			*	FS amount (real dollars)
-		
-		*	Change in TFP costs over time (real-dollars, 4-ppl FU as an example), to show trends in TFP
 		
 		
 		*	Whether FS is used last month at once over the study period
