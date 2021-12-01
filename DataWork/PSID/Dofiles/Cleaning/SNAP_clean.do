@@ -2804,7 +2804,7 @@
 				label	var	relat_time_enum8	"t+3"
 				
 				*	Pre-trend plot
-				reg	PFS_glm 	relat_time_enum1	relat_time_enum2	relat_time_enum3	relat_time_enum4	relat_time_enum5	relat_time_enum6	relat_time_enum7	i.year, fe
+				*reg	PFS_glm 	relat_time_enum1	relat_time_enum2	relat_time_enum3	relat_time_enum4	relat_time_enum5	relat_time_enum6	relat_time_enum7	i.year, fe
 				xtreg PFS_glm 	relat_time_enum1	relat_time_enum2	relat_time_enum3	relat_time_enum4	relat_time_enum5	relat_time_enum6	relat_time_enum7	i.year, fe
 				est	store	PT_never_once
 				
@@ -2829,8 +2829,8 @@
 				replace	relat_time=3	if	total_FS_used>=1	&	cumul_FS_used>=1	&	l3.cumul_FS_used==1	&	l3.FS_rec_wth==1	//	3 year after first FS redemption
 				
 				*	Make value of never-treated group as non-missing and zero for each relative time indicator, so this group can be included in the regression
-				replace	relat_time=4	if	total_FS_used==0	//	Including only never-treated as a control group
-				*replace	relat_time=4	if	mi(relat_time)			//	Including never-treated group as well as ever-treated group outside the lead-lag window (ex. 5 yrs before FS redemption) as a control group. Basically all other obs.
+				*replace	relat_time=4	if	total_FS_used==0	//	Including only never-treated as a control group
+				replace	relat_time=4	if	mi(relat_time)			//	Including never-treated group as well as ever-treated group outside the lead-lag window (ex. 5 yrs before FS redemption) as a control group. Basically all other obs.
 				
 				*	Creat dummy for each indicator (never-treated group will be zero in all indicator)
 				cap	drop	relat_time_enum*
@@ -2850,7 +2850,45 @@
 				est	store	PT_never_ever
 				
 				coefplot	PT_never_ever,	graphregion(color(white)) bgcolor(white) vertical keep(relat_time_enum*) xtitle(Event time) ytitle(Coefficient) 	///
-											title(Never-treated vs Ever-treated) subtitle(Excluding ever-treated outside this window)	name(PFS_pretrend, replace)
+											title(Never-treated vs Ever-treated) /*subtitle(Excluding ever-treated outside this window)*/	name(PFS_pretrend, replace)
+				graph	export	"${SNAP_outRaw}/PFS_never_ever.png", replace
+				graph	close
+				
+			*	Never-treated vs treated multiple tims (twice or more) - exclude treated only once.
+			cap	drop	relat_time relat_time*
+			
+				*	Standardize event time
+				gen		relat_time=-4	if	total_FS_used>1	&	f3.cumul_FS_used==0	&	f4.FS_rec_wth==1	//	4 year before first FS redemption
+				replace	relat_time=-3	if	total_FS_used>1	&	f2.cumul_FS_used==0	&	f3.FS_rec_wth==1	//	3 year before first FS redemption
+				replace	relat_time=-2	if	total_FS_used>1	&	f1.cumul_FS_used==0	&	f2.FS_rec_wth==1	//	2 year before first FS redemption
+				replace	relat_time=-1	if	total_FS_used>1	&	cumul_FS_used==0	&	f1.FS_rec_wth==1	//	1 year before first FS redemption
+				replace	relat_time=-0	if	total_FS_used>1	&	cumul_FS_used==1	&	FS_rec_wth==1		//	Year of first FS redemption
+				replace	relat_time=1	if	total_FS_used>1	&	cumul_FS_used>=1	&	l1.cumul_FS_used==1	&	l1.FS_rec_wth==1	//	1 year after first FS redemption
+				replace	relat_time=2	if	total_FS_used>1	&	cumul_FS_used>=1	&	l2.cumul_FS_used==1	&	l2.FS_rec_wth==1	//	2 year after first FS redemption
+				replace	relat_time=3	if	total_FS_used>1	&	cumul_FS_used>=1	&	l3.cumul_FS_used==1	&	l3.FS_rec_wth==1	//	3 year after first FS redemption
+				
+				*	Make value of never-treated group as non-missing and zero for each relative time indicator, so this group can be included in the regression
+				replace	relat_time=4	if	total_FS_used==0	//	Including only never-treated as a control group
+								
+				*	Creat dummy for each indicator (never-treated group will be zero in all indicator)
+				cap	drop	relat_time_enum*
+				tab	relat_time, gen(relat_time_enum)
+				drop	relat_time_enum9	//	We should not use it, as it is a dummy for never-treated group
+				
+				label	var	relat_time_enum1	"t-4"
+				label	var	relat_time_enum2	"t-3"
+				label	var	relat_time_enum3	"t-2"
+				label	var	relat_time_enum4	"t-1"
+				label	var	relat_time_enum5	"t=0"
+				label	var	relat_time_enum6	"t+1"
+				label	var	relat_time_enum7	"t+2"
+				label	var	relat_time_enum8	"t+3"
+				
+				xtreg PFS_glm 	relat_time_enum1	relat_time_enum2	relat_time_enum3	relat_time_enum4	relat_time_enum5	relat_time_enum6	relat_time_enum7, fe
+				est	store	PT_never_ever
+				
+				coefplot	PT_never_ever,	graphregion(color(white)) bgcolor(white) vertical keep(relat_time_enum*) xtitle(Event time) ytitle(Coefficient) 	///
+											title(Never-treated vs Treated multiple times) /*subtitle(Excluding ever-treated outside this window)*/	name(PFS_pretrend, replace)
 				graph	export	"${SNAP_outRaw}/PFS_never_ever.png", replace
 				graph	close
 
@@ -2888,7 +2926,7 @@
 				est	store	PT_never_ever
 				
 				coefplot	PT_never_ever,	graphregion(color(white)) bgcolor(white) vertical keep(relat_time_enum*) xtitle(Event time) ytitle(Coefficient) 	///
-											title(Treated-twice vs Treated-3 times)	name(PFS_pretrend, replace)
+											title(Treated twice vs Treated 3-times)	name(PFS_pretrend, replace)
 				graph	export	"${SNAP_outRaw}/PFS_twice_3times.png", replace
 				graph	close
 				
