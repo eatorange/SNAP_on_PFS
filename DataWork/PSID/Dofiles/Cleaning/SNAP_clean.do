@@ -2652,9 +2652,13 @@
 				*	Number of waves living in FU
 				loc	var	num_waves_in_FU
 				cap	drop	`var'
+				cap	drop	`var'_temp
 				cap	drop	`var'_uniq
-				bys	x11101ll:	egen	`var'=total(live_in_FU)	if	live_in_FU==1
-				bys	x11101ll	live_in_FU:	gen		`var'_uniq	=`var'	if	_n==1	&	live_in_FU==1
+				bys	x11101ll:	egen	`var'=total(live_in_FU)	if	live_in_FU==1 // Only counts the period when individual was living in FU. NOT including it will result in counting invalid periods (ex. before born)
+				bys x11101ll:	egen	`var'_temp	=	max(`var')
+				bys x11101ll:	gen 	`var'_uniq	=	`var'_temp if _n==1
+				drop	`var'
+				rename	`var'_temp	`var'
 				summ	`var'_uniq,d
 				label	var	`var'_uniq "\# of waves surveyed"
 				
@@ -2672,21 +2676,37 @@
 				loc	var	FS_ever_used
 				cap	drop	`var'
 				cap	drop	`var'_uniq
-				bys	x11101ll:	egen	`var'=	max(FS_rec_wth)	/*if	live_in_FU==1*/ // including "if live_in_FU==1" will create missing vlaues if sequence number is zero. I don't think we need to do that.
-				bys x11101ll	/*live_in_FU*/:	gen `var'_uniq	=	`var' if _n==1	/*&	live_in_FU==1*/
-				summ	`var'_uniq,d
+				cap	drop	`var'_temp
+				bys	x11101ll:	egen	`var'=	max(FS_rec_wth)	if live_in_FU==1 // Only counts the period when individual was living in FU. NOT including it will result in counting invalid periods (ex. before born)
+				bys x11101ll:	egen	`var'_temp	=	max(`var')
+				bys x11101ll:	gen 	`var'_uniq	=	`var'_temp if _n==1
+				drop	`var'
+				rename	`var'_temp	`var'
+				summ	`var'_uniq ,d
 				label var	`var'		"FS ever used throughouth the period"
 				label var	`var'_uniq	"FS ever used throughouth the period"
 				
 				*	# of waves FS redeemed	(if ever used)
 				loc	var	total_FS_used
 				cap	drop	`var'
+				cap	drop	`var'_temp
 				cap	drop	`var'_uniq
-				bys	x11101ll:	egen	`var'=	total(FS_rec_wth)	/*if	live_in_FU==1*/ // including "if live_in_FU==1" will create missing vlaues if sequence number is zero. I don't think we need to do that.
-				bys x11101ll	/*live_in_FU*/:	gen `var'_uniq	=	`var' if _n==1
+				bys	x11101ll:	egen	`var'=	total(FS_rec_wth)	if	live_in_FU==1 // Only counts the period when individual was living in FU. NOT including it will result in counting invalid periods (ex. before born)
+				bys x11101ll:	egen	`var'_temp	=	max(`var')
+				bys x11101ll:	gen 	`var'_uniq	=	`var'_temp if _n==1
 				summ	`var'_uniq if `var'_uniq>=1,d
 				label var	`var'		"Total FS used throughouth the period"
 				label var	`var'_uniq	"Total FS used throughouth the period"
+				
+				*	% of FS redeemed (# FS redeemed/# surveyed)
+				
+				loc	var	share_FS_used
+				cap	drop	`var'
+				cap	drop	`var'_uniq
+				gen	`var'	=	total_FS_used_uniq	/	num_waves_in_FU_uniq
+				bys x11101ll:	gen 	`var'_uniq	=	`var' if _n==1
+				label var	`var'		"\% of FS used throughouth the period"
+				label var	`var'_uniq	"\% of FS used throughouth the period"
 				
 					*	Generate indicaor by the #
 					*local	var	never_treated
@@ -2714,7 +2734,7 @@
 				
 				
 				*	For now, generate summ table separately for indvars and fam-level vars, as indvars do not represent full sample if conditiond by !mi(glm) (need to figure out why)
-				local	indvars	ind_female_uniq num_waves_in_FU_uniq FS_ever_used_uniq total_FS_used_uniq
+				local	indvars	ind_female_uniq num_waves_in_FU_uniq FS_ever_used_uniq total_FS_used_uniq	share_FS_used_uniq
 				local	rpvars	rp_female	rp_age	rp_White	rp_married	rp_NoHS rp_HS rp_somecol rp_col		rp_employed rp_disabled
 				local	famvars	fam_income_month_pc_real	foodexp_tot_inclFS_pc_real	FS_rec_amt_real	famnum	childnum	FS_rec_wth
 				
@@ -2746,9 +2766,18 @@
 			*	Split-off
 			
 		*	Histogram of FS redemption frequency
-			histogram	total_FS_used_uniq	if	total_FS_used_uniq>=1
-			graph	export "${SNAP_outRaw}/FS_redemption_his.png", replace
+			histogram	total_FS_used_uniq	if	total_FS_used_uniq>=1, name(FS_fre, replace)
+			graph	export "${SNAP_outRaw}/FS_redemption_freq.png", replace
 			graph	close
+			
+		*	Histogram of share of FS redemption
+			histogram	share_FS_used	if	total_FS_used_uniq>=1, bin(10) name(FS_share, replace)
+			graph	export "${SNAP_outRaw}/FS_redemption_share.png", replace
+			graph	close
+			
+			grc1leg2		FS_freq	FS_share,	title(Frequency and Share) 	graphregion(color(white))  legendfrom(FS_share)
+							graph	export	"${PSID_outRaw}/TFI_CFI_`measure'_region_FE.png", replace
+							graph	close
 	
 		/*
 			cap drop	_seq	_spell	_end
