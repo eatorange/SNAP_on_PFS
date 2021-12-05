@@ -151,13 +151,13 @@
 		global	state_group_West	${state_group18}	${state_group19}	${state_group20}	${state_group21}	
 		
 	
-	local	ind_agg			0	//	Aggregate individual-level variables across waves
-	local	fam_agg			0	//	Aggregate family-level variables across waves
-	local	ext_data		0	//	Prepare external data (CPI, TFP, etc.)
+	local	ind_agg			1	//	Aggregate individual-level variables across waves
+	local	fam_agg			1	//	Aggregate family-level variables across waves
+	local	ext_data		1	//	Prepare external data (CPI, TFP, etc.)
 	local	cr_panel		1	//	Create panel structure from ID variable
 	local	merge_data		1	//	Merge ind- and family- variables and import it into ID variable
-		local	raw_reshape	0		//	Merge raw variables and reshape into long data (takes time)
-		local	add_clean	0		//	Do additional cleaning and import external data (CPI, TFP)
+		local	raw_reshape	1		//	Merge raw variables and reshape into long data (takes time)
+		local	add_clean	1		//	Do additional cleaning and import external data (CPI, TFP)
 		local	import_dta	1		//	Import aggregated variables into ID data. 
 	local	clean_vars		1	//	Clean variables and construct consistent variables
 	local	PFS_const		1	//	Construct PFS
@@ -889,6 +889,28 @@
 		gen	prev_yrmonth	=	yearmonth	//	This variable will be used to match main data
 
 		save	"${SNAP_dtInt}/CPI_1913_2021",	replace
+		
+		
+		*	SNAP summary (participants, costs, benefits, etc.)
+		import excel "${clouldfolder}/DataWork/USDA/DataSets/Raw/SNAPsummary-11.xls", sheet("Sheet1") cellrange(A5)  firstrow clear
+
+		rename	(FiscalYear AverageParticipation C TotalBenefits E TotalCosts)	(year	part_num	avg_benefit_pc	total_benefits	other_costs	total_costs)
+
+		drop in 1
+		replace	year="1982" if year=="1982 3]"
+		drop if _n>=53
+		destring *, replace
+		
+		replace	part_num	=	part_num/1000 // Convert K to M
+		replace	total_costs	=	total_costs/1000 // Convert M to B
+		
+		lab	var	part_num	 	"Average participation (M)"
+		lab	var	avg_benefit_pc 	"Average benefit per capita ($)"
+		lab	var	total_benefits	"Total benefits ($ M)"
+		lab	var	other_costs		"Other costs ($ M)"
+		lab	var	total_costs		"Total costs ($ B)"
+		
+		save	"${SNAP_dtInt}/SNAP_summary",	replace
 		
 		
 		*	Thrifty Food Plan data
@@ -2762,8 +2784,25 @@
 				nonumbers mtitles("Total" ) ///
 				title (Summary Statistics_fam)	tex 
 				
-	
-			*	Split-off
+		
+		*	Program Summary
+		preserve
+		
+			use	"${SNAP_dtInt}/SNAP_summary",	clear
+			
+			graph	twoway	(line part_num	year, lpattern(dash) xaxis(1 2) yaxis(1))	///
+							(line total_costs	year, lpattern(dot) xaxis(1 2) yaxis(2)),  ///
+							xline(1974 1996 2009 2020, axis(1)) xlabel(1974 "Nationwide FSP" 1996 "Welfare Reform" 2009 "2008 Farm Bill" 2020 "COVID", axis(2))	///
+							xtitle(Fiscal Year)	xtitle("", axis(2))  /*title(Program Summary)*/	bgcolor(white)	graphregion(color(white)) note(Source: USDA)	name(SNAP_summary, replace)
+
+			graph	export	"${SNAP_outRaw}/Program_summary.png", replace
+			graph	close
+		
+		restore
+		
+		
+		
+		*	Split-off
 			
 		*	Histogram of FS redemption frequency
 			histogram	total_FS_used_uniq	if	total_FS_used_uniq>=1, name(FS_fre, replace)
