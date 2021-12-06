@@ -151,14 +151,14 @@
 		global	state_group_West	${state_group18}	${state_group19}	${state_group20}	${state_group21}	
 		
 	
-	local	ind_agg			1	//	Aggregate individual-level variables across waves
-	local	fam_agg			1	//	Aggregate family-level variables across waves
-	local	ext_data		1	//	Prepare external data (CPI, TFP, etc.)
-	local	cr_panel		1	//	Create panel structure from ID variable
-	local	merge_data		1	//	Merge ind- and family- variables and import it into ID variable
-		local	raw_reshape	1		//	Merge raw variables and reshape into long data (takes time)
-		local	add_clean	1		//	Do additional cleaning and import external data (CPI, TFP)
-		local	import_dta	1		//	Import aggregated variables into ID data. 
+	local	ind_agg			0	//	Aggregate individual-level variables across waves
+	local	fam_agg			0	//	Aggregate family-level variables across waves
+	local	ext_data		0	//	Prepare external data (CPI, TFP, etc.)
+	local	cr_panel		0	//	Create panel structure from ID variable
+	local	merge_data		0	//	Merge ind- and family- variables and import it into ID variable
+		local	raw_reshape	0		//	Merge raw variables and reshape into long data (takes time)
+		local	add_clean	0		//	Do additional cleaning and import external data (CPI, TFP)
+		local	import_dta	0		//	Import aggregated variables into ID data. 
 	local	clean_vars		1	//	Clean variables and construct consistent variables
 	local	PFS_const		1	//	Construct PFS
 	local	summ_stats		0	//	Generate summary statistics (will be moved to another file later)
@@ -2454,7 +2454,7 @@
 			label var	`var'	"Food exp(w/o FS) exceeds TFP cost"
 			
 			*	Summary stat
-			/*	
+				
 				cap drop diff_total
 				cap drop foodexp_tot_imp_month
 				gen foodexp_tot_imp_month = foodexp_tot_imputed/12
@@ -2467,7 +2467,7 @@
 				
 				cap	drop	diff_total
 				cap	drop	foodexp_tot_imp_month
-			*/	
+				
 						
 		*	Winsorize per capita value for every year (except TFP)
 		local	pcvars	fam_income_pc ln_fam_income_pc foodexp_tot_exclFS_pc foodexp_tot_exclFS_pc_th foodexp_tot_inclFS_pc foodexp_tot_inclFS_pc_th	// fam_income_pc_real foodexp_tot_exclFS_pc_real foodexp_tot_inclFS_pc_real
@@ -2517,7 +2517,7 @@
 		foreach	var of global money_vars_current	{
 		    
 			cap	drop	`var'_real
-			gen	double	`var'_real	=	`var'* (CPI/100)
+			gen	double	`var'_real	=	`var'* (100/CPI)
 			
 		}
 		
@@ -2570,6 +2570,10 @@
 	 
 		use    "${SNAP_dtInt}/SNAP_long_const",	clear
 		
+		*	Generate a variable (will be moved to clean var section)
+		gen	age_ind_sq	=	(age_ind)^2
+		label var	age_ind_sq	"Age sq."
+		
 		*	Set globals
 		global	statevars		l1_foodexp_tot_inclFS_pc_1 l1_foodexp_tot_inclFS_pc_2 l1_foodexp_tot_inclFS_pc_3
 		global	demovars		rp_age rp_age_sq	rp_nonWhte	rp_married	rp_female	
@@ -2581,6 +2585,7 @@
 		global	foodvars		FS_rec_wth
 		global	regionvars		rp_state_enum1-rp_state_enum31 rp_state_enum33-rp_state_enum50 	//	Exclusing NY (rp_state_enum32) and outside 48 states (1, 52, 53). The latter should be excluded when running regression
 		global	timevars		year_enum2-year_enum32
+		global	indvars			ind_female	age_ind	age_ind_sq
 
 		
 		*	Declare variables
@@ -2588,8 +2593,9 @@
 		
 		*	Step 1
 		*	Exclude year 10 (to calculate RMPSE)	
-		svy: glm 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	${foodvars}	${regionvars}	${timevars}, family(gamma)	link(log)
-		*svy: reg 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	${foodvars}	${regionvars}	${timevars}
+		*	IMPORTANT: Unlike Lee et al. (2021), I exclude a binary indicator whether HH received SNAP or not (FS_rec_wth), as including it will violate exclusion restriction of IV
+		svy: glm 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}*/	${indvars}	${regionvars}	${timevars}		, family(gamma)	link(log)
+		*svy: reg 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}*/	${indvars}	${regionvars}	${timevars}	
 		est	sto	glm_step1
 	
 		*	Predict fitted value and residual
@@ -2602,8 +2608,8 @@
 		local	depvar	e1_foodexp_sq_glm
 		
 		*	For now (2021-11-28) GLM in step 2 does not converge. Will use OLS for now.
-		*svy: glm 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	${foodvars}	${regionvars}	${timevars}	, family(gamma)	link(log)
-		svy: reg 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	${foodvars}	${regionvars}	${timevars}
+		*svy: glm 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}*/	${indvars}	${regionvars}	${timevars}	, family(gamma)	link(log)
+		svy: reg 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}*/	${indvars}	${regionvars}	${timevars}
 			
 		est store glm_step2
 		gen	glm_step2_sample=1	if	e(sample)==1 & `=e(subpop)'
@@ -2642,13 +2648,80 @@
 		
 		save    "${SNAP_dtInt}/SNAP_long_PFS",	replace
 		
+		
+		*	Regress PFS on characteristics
+		use    "${SNAP_dtInt}/SNAP_long_PFS",	clear	
+		
+			*	PFS, without region FE
+			local	depvar	PFS_glm
+			
+			svy, subpop(if !mi(PFS_glm)):	///
+				reg	`depvar'	${indvars} ${demovars}	${econvars}		${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${foodvars}*/	/*${changevars}	${regionvars}	${timevars}	*/						
+			est	store	PFS_noFE	
+			
+			svy, subpop(if !mi(PFS_glm)):	///
+				reg	`depvar'	${indvars} ${demovars}	${econvars}		${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${foodvars}*/	/*${changevars}	${regionvars} */	${timevars}							
+			est	store	PFS_timeFEonly	
+			
+			svy, subpop(if !mi(PFS_glm)):	///
+				reg	`depvar'	${indvars} ${demovars}	${econvars}		${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${foodvars}*/	/*${changevars}*/	${regionvars}	${timevars}							
+			est	store	PFS_allFE
+			
+		*	Food Security Indicators and Their Correlates (Table 4 of 2020/11/16 draft)
+			esttab	PFS_noFE	PFS_timeFEonly	PFS_allFE	using "${SNAP_outRaw}/Tab_3_PFS_association.csv", ///
+					cells(b(star fmt(3)) se(fmt(2) par)) stats(N_sub r2) label legend nobaselevels star(* 0.10 ** 0.05 *** 0.01)	/*drop(_cons)*/	///
+					title(Effect of Correlates on Food Security Status) replace
+					
+					
+			esttab	PFS_noFE	PFS_timeFEonly	PFS_allFE	using "${SNAP_outRaw}/Tab_3_PFS_association.tex", ///
+					cells(b(star fmt(3)) & se(fmt(2) par)) stats(N_sub r2) incelldelimiter() label legend nobaselevels star(* 0.10 ** 0.05 *** 0.01)	/*drop(_cons)*/		///
+					/*cells(b(nostar fmt(%8.3f)) & se(fmt(2) par)) stats(N_sub r2, fmt(%8.0fc %8.3fc)) incelldelimiter() label legend nobaselevels /*nostar star(* 0.10 ** 0.05 *** 0.01)*/	/*drop(_cons)*/	*/	///
+					title(Effect of Correlates on Food Security Status) replace
+
+		
 	}
 	
 	*	Summary stats	
 	if	`summ_stats'==1	{
 	    
 		use    "${SNAP_dtInt}/SNAP_long_PFS",	clear	
+		
+			*	Re-scale HFSM, so it can be compared with the PFS
 			
+			cap	drop	HFSM_rescale
+			gen	HFSM_rescale = (9.3-HFSM_scale)/9.3
+			label	var	HFSM_rescale "HFSM (re-scaled)"
+			
+			*	Density Estimate of Food Security Indicator (Figure A1)
+			graph twoway 		(kdensity HFSM_rescale	if	ind_female==0)	///
+								(kdensity PFS_glm		if	!mi(HFSM_rescale)	&	!mi(PFS_glm)),	///
+								/*title (Density Estimates of the USDA scale and the PFS)*/	xtitle(Scale) ytitle(Density)		///
+								name(HFSM_PFS, replace) graphregion(color(white)) bgcolor(white)		///
+								legend(lab (1 "HFSM (rescaled)") lab(2 "PFS") rows(1))					
+			graph	export	"${SNAP_outRaw}/Fig_A2_Density_HFSM_PFS.png", replace
+			
+			
+			*	PFS by gender
+			graph twoway 		(kdensity PFS_glm	if	ind_female==0, bwidth(0.05) )	///
+								(kdensity PFS_glm	if	ind_female==1, bwidth(0.05) ),	///
+								/*title (Density Estimates of the USDA scale and the PFS)*/	xtitle(PFS) ytitle(Density)		///
+								name(PFS_ind_gender, replace) graphregion(color(white)) bgcolor(white)		///
+								legend(lab (1 "Male") lab(2 "Female") rows(1))	
+								
+								
+			*	PFS by race
+			graph twoway 		(kdensity PFS_glm	if	rp_nonWhte==0, bwidth(0.05) )	///
+								(kdensity PFS_glm	if	rp_nonWhte==1, bwidth(0.05) ),	///
+								/*title (Density Estimates of the USDA scale and the PFS)*/	xtitle(PFS) ytitle(Density)		///
+								name(PFS_rp_race, replace) graphregion(color(white)) bgcolor(white)		///
+								legend(lab (1 "White") lab(2 "non-White") rows(1))	
+			
+			graph	combine	PFS_ind_gender	PFS_rp_race, graphregion(color(white) fcolor(white)) 
+			graph	export	"${SNAP_outRaw}/PFS_kdensities.png", replace
+			graph	close
+			
+		
+		
 		*	Sample information
 			count if !mi(PFS_glm)	//	Sample size
 			unique	x11101ll	if	!mi(PFS_glm)	//	Total individuals
@@ -2758,10 +2831,17 @@
 				*	For now, generate summ table separately for indvars and fam-level vars, as indvars do not represent full sample if conditiond by !mi(glm) (need to figure out why)
 				local	indvars	ind_female_uniq num_waves_in_FU_uniq FS_ever_used_uniq total_FS_used_uniq	share_FS_used_uniq
 				local	rpvars	rp_female	rp_age	rp_White	rp_married	rp_NoHS rp_HS rp_somecol rp_col		rp_employed rp_disabled
-				local	famvars	fam_income_month_pc_real	foodexp_tot_inclFS_pc_real	FS_rec_amt_real	famnum	childnum	FS_rec_wth
+				local	famvars	split_off	fam_income_month_pc_real	foodexp_tot_inclFS_pc_real	FS_rec_amt_real	famnum	childnum	FS_rec_wth
 				
 				
-				estpost summ	`indvars'	/*`rpvars'	`famvars' if !mi(PFS_glm)*/
+				estpost summ	`indvars'	if num_waves_in_FU_uniq>=2 // Temporary condition. Need to think proper condition.
+			
+					/*
+					*	If I want survey-weighted summary stats...
+					svy, subpop(if num_waves_in_FU_uniq>=2):	mean	`indvars'
+					estadd matrix mean = e(b)
+					estadd matrix sd = r(table)[2,1...]
+					*/
 				
 				esttab using "${SNAP_outRaw}/Tab_1_Sumstats_ind.csv", replace ///
 				cells("mean(fmt(2)) sd(fmt(2)) min(fmt(0)) max(fmt(0))") label	///
@@ -2774,6 +2854,7 @@
 				title (Summary Statistics_ind)	tex 
 				
 				estpost summ	`rpvars'	`famvars' if !mi(PFS_glm)
+				
 				esttab using "${SNAP_outRaw}/Tab_1_Sumstats_fam.csv", replace ///
 				cells("mean(fmt(2)) sd(fmt(2)) min(fmt(0)) max(fmt(0))") label	///
 				nonumbers mtitles("Total" ) ///
