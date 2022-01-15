@@ -149,7 +149,26 @@
 		global	state_group20	rp_state_enum37	rp_state_enum47	//	OR, WA
 		global	state_group21	rp_state_enum5	//	CA						
 		global	state_group_West	${state_group18}	${state_group19}	${state_group20}	${state_group21}	
-		
+	
+	*	Variable label
+	label define	statecode	0	"Inap.: U.S. territory or foreign country"	99	"D.K; N.A"	///
+									1	"Alabama"		2	"Arizona"			3	"Arkansas"	///
+									4	"California"	5	"Colorado"			6	"Connecticut"	///
+									7	"Delaware"		8	"D.C."				9	"Florida"	///
+									10	"Georgia"		11	"Idaho"				12	"Illinois"	///
+									13	"Indiana"		14	"Iowa"				15	"Kansas"	///
+									16	"Kentucky"		17	"Lousiana"			18	"Maine"		///
+									19	"Maryland"		20	"Massachusetts"		21	"Michigan"	///
+									22	"Minnesota"		23	"Mississippi"		24	"Missouri"	///
+									25	"Montana"		26	"Nebraska"			27	"Nevada"	///
+									28	"New Hampshire"	29	"New Jersey"		30	"New Mexico"	///
+									31	"New York"		32	"North Carolina"	33	"North Dakota"	///
+									34	"Ohio"			35	"Oklahoma"			36	"Oregon"	///
+									37	"Pennsylvania"	38	"Rhode Island"		39	"South Carolina"	///
+									40	"South Dakota"	41	"Tennessee"			42	"Texas"	///
+									43	"Utah"			44	"Vermont"			45	"Virginia"	///
+									46	"Washington"	47	"West Virginia"		48	"Wisconsin"	///
+									49	"Wyoming"		50	"Alaska"			51	"Hawaii"
 	
 	local	ind_agg			0	//	Aggregate individual-level variables across waves
 	local	fam_agg			0	//	Aggregate family-level variables across waves
@@ -875,6 +894,32 @@
 	*	Prepare external data
 	if	`ext_data'==1	{
 		
+		*	SNAP policy dataset
+		import excel	"${dataWorkFolder}/USDA/SNAP_Policy_Database.xlsx", firstrow 	clear
+		
+		
+			*	Clean data
+			cap	drop	statecode
+			gen	statecode	=	state_fips
+			recode	statecode	(2=50)	(4=2)	(5=3)	(6=4)	(8=5)	(9=6)	(10=7)	(11=8)	(12=9)	(13=10)	(15=51)	(16=11)	(17=12)	(18=13)	///
+								(19=14)	(20=15)	(21=16)	(22=17)	(23=18)	(24=19)	(25=20)	(26=21)	(27=22)	(28=23)	(29=24)	(30=25)	(31=26)	(32=27)	///
+								(33=28)	(34=29)	(35=30)	(36=31)	(37=32)	(38=33)	(39=34)	(40=35)	(41=36)	(42=37)	(44=38)	(45=39)	(46=40)	(47=41)	///
+								(48=42)	(49=43)	(50=44)	(51=45)	(53=46)	(54=47)	(55=48)	(56=49)
+			label	value	statecode	statecode
+			label	var	statecode	"State"
+			order	statecode
+			drop	state_fips	statename	state_pc
+
+			*	Year and month
+			cap	drop	year	month
+			gen year 	=	floor(yearmonth/100)
+			gen	month	=	mod(yearmonth,100)
+			order	year	month, after(yearmonth)
+			drop	yearmonth
+			label	var	year	"Year"
+			label	var	month	"Month"
+			
+		
 		*	CPI data (to convert current to real dollars)
 		import excel	"${clouldfolder}/DataWork/CPI/CPI_1913_2021.xlsx", firstrow 	clear
 		keep	Year-Dec
@@ -911,6 +956,17 @@
 		lab	var	total_costs		"Total costs ($ B)"
 		
 		save	"${SNAP_dtInt}/SNAP_summary",	replace
+		
+		
+		*	Unemployment Rate (BLS)
+		import excel "${clouldfolder}/DataWork/BLS/unemp_rate.xlsx", sheet("BLS Data Series") cellrange(A12)  firstrow clear
+		
+		rename	(Year Annual) (year unemp_rate)
+		keep	year	unemp_rate
+		
+		label	var	unemp_rate "Unemployment Rate (%)"
+		
+		save	"${SNAP_dtInt}/Unemployment Rate",	replace
 		
 		
 		*	Thrifty Food Plan data
@@ -1583,24 +1639,6 @@
 		label	var		`var'	"non-White (RP)"
 		
 		*	State of Residence
-		label define	statecode	0	"Inap.: U.S. territory or foreign country"	99	"D.K; N.A"	///
-									1	"Alabama"		2	"Arizona"			3	"Arkansas"	///
-									4	"California"	5	"Colorado"			6	"Connecticut"	///
-									7	"Delaware"		8	"D.C."				9	"Florida"	///
-									10	"Georgia"		11	"Idaho"				12	"Illinois"	///
-									13	"Indiana"		14	"Iowa"				15	"Kansas"	///
-									16	"Kentucky"		17	"Lousiana"			18	"Maine"		///
-									19	"Maryland"		20	"Massachusetts"		21	"Michigan"	///
-									22	"Minnesota"		23	"Mississippi"		24	"Missouri"	///
-									25	"Montana"		26	"Nebraska"			27	"Nevada"	///
-									28	"New Hampshire"	29	"New Jersey"		30	"New Mexico"	///
-									31	"New York"		32	"North Carolina"	33	"North Dakota"	///
-									34	"Ohio"			35	"Oklahoma"			36	"Oregon"	///
-									37	"Pennsylvania"	38	"Rhode Island"		39	"South Carolina"	///
-									40	"South Dakota"	41	"Tennessee"			42	"Texas"	///
-									43	"Utah"			44	"Vermont"			45	"Virginia"	///
-									46	"Washington"	47	"West Virginia"		48	"Wisconsin"	///
-									49	"Wyoming"		50	"Alaska"			51	"Hawaii"
 		lab	val	rp_state statecode
 		lab	var	rp_state "State of Residence"
 		
@@ -2592,17 +2630,38 @@
 		local	depvar		foodexp_tot_inclFS_pc
 		
 		*	Step 1
-		*	Exclude year 10 (to calculate RMPSE)	
 		*	IMPORTANT: Unlike Lee et al. (2021), I exclude a binary indicator whether HH received SNAP or not (FS_rec_wth), as including it will violate exclusion restriction of IV
 		svy: glm 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}*/	${indvars}	${regionvars}	${timevars}		, family(gamma)	link(log)
 		*svy: reg 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}*/	${indvars}	${regionvars}	${timevars}	
+		ereturn list
 		est	sto	glm_step1
-	
+			
 		*	Predict fitted value and residual
 		gen	glm_step1_sample=1	if	e(sample)==1 & `=e(subpop)'	//	We need =`e(subpop)' condition, as e(sample) includes both subpopulation and non-subpopulation.
 		predict double mean1_foodexp_glm	if	glm_step1_sample==1
 		predict double e1_foodexp_glm	if	glm_step1_sample==1,r
 		gen e1_foodexp_sq_glm = (e1_foodexp_glm)^2
+		
+			*	As a robustness check, run step 1 "with" FS redemption (just like Lee et al. (2021)) and compare the variation captured.
+			svy: glm 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	${foodvars}	${indvars}	${regionvars}	${timevars}	, family(gamma)	link(log)
+			ereturn list
+			est	sto	glm_step1_withFS
+			
+			*	Without income and FS redemption
+			svy: glm 	`depvar'	${statevars}	${demovars}	/*${econvars}*/	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}*/	${indvars}	${regionvars}	${timevars}	, family(gamma)	link(log)
+			ereturn list
+			est	sto	glm_step1_woFS_woinc
+			
+								
+					
+			*	Output robustness check (comparing step 1 w/o FS and with FS)
+			esttab	glm_step1_withFS	glm_step1	glm_step1_woFS_woinc	using "${SNAP_outRaw}/GLM_pooled_FS.csv", ///
+					cells(b(star fmt(%8.2f)) se(fmt(2) par)) stats(N_sub /*r2*/) label legend nobaselevels star(* 0.10 ** 0.05 *** 0.01)	///
+					title(Conditional Mean of Food Expenditure per capita (with and w/o FS)) 	replace
+					
+			esttab	glm_step1_withFS	glm_step1	glm_step1_woFS_woinc	using "${SNAP_outRaw}/GLM_pooled_FS.tex", ///
+					cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N_sub, fmt(%8.0fc)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(_cons)*/	///
+					title(Conditional Mean of Food Expenditure per capita (with and w/o FS))		replace	
 		
 		*	Step 2
 		local	depvar	e1_foodexp_sq_glm
@@ -2628,7 +2687,6 @@
 			esttab	glm_step1	glm_step2	using "${SNAP_outRaw}/GLM_pooled.tex", ///
 					cells(b(nostar fmt(%8.3f)) & se(fmt(2) par)) stats(N_sub, fmt(%8.0fc)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(_cons)*/	///
 					title(Conditional Mean and Variance of Food Expenditure per capita)		replace		
-		
 		
 		
 		*	Step 3
@@ -2836,6 +2894,8 @@
 				
 				estpost summ	`indvars'	if num_waves_in_FU_uniq>=2 // Temporary condition. Need to think proper condition.
 			
+				summ	FS_rec_amt_real	if	!mi(PFS_glm)	&	FS_rec_wth==1
+			
 					/*
 					*	If I want survey-weighted summary stats...
 					svy, subpop(if num_waves_in_FU_uniq>=2):	mean	`indvars'
@@ -2864,18 +2924,28 @@
 				cells("mean(fmt(2)) sd(fmt(2)) min(fmt(0)) max(fmt(0))") label	///
 				nonumbers mtitles("Total" ) ///
 				title (Summary Statistics_fam)	tex 
-				
+		
 		
 		*	Program Summary
 		preserve
 		
 			use	"${SNAP_dtInt}/SNAP_summary",	clear
 			
+			merge	1:1	year	using		"${SNAP_dtInt}/Unemployment Rate", nogen assert(3)
+			
+			graph	twoway	(line part_num		year, lpattern(dash) xaxis(1 2) yaxis(1))	///
+						(line unemp_rate	year, lpattern(dash_dot) xaxis(1 2) yaxis(2)),  ///
+						xline(1974 1996 2009 2020, axis(1)) xlabel(1974 "Nationwide FSP" 1996 "Welfare Reform" 2009 "ARRA" 2020 "COVID", axis(2))	///
+						xtitle(Fiscal Year)	xtitle("", axis(2))  /*title(Program Summary)*/	bgcolor(white)	graphregion(color(white)) note(Source: USDA & BLS)	name(SNAP_summary, replace)
+			
+			/*
 			graph	twoway	(line part_num	year, lpattern(dash) xaxis(1 2) yaxis(1))	///
 							(line total_costs	year, lpattern(dot) xaxis(1 2) yaxis(2)),  ///
 							xline(1974 1996 2009 2020, axis(1)) xlabel(1974 "Nationwide FSP" 1996 "Welfare Reform" 2009 "2008 Farm Bill" 2020 "COVID", axis(2))	///
 							xtitle(Fiscal Year)	xtitle("", axis(2))  /*title(Program Summary)*/	bgcolor(white)	graphregion(color(white)) note(Source: USDA)	name(SNAP_summary, replace)
-
+			*/
+			
+			
 			graph	export	"${SNAP_outRaw}/Program_summary.png", replace
 			graph	close
 		
@@ -2895,8 +2965,8 @@
 			graph	export "${SNAP_outRaw}/FS_redemption_share.png", replace
 			graph	close
 			
-			grc1leg2		FS_freq	FS_share,	title(Frequency and Share) 	graphregion(color(white))  legendfrom(FS_share)
-							graph	export	"${PSID_outRaw}/TFI_CFI_`measure'_region_FE.png", replace
+			grc1leg2		FS_fre	FS_share,	title(Frequency and Share) 	graphregion(color(white))  legendfrom(FS_share)
+							graph	export	"${SNAP_outRaw}/hist_FS_redemption.png", replace
 							graph	close
 	
 		/*
