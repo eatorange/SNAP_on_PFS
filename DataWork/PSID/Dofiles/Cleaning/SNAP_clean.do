@@ -96,6 +96,7 @@
 	
 	label	define	yes1no0	0	"No"	1	"Yes",	replace
 	
+	label	define	policy_status	0	"No"	1	"Statewide"	2	"Select parts of the state"
 	
 	*	States
 	*	Note: state codes here are slightly different from that in PFS paper, as Rhode Island (rp_state_enum39) exists here while it didnt exist in PFS paper...
@@ -151,7 +152,7 @@
 		global	state_group_West	${state_group18}	${state_group19}	${state_group20}	${state_group21}	
 	
 	*	Variable label
-	label define	statecode	0	"Inap.: U.S. territory or foreign country"	99	"D.K; N.A"	///
+	label define	statecode		0	"Inap.: U.S. territory or foreign country"	99	"D.K; N.A"	///
 									1	"Alabama"		2	"Arizona"			3	"Arkansas"	///
 									4	"California"	5	"Colorado"			6	"Connecticut"	///
 									7	"Delaware"		8	"D.C."				9	"Florida"	///
@@ -168,18 +169,18 @@
 									40	"South Dakota"	41	"Tennessee"			42	"Texas"	///
 									43	"Utah"			44	"Vermont"			45	"Virginia"	///
 									46	"Washington"	47	"West Virginia"		48	"Wisconsin"	///
-									49	"Wyoming"		50	"Alaska"			51	"Hawaii"
+									49	"Wyoming"		50	"Alaska"			51	"Hawaii"	99	"DK/NA",	replace
 	
 	local	ind_agg			0	//	Aggregate individual-level variables across waves
 	local	fam_agg			0	//	Aggregate family-level variables across waves
 	local	ext_data		0	//	Prepare external data (CPI, TFP, etc.)
 	local	cr_panel		0	//	Create panel structure from ID variable
-	local	merge_data		0	//	Merge ind- and family- variables and import it into ID variable
+	local	merge_data		1	//	Merge ind- and family- variables and import it into ID variable
 		local	raw_reshape	0		//	Merge raw variables and reshape into long data (takes time)
-		local	add_clean	0		//	Do additional cleaning and import external data (CPI, TFP)
-		local	import_dta	0		//	Import aggregated variables into ID data. 
-	local	clean_vars		1	//	Clean variables and construct consistent variables
-	local	PFS_const		1	//	Construct PFS
+		local	add_clean	1		//	Do additional cleaning and import external data (CPI, TFP)
+		local	import_dta	1		//	Import aggregated variables into ID data. 
+	local	clean_vars		0	//	Clean variables and construct consistent variables
+	local	PFS_const		0	//	Construct PFS
 	local	summ_stats		0	//	Generate summary statistics (will be moved to another file later)
 	
 	
@@ -730,7 +731,7 @@
 			keep	x11101ll	`var'*
 			save	"${SNAP_dtInt}/Fam_vars/`var'", replace
 			
-			*	At home expenditure, additional to food stamp value (since 1994, for those who redeemd food stamp, Free recall period)
+			*	At home expenditure, additional to food stamp value (since 1994, for those who redeemed food stamp, Free recall period)
 			**	This question is asked only when household affirmed "did you spend any money in addition to stamp value?"
 			loc	var	foodexp_home_stamp
 			psid use || `var'  [94]ER3078 [95]ER6077 [96]ER8174 [97]ER11068 [99]ER14288 [01]ER18421 [03]ER21686 [05]ER25688 [07]ER36706 [09]ER42712 [11]ER48028 [13]ER53725 [15]ER60740 [17]ER66787 [19]ER72791 using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
@@ -745,7 +746,14 @@
 			
 			keep	x11101ll	`var'*
 			save	"${SNAP_dtInt}/Fam_vars/`var'", replace
-
+			
+			*	At-home, whether food stamp amount was included in weekly food expenditure (1975-1976)
+			**	If respondent answered "yes", food stamp amount should be deducted from the expenditure to get food expenditure without stamp value
+			loc	var	foodexp_home_wth_stamp_incl
+			psid use || `var'  	[72]V2482 [74]V3447 [75]V3848 [76]V4361 using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
+			keep	x11101ll	`var'*
+			save	"${SNAP_dtInt}/Fam_vars/`var'", replace
+			
 			*	At home, imputed annual cost (available since 1999)
 			**	Can be used to check whether my individual calculation is correct.
 			loc	var	foodexp_home_imputed
@@ -899,18 +907,25 @@
 		
 		
 			*	Clean data
-			cap	drop	statecode
-			gen	statecode	=	state_fips
-			recode	statecode	(2=50)	(4=2)	(5=3)	(6=4)	(8=5)	(9=6)	(10=7)	(11=8)	(12=9)	(13=10)	(15=51)	(16=11)	(17=12)	(18=13)	///
+			loc	var	rp_state
+			cap	drop	`var'
+			gen	`var'	=	state_fips
+			recode	`var'	(2=50)	(4=2)	(5=3)	(6=4)	(8=5)	(9=6)	(10=7)	(11=8)	(12=9)	(13=10)	(15=51)	(16=11)	(17=12)	(18=13)	///
 								(19=14)	(20=15)	(21=16)	(22=17)	(23=18)	(24=19)	(25=20)	(26=21)	(27=22)	(28=23)	(29=24)	(30=25)	(31=26)	(32=27)	///
 								(33=28)	(34=29)	(35=30)	(36=31)	(37=32)	(38=33)	(39=34)	(40=35)	(41=36)	(42=37)	(44=38)	(45=39)	(46=40)	(47=41)	///
 								(48=42)	(49=43)	(50=44)	(51=45)	(53=46)	(54=47)	(55=48)	(56=49)
-			label	value	statecode	statecode
-			label	var	statecode	"State"
-			order	statecode
+			label	value	`var'	statecode
+			label	var	`var'	"State"
+			order	`var'
 			drop	state_fips	statename	state_pc
 
+			
 			*	Year and month
+			*	Since we want to match it with previous month of survey (when survey asked FS redemption), make a new variable to be matched with previous month
+			clonevar	prev_yrmonth	=	yearmonth
+			order	prev_yrmonth, after(yearmonth)
+			lab	var	yearmonth "Year and Month of Policy"
+			/*
 			cap	drop	year	month
 			gen year 	=	floor(yearmonth/100)
 			gen	month	=	mod(yearmonth,100)
@@ -918,6 +933,181 @@
 			drop	yearmonth
 			label	var	year	"Year"
 			label	var	month	"Month"
+			*/
+			
+			*	Policy variables
+			label	var	bbce	"Broad-based categorical eligibility (BBCE)"
+			label value	bbce	yes1no0
+			
+			loc	var	bbce_inclmt
+			label	var	`var'	"Gross income limit as a percentage of the Federal pov guideline under BBCE"
+			replace	`var'=.n	if	`var'==-9
+					
+			loc	var	bbce_asset
+			lab	var	`var'	"Asset test eliminated (under BBCE)"
+			replace	`var'=.n	if	`var'==-9
+			label	value	`var'	yes1no0
+			
+			loc	var	bbce_a_amt
+			label	var	`var'	"Dollar amount of the asset limit used under BBCE (K)"
+			replace	`var'=.n	if	`var'==-9
+			
+			loc	var	bbce_a_veh
+			label	var	`var'	"Exludes at least one (but not all) vehicles from asset test under BBCE"
+			replace	`var'=.n	if	`var'==-9
+			label	value	`var'	yes1no0
+			
+			loc	var	bbce_hh
+			label	var	`var'	"Limits BBCE to certain type of HHs"
+			replace	`var'=.n	if	`var'==-9
+			label	value	`var'	policy_status
+			
+			loc	var	bbce_sen
+			label	var	`var'	"Gross income limit for senior/disabled to quality for BBCE"
+			replace	`var'=.n	if	`var'==-9
+			label	value	`var'	yes1no0
+			note	`var':	HHs with senior or disabled members whose income is above the state-specified cut-off (typcially 200 percent of Pov line) do not quality for the BBCE and would face the federal asset limit
+			
+			loc	var	call
+			lab	var	`var'	"Call center availability"
+			lab	define	`var'	0	"No call center"	///
+								1	"Available statewide"	///
+								2	"Only in select part of the state"
+			lab	values	`var'	`var'					
+			
+			loc	var	cap
+			lab	var	`var'	"Operates Combined Application Project for SSI receipients"
+			lab	value	`var'	yes1no0
+			note	`var':	It allows SSI recipients to use a streamlined SNAP application process.
+			
+			loc	var	certearn0103
+			lab	var	`var'	"Proportion of SNAP units with earnings with 1-3 month recertification period"
+			
+			loc	var	certearn0406
+			lab	var	`var'	"Proportion of SNAP units with earnings with 4-6 month recertification period"
+			
+			loc	var	certearn0712
+			lab	var	`var'	"Proportion of SNAP units with earnings with 7-12 month recertification period"
+			
+			loc	var	certearn1399
+			lab	var	`var'	"Proportion of SNAP units with earnings with 13+ month recertification period"
+			
+			loc	var	certearnavg
+			lab	var	`var'	"Average certification periods for SNAP units with earnings (in months)"
+			
+			loc	var	certearnmed
+			lab	var	`var'	"Median certification periods for SNAP units with earnings (in months)"
+			
+			loc	var	certeld0103
+			lab	var	`var'	"Proportion of elderly SNAP units with 1-3 month recertification period"
+			
+			loc	var	certeld0406
+			lab	var	`var'	"Proportion of elderly SNAP units with 4-6 month recertification period"
+			
+			loc	var	certeld0712
+			lab	var	`var'	"Proportion of elderly SNAP units with 7-12 month recertification period"
+			
+			loc	var	certeld1399
+			lab	var	`var'	"Proportion of elderly SNAP units with 13+ month recertification period"
+			
+			loc	var	certeldavg
+			lab	var	`var'	"Average certification periods for elderly SNAP units (in months)"
+			
+			loc	var	certeldmed
+			lab	var	`var'	"Median certification periods for elderly SNAP units (in months)"
+			
+			loc	var	certnonearn0103
+			lab	var	`var'	"Proportion of nonearning, nonelderly SNAP units with 1-3 month recertification period"
+			
+			loc	var	certnonearn0406
+			lab	var	`var'	"Proportion of nonearning, nonelderly SNAP units with 4-6 month recertification period"
+			
+			loc	var	certnonearn0712
+			lab	var	`var'	"Proportion of nonearning, nonelderly SNAP units with 7-12 month recertification period"
+			
+			loc	var	certnonearn1399
+			lab	var	`var'	"Proportion of nonearning, nonelderly SNAP units with 13+ month recertification period"
+			
+			loc	var	certnonearnavg
+			lab	var	`var'	"Average certification periods for nonearning, nonelderly SNAP units (in months)"
+			
+			loc	var	certnonearnmed
+			lab	var	`var'	"Median certification periods for nonearning, nonelderly SNAP units (in months)"
+			
+			loc	var	ebtissuance
+			lab	var	`var'	"Proportion of the dollar value of all SNAP benefits that are accounted for by EBIT"
+			
+			loc	var	faceini
+			lab	var	`var'	"Waiver to use a telephone interview in lieu of a face-to-fac interview for initial certification"
+			label	value	`var'	yes1no0
+			
+			loc	var	facerec
+			lab	var	`var'	"Waiver to use a telephone interview in lieu of a face-to-fac interview for recertification"
+			label	value	`var'	yes1no0
+			
+			loc	var	fingerprint
+			lab	var	`var'	"Fingerprint requirement"
+			label	value	`var'	policy_status
+			
+			loc	var	noncitadultfull
+			lab	var	`var'	"SNAP or state-funded food assistance eligibility of ALL legal noncitizen adults (18-64)"
+			label	value	`var'	yes1no0
+			
+			loc	var	noncitadultpart
+			lab	var	`var'	"SNAP or state-funded food assistance eligibility of SOME legal noncitizen adults (18-64)"
+			label	value	`var'	yes1no0
+			
+			loc	var	noncitchildfull
+			lab	var	`var'	"SNAP or state-funded food assistance eligibility of ALL legal noncitizen children (<18)"
+			label	value	`var'	yes1no0
+			
+			loc	var	noncitchildpart
+			lab	var	`var'	"SNAP or state-funded food assistance eligibility of SOME legal noncitizen children (<18)"
+			label	value	`var'	yes1no0
+			
+			loc	var	nonciteldfull
+			lab	var	`var'	"SNAP or state-funded food assistance eligibility of ALL legal noncitizen elderly (>64)"
+			label	value	`var'	yes1no0
+			
+			loc	var	nonciteldpart
+			lab	var	`var'	"SNAP or state-funded food assistance eligibility of SOME legal noncitizen elderly (>64)"
+			label	value	`var'	yes1no0
+			
+			loc	var	oapp
+			lab	var	`var'	"Online Application"
+			label	value	`var'	policy_status
+			
+			loc	var	outreach
+			lab	var	`var'	"Total grant outreach spending (nominal, K)"
+			
+			loc	var	reportsimple
+			lab	var	`var'	"Simplified reporting"
+			label	value	`var'	yes1no0
+			
+			loc	var	transben
+			lab	var	`var'	"Transitional SNAP benefits to families leaving the TANF or state-funded cash assistance programs"
+			label	value	`var'	yes1no0
+			
+			loc	var	vehexclall
+			lab	var	`var'	"ALL vehicles excluded from the asset test"
+			label	value	`var'	yes1no0
+			
+			loc	var	vehexclamt
+			lab	var	`var'	"Excemption of the amount higher than thee SNAP standard auto exemption"
+			label	value	`var'	yes1no0
+			
+			loc	var	vehexclall
+			lab	var	`var'	"ALL vehicles excluded from the asset test"
+			label	value	`var'	yes1no0
+			note `var':	When a State removes the asset test due to its adoption of broad-based categorical eligibility, vehexclamt is assigned a value of 0.
+			
+			loc	var	vehexclone
+			lab	var	`var'	"SOME vehicles excluded from the asset test"
+			label	value	`var'	yes1no0
+			note `var':	When a State removes the asset test due to its adoption of broad-based categorical eligibility, vehexclamt is assigned a value of 0.
+						
+			*	Save
+			save	"${SNAP_dtInt}/SNAP_policy_data",	replace
 			
 		
 		*	CPI data (to convert current to real dollars)
@@ -1220,7 +1410,8 @@
 								stamp_useamt_month	stamp_cntyr_recall	stamp_usewth_month	stamp_usewth_crtyear	stamp_useamt	stamp_recamt_annual		stamp_recamt	stamp_recamt_period	stamp_used	stamp_monthsused	///	/*	FS/SNAP usage*/							
 								stamp_usewth_crtJan	stamp_usewth_crtFeb	stamp_usewth_crtMar	stamp_usewth_crtApr	stamp_usewth_crtMay	stamp_usewth_crtJun		///	/*	FS/SNAP usage*/
 								stamp_usewth_crtJul	stamp_usewth_crtAug	stamp_usewth_crtSep	stamp_usewth_crtOct	stamp_usewth_crtNov	stamp_usewth_crtDec		///	/*	FS/SNAP usage*/						
-								foodexp_home_annual	foodexp_home_grown	foodexp_home_nostamp	foodexp_home_nostamp_recall	foodexp_home_spent_extra	foodexp_home_stamp	foodexp_home_stamp_recall	foodexp_home_imputed	///	/* At-home food exp */	///
+								foodexp_home_annual	foodexp_home_grown	foodexp_home_nostamp	foodexp_home_nostamp_recall	foodexp_home_spent_extra	///
+								foodexp_home_stamp	foodexp_home_stamp_recall	foodexp_home_wth_stamp_incl	foodexp_home_imputed	///	/* At-home food exp */	///
 								foodexp_away_cat	foodexp_away_annual	foodexp_away_stamp	foodexp_away_stamp_recall	foodexp_away_nostamp	foodexp_away_nostamp_recall	foodexp_away_imputed	///	/*	Away food expenditure	*/
 								foodexp_atwork	foodexp_atwork_saved	///	/*	At work food expenditure	*/
 								foodexp_deliv_nostamp_wth	foodexp_deliv_nostamp	foodexp_deliv_nostamp_recall	foodexp_deliv_stamp_wth	foodexp_deliv_stamp	foodexp_deliv_stamp_recall	///	/*	devliered food expenditure	*/
@@ -1233,13 +1424,12 @@
 				
 			}
 			
-
-
-			
+						
 			*	Save (wide-format)	
 			*order	hhid_agg,	before(x11101ll)
 			*order	pn-fu_nonmiss,	after(x11101ll)
 			save	"${SNAP_dtInt}/SNAP_RawMerged_wide",	replace
+			
 			
 			*	Re-shape it into long format	
 			reshape long x11102_	xsqnr_	wgt_long_ind	wgt_long_fam	wgt_long_fam_adj	living_Sample tot_living_Sample	${varlist_ind}	${varlist_fam}, i(x11101ll) j(year)
@@ -1271,6 +1461,30 @@
 			label	var	rp_gender	"Gender of RP"
 
 			save	"${SNAP_dtInt}/SNAP_RawMerged_long",	replace
+							
+			*	Appending extra variables 
+			**	Disabled by default. Run this code only when you have extra variable to append from the raw PSID data.
+			
+			{
+				local	var	foodexp_home_wth_stamp_incl
+				cd "${SNAP_dtInt}/Fam_vars"
+				
+					*	Wide
+					use	"${SNAP_dtInt}/SNAP_RawMerged_wide",	clear
+					merge 1:1 x11101ll using "`var'", keepusing(`var'*) nogen assert(3)
+					save	"${SNAP_dtInt}/SNAP_RawMerged_wide",	replace
+					
+					*	Long
+					use	"`var'", clear
+					reshape	long `var', i(x11101ll) j(year)
+					tempfile	`var'_ln
+					save	``var'_ln'
+					
+					use	"${SNAP_dtInt}/SNAP_RawMerged_long", clear
+					merge	1:1		x11101ll	year	using	``var'_ln',	keepusing(`var'*)	nogen	assert(1 3)
+					save	"${SNAP_dtInt}/SNAP_RawMerged_long",	replace
+			}
+			
 		
 		}
 			
@@ -1473,8 +1687,11 @@
 			use	"${SNAP_dtInt}/Ind_vars/ID_sample_long.dta",	clear
 			merge	1:1	x11101ll	year	using "${SNAP_dtInt}/SNAP_ExtMerged_long", nogen assert(2 3) keep(3) 	
 								
+			*	Import SNAP policy data
+			merge m:1 rp_state prev_yrmonth using "${SNAP_dtInt}/SNAP_policy_data", nogen keep(1 3)
+			
 			*	Import CPI data
-			merge	m:1	prev_yrmonth	using	"${SNAP_dtInt}/CPI_1913_2021", keep(1 3) keepusing(CPI)
+			merge	m:1	prev_yrmonth	using	"${SNAP_dtInt}/CPI_1913_2021",	keep(1 3) keepusing(CPI)
 			
 				*	Validate merge
 				local	zero_seqnum	seqnum==0
@@ -1873,7 +2090,7 @@
 			replace	`var'=1	if	(inrange(year,1994,1997)	|	inrange(year,2009,2019))	&	!mi(stamp_usewth_month)	&	stamp_usewth_month==1
 			
 			label	value	`var' yes1no0
-			label var	`var'	"FS used last month"
+			label var	`var'		"FS used last month"
 			label var	FS_rec_wth	"FS used last month"
 
 		*	Month of FS redemption 
@@ -2126,7 +2343,7 @@
 		
 				*	1968-1993
 				*	Note: at-home expenditure includes "delivered" during these period.
-				*	Convert annual amount to monthly aount
+				*	Convert annual amount to monthly amount
 				*	Important: Although "annual food expenditure" is included this period, I divide it my to make monthly food expenidture for two reasons
 				*	(1) Food expenditure is separately collected based on "food stamp used last month", thus it allows more accurate matching with food stamp used "last month"
 				*	(2) In the questionnaires people were asked "weekly" or "monthly" expenditure, so I assume annual food expenditure reported here is somehow imputed from those values
@@ -2135,11 +2352,18 @@
 					*cap	drop	`var'
 					*gen	double	`var'=.	
 					
+					*	In 1975-1976, separate questions were asked whether food stamp amount is included in reported foo expenditure
+					*	If included, then the amount should be excluded from annual food expenditure to get annual food expenditure "net of" food stamp value
+					replace	foodexp_home_annual	=	foodexp_home_annual	-	stamp_useamt	if	inrange(year,1975,1976)	&	foodexp_home_wth_stamp_incl==5
+					
 					replace	`var_exclFS'=foodexp_home_annual/12	if	inrange(year,1968,1993)
 						
 					*	Add up FS amount to get food exp including FS amount
 					replace	`var_inclFS'=`var_exclFS'	+	FS_rec_amt	if	inrange(year,1968,1993)	&	FS_rec_wth==1	//	Received FS
 					replace	`var_inclFS'=`var_exclFS'					if	inrange(year,1968,1993)	&	FS_rec_wth==0	//	Didn't receive FS
+					
+					
+					
 					
 							
 				*	1994-2019
@@ -2735,6 +2959,19 @@
 					cells(b(star fmt(3)) & se(fmt(2) par)) stats(N_sub r2) incelldelimiter() label legend nobaselevels star(* 0.10 ** 0.05 *** 0.01)	/*drop(_cons)*/		///
 					/*cells(b(nostar fmt(%8.3f)) & se(fmt(2) par)) stats(N_sub r2, fmt(%8.0fc %8.3fc)) incelldelimiter() label legend nobaselevels /*nostar star(* 0.10 ** 0.05 *** 0.01)*/	/*drop(_cons)*/	*/	///
 					title(Effect of Correlates on Food Security Status) replace
+		
+		
+		*	
+		local	depvar	PFS_glm
+		
+		ivregress	2sls	`depvar'	${indvars} ${demovars} (FS_rec_wth	=	bbce)	if	!mi(PFS_glm), robust	cluster(x11101ll)
+		estat firststage
+		
+		
+		weakivtest
+		
+		svy, subpop(if !mi(PFS_glm)):	///
+			ivregress	`depvar'	${indvars} ${demovars}	// ${econvars}		${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${foodvars}*/	/*${changevars}*/	${regionvars}	${timevars}			
 
 		
 	}
@@ -2969,14 +3206,7 @@
 							graph	export	"${SNAP_outRaw}/hist_FS_redemption.png", replace
 							graph	close
 	
-		/*
-			cap drop	_seq	_spell	_end
-			tsspell, cond(year>=2 & PFS_FI_glm==1)
-		*/
-		
-		*	Change in TFP costs over time (real-dollars, 4-ppl FU as an example), to show trends in TFP
-		
-		
+			
 		*	Test parallel trend assumption
 			
 			*	Never-treated vs Treated-once
