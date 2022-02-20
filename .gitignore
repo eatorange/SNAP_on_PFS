@@ -52,3 +52,4 @@
 
 #temporary files
 *~
+*.tmp
