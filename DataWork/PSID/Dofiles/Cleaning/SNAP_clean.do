@@ -488,8 +488,10 @@
 		*	Previusoly I planned to use previous year's food stamp redemption amount, but I decided to use previous "MONTH" amount for more accurate match with expenditure
 			*	Expenditure questions differ based on previosu "MONTH" redemption, and food expenditure recall period are often "WEEKLY" or "MONTHLY"
 			
-			*	Used food stamp last MONTH
+			*	Stamp amount used last MONTH
 			*	I combine three series of variables: (1) Amount saved last month (1975-1997) (2) Current year with free recall period (so I can convert it to monthly amount) (1999-2007) (3) Last month (2009-2019)
+				**	Note: For earlier periods (1975-1979), where HH had to pay for food stamps, "amount saved" must be combined with "amount paid" to get the total value of food from stamp. (check page 42 of 1977 file description for detail)
+				**	It should be in cleaning stage
 			*	This variable is important as households' food expenditure are separately collected based on this response.
 			loc	var	stamp_useamt_month
 			psid use || `var'		[75]V3846 [76]V4359 [77]V5269 [78]V5768 [79]V6374 [80]V6970 [81]V7562 [82]V8254 [83]V8862 [84]V10233 [85]V11373 [86]V12772 [87]V13874 [90]V17805 [91]V19105 [92]V20405 [93]V21703 [94]ER3076 [95]ER6075 [96]ER8172 [97]ER11066	///	/* first series*/
@@ -497,6 +499,13 @@
 									[09]ER42709 [11]ER48025 [13]ER53722 [15]ER60737 [17]ER66784 [19]ER72788, keepnotes design(any) clear		/*	Third series*/
 			keep	x11101ll	`var'*
 			save	"${SNAP_dtInt}/Fam_vars/`var'", replace						
+			
+			*	Paid amount for stamp last MONTH (1975-1979)
+			*	In early periods (1975-1979) when HH had to buy stamps, this amount should be added to amount saved to get total value of additional foods from food stamps (check pg 42 of 1977 file description for detail)
+			loc	var	stamp_payamt_month
+			psid use || `var'		[75]V3844 [76]V4357 [77]V5267 [78]V5766 [79]V6372, keepnotes design(any) clear		/*	Third series*/
+			keep	x11101ll	`var'*
+			save	"${SNAP_dtInt}/Fam_vars/`var'", replace	
 			
 			*	Stamp amount used recall periods
 			*	Should be combined with the amount redeemed this year ([99]ER14285...)
@@ -516,6 +525,19 @@
 			
 			keep	x11101ll	`var'*
 			save	"${SNAP_dtInt}/Fam_vars/`var'", replace
+			
+			*	Number of people in HH issued food stamp last MONTH
+				*	Note: Although PSID year-by-year index categorized it as "previosu year", they are actually asking about "last month" (in early years. Need to check whether it is true in later years)
+				**	Note: These variables are codded differently (ex. different top-coded value) in different years, so should not be "directly" used in analyses across years unless carefully harmonized.
+				**	This variable will only be used to determine whether HH received food stamp (=0) or not (>0), especially in early years (see pg 42 of 1977 file description)
+			loc	var	stamp_ppl_month
+			psid use || `var'   	[75]V3843 [76]V4356 [77]V5266 [78]V5765 [79]V6371 [80]V6969 [81]V7561 [82]V8253 [83]V8861 [84]V10232 [85]V11372 [86]V12771 [87]V13873 [90]V17804	///
+									[91]V19104 [92]V20404 [93]V21702 [94]ER3075 [95]ER6074 [96]ER8171 [97]ER11065 [99]ER14284 [01]ER18416 [03]ER21681 [05]ER25683 [07]ER36701 [09]ER42708	///
+									[11]ER48024 [13]ER53721 [15]ER60736 [17]ER66783 [19]ER72787	///
+									using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
+			keep	x11101ll	`var'*
+			save	"${SNAP_dtInt}/Fam_vars/`var'", replace
+			
 			
 			*	Whether food stamp is used "current year"
 			*	HH food expenditure is collected in separate variables (FS or non-FS) based on this variable.
@@ -693,6 +715,8 @@
 		*	Food expenditure
 
 			*	At home expenditure, until 1993 (annual, stamp excluded)
+				*	Note: stamp value is excluded since 1977. For 1975-1976, it depends on whether HH answered "stamp amount included in the expenditure?"
+				*	Food expenditure net of stamp amount in 1975-1976 are adjusted in cleaning phase.
 			*	Note: This variable includes "cost of food delivered to door". Please find the codebook of variable V21707.
 			loc	var	foodexp_home_annual
 			psid use || `var'  [68]V37 [69]V500 [70]V1175 [71]V1876 [72]V2476 [74]V3441 [75]V3841 [76]V4354 [77]V5271 [78]V5770 [79]V6376 [80]V6972 [81]V7564 [82]V8256 [83]V8864 [84]V10235 [85]V11375 [86]V12774 [87]V13876 [90]V17807 [91]V19107 [92]V20407 [93]V21707 using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
@@ -761,7 +785,7 @@
 			keep	x11101ll	`var'*
 			save	"${SNAP_dtInt}/Fam_vars/`var'", replace
 			
-		*	Away from home
+		*	Away from home (eating out)
 		
 			*	Weekly amount (bracket, 1968-1969)
 			**	1968 do not have a exact variable, thus need to be imputed using this variable
@@ -1466,7 +1490,7 @@
 			**	Disabled by default. Run this code only when you have extra variable to append from the raw PSID data.
 			
 			{
-				local	var	foodexp_home_wth_stamp_incl
+				local	var	stamp_ppl_month
 				cd "${SNAP_dtInt}/Fam_vars"
 				
 					*	Wide
@@ -1484,6 +1508,7 @@
 					merge	1:1		x11101ll	year	using	``var'_ln',	keepusing(`var'*)	nogen	assert(1 3)
 					save	"${SNAP_dtInt}/SNAP_RawMerged_long",	replace
 			}
+			
 			
 		
 		}
@@ -2070,7 +2095,14 @@
 			
 		label	var	`var'	"FS/SNAP amount received last month"
 		
-		
+		*	Food stamp amount paid (1975-1979)
+		*	This amount should be added to "amount saved" to get total food value from food stamp
+			*	There is 1 obs in raw data where HH answered "$999 or more". I will leave it as it is for now.
+		local	var	FS_rec_amt_paid
+		cap	drop	`var'
+		gen		double	`var'=.	
+		replace	`var'=	stamp_payamt_month	if	inrange(year,1975,1979)
+		label	var	`var'	"Amount paid for food stamp last month (1975-1979)"
 		
 		*	Whether FS received last month (1975-1997, 2009-2019)
 		*	(1999-2007 will be constructed after constructing "month of FS redeemed")
@@ -2078,16 +2110,17 @@
 		cap	drop	`var'
 		gen		`var'=.	
 		
-			*	1975-1993
-			*	Here we determine FS status by redeeming non-zero FS amount
-			replace	`var'=0	if	inrange(year,1975,1993)		&	FS_rec_amt==0
-			replace	`var'=1	if	inrange(year,1975,1993)		&	!mi(FS_rec_amt)	&	FS_rec_amt!=0
+			*	1975-1977
+			*	Here we determine FS status by "the number of people FS issued", based on 1977 file description document (page 42)
+			*	Note: in 1985, among 786 HHs where at least one person received FS, 97% of them (762 HHs) redeemed non-zero amount (code: tab V3844 if V3843!=0 from 1975 raw data)
+			replace	`var'=0	if	inrange(year,1975,1977)		&	stamp_ppl_month==0	//	No FS
+			replace	`var'=1	if	inrange(year,1975,1977)		&	inrange(stamp_ppl_month,1,9)	//	FS
 			
-			*	1994-1997, 2009-2019
+			*	1978-1997, 2009-2019
 			*	Here we have indicator dummy of last month usage so we can directly import it
 			*	Any non-missing value other than "yes" (ex. no, wild code, na/dk, inapp) are categorized as "no"
-			replace	`var'=0	if	(inrange(year,1994,1997)	|	inrange(year,2009,2019))	&	!mi(stamp_usewth_month)	&	stamp_usewth_month!=1
-			replace	`var'=1	if	(inrange(year,1994,1997)	|	inrange(year,2009,2019))	&	!mi(stamp_usewth_month)	&	stamp_usewth_month==1
+			replace	`var'=0	if	(inrange(year,1978,1997)	|	inrange(year,2009,2019))	&	!mi(stamp_usewth_month)	&	stamp_usewth_month!=1
+			replace	`var'=1	if	(inrange(year,1978,1997)	|	inrange(year,2009,2019))	&	!mi(stamp_usewth_month)	&	stamp_usewth_month==1
 			
 			label	value	`var' yes1no0
 			label var	`var'		"FS used last month"
@@ -2169,7 +2202,8 @@
 			tab FS_rec_wth FS_rec_crtyr_wth if inrange(year,1999,2007)
 			tab FS_rec_wth if inrange(year,1999,2007) & FS_rec_crtyr_wth==1	//	FU that used FS this year, but not last month
 		
-		/* I use new code above.
+		/*	The code below is outdated. I use new code above.
+		{
 		*	Whether FS/SNAP received last month
 		loc	var	FS_rec_wth
 		cap	drop	`var'
@@ -2191,7 +2225,7 @@
 		label	var	`var'	"Received FS/SNAP last month"
 		*/
 
-		*	The code below is written for "previous year" stamp information. Since we no longer use it, we will disable it for now. We can re-use the code once found it useful.
+		*	The code below is written for "previous year" stamp information. Since we no longer use it, we will disable it for now. We can re-use the code once found it useful.	
 		/*
 		
 		
@@ -2322,13 +2356,14 @@
 		label	var	foodexp_home_nostamp_recall	"Food exp recall period (w/o stamp)"
 		label	var	foodexp_home_nostamp_recall	"Add. food exp recall period (with stamp)"
 		*/
-		
+	
+	
 		
 		*	Food expenditure
 		
 			*	At-home
-			loc	var_inclFS	foodexp_home_inclFS
-			loc	var_exclFS	foodexp_home_exclFS
+			loc	var_inclFS	foodexp_home_inclFS	//	food expenditure including food stamp amount
+			loc	var_exclFS	foodexp_home_exclFS	//	food expenditure excluding food stamp amount
 			loc	var_extamt	foodexp_home_extramt
 			
 			cap	drop	`var_inclFS'
@@ -2341,7 +2376,7 @@
 			label	var	`var_exclFS'	"Food exp at home (Monthly) (FS excl)"
 			label	var	`var_extamt'	"Food exp at home (Monthly), in addition to FS amount"
 		
-				*	1968-1993
+				*	1975-1993
 				*	Note: at-home expenditure includes "delivered" during these period.
 				*	Convert annual amount to monthly amount
 				*	Important: Although "annual food expenditure" is included this period, I divide it my to make monthly food expenidture for two reasons
@@ -2356,16 +2391,15 @@
 					*	If included, then the amount should be excluded from annual food expenditure to get annual food expenditure "net of" food stamp value
 					replace	foodexp_home_annual	=	foodexp_home_annual	-	stamp_useamt	if	inrange(year,1975,1976)	&	foodexp_home_wth_stamp_incl==5
 					
+					*	Make annual expenditure into monthly expenditure
 					replace	`var_exclFS'=foodexp_home_annual/12	if	inrange(year,1968,1993)
 						
-					*	Add up FS amount to get food exp including FS amount
-					replace	`var_inclFS'=`var_exclFS'	+	FS_rec_amt	if	inrange(year,1968,1993)	&	FS_rec_wth==1	//	Received FS
-					replace	`var_inclFS'=`var_exclFS'					if	inrange(year,1968,1993)	&	FS_rec_wth==0	//	Didn't receive FS
-					
-					
-					
-					
-							
+					*	Add up FS amount received (and amount paid in 1975-1979) to get food exp including FS amount
+					replace	`var_inclFS'=`var_exclFS'										if	inrange(year,1975,1993)	&	FS_rec_wth==0	//	Didn't receive FS
+					replace	`var_inclFS'=`var_exclFS'	+	FS_rec_amt	+	FS_rec_amt_paid	if	inrange(year,1975,1979)	&	FS_rec_wth==1	//	Received FS (1975-1979, add amount paid and amount received)
+					replace	`var_inclFS'=`var_exclFS'	+	FS_rec_amt						if	inrange(year,1980,1993)	&	FS_rec_wth==1	//	Received FS (1980-1993, add amount received)
+									
+												
 				*	1994-2019
 				*	Food exp are collected separately, between FS user and non-user.
 					*	For FS user, (1) FS amount (2) Amount in addition to FS are collected
@@ -2962,17 +2996,92 @@
 		
 		
 		*	
+		
+		
+		*	Weak IV test (preliminary, unweighted)
+		local	endovar	FS_rec_wth
 		local	depvar	PFS_glm
 		
-		ivregress	2sls	`depvar'	${indvars} ${demovars} (FS_rec_wth	=	bbce)	if	!mi(PFS_glm), robust	cluster(x11101ll)
-		estat firststage
 		
+			*	Fingerprint (dummy)
+			loc	var	fp_dummy
+			cap	drop	`var'
+			gen	`var'=fingerprint
+			replace	`var'=1	if	`var'==2	//	"Partially exists" also have the value 1
+			
 		
+				*ivregress	2sls	`depvar'	${indvars} ${demovars} ${econvars}		${healthvars}	${empvars}		${familyvars}	${eduvars}	${regionvars}	${timevars}		(FS_rec_wth	=	bbce	/*i.fingerprint	reportsimple*/)	if	!mi(PFS_glm), robust	cluster(x11101ll) first
+			
+			*	BBCE
+			loc	IV	bbce
+			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}		${healthvars}	${empvars}		${familyvars}	${eduvars}	${regionvars}	${timevars}		(`endovar'	=	`IV'	/*i.fingerprint	reportsimple*/)	if	!mi(PFS_glm), robust	cluster(x11101ll) first savefirst savefprefix(`IV')
+			est	store	`IV'_2nd
+			scalar	Fstat_`IV'	=	e(widstat)
+			est	restore	`IV'`endovar'
+			estadd	scalar	Fstat	=	Fstat_`IV', replace
+			est	store	`IV'_1st
+			est	drop	`IV'`endovar'
+			
+			*	Finger print
+			loc	IV	fp_dummy
+			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}		${healthvars}	${empvars}		${familyvars}	${eduvars}	${regionvars}	${timevars}		(`endovar'	=	`IV'	/*i.fingerprint	reportsimple*/)	if	!mi(PFS_glm), robust	cluster(x11101ll) first savefirst savefprefix(`IV')
+			est	store	`IV'_2nd
+			scalar	Fstat_`IV'	=	e(widstat)
+			est	restore	`IV'`endovar'
+			estadd	scalar	Fstat	=	Fstat_`IV', replace
+			est	store	`IV'_1st
+			est	drop	`IV'`endovar'
+			
+			*	Simplified reporting
+			loc	IV	reportsimple
+			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}		${healthvars}	${empvars}		${familyvars}	${eduvars}	${regionvars}	${timevars}		(`endovar'	=	`IV'	/*i.fingerprint	reportsimple*/)	if	!mi(PFS_glm), robust	cluster(x11101ll) first savefirst savefprefix(`IV')
+			est	store	`IV'_2nd
+			scalar	Fstat_`IV'	=	e(widstat)
+			est	restore	`IV'`endovar'
+			estadd	scalar	Fstat	=	Fstat_`IV', replace
+			est	store	`IV'_1st
+			est	drop	`IV'`endovar'
+			
+			*	Vehicles excluded from Asset test
+			loc	IV	vehexclall
+			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}		${healthvars}	${empvars}		${familyvars}	${eduvars}	${regionvars}	${timevars}		(`endovar'	=	`IV'	/*i.fingerprint	reportsimple*/)	if	!mi(PFS_glm), robust	cluster(x11101ll) first savefirst savefprefix(`IV')
+			est	store	`IV'_2nd
+			scalar	Fstat_`IV'	=	e(widstat)
+			est	restore	`IV'`endovar'
+			estadd	scalar	Fstat	=	Fstat_`IV', replace
+			est	store	`IV'_1st
+			est	drop	`IV'`endovar'
+			
+			*	All IVs combined
+			loc	IV	bbce	fp_dummy	reportsimple	vehexclall
+			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}		${healthvars}	${empvars}		${familyvars}	${eduvars}	${regionvars}	${timevars}		(`endovar'	=	`IV'	/*i.fingerprint	reportsimple*/)	if	!mi(PFS_glm), robust	cluster(x11101ll) first savefirst savefprefix(all)
+			est	store	all_2nd
+			scalar	Fstat_all	=	e(widstat)
+			est	restore	all`endovar'
+			estadd	scalar	Fstat	=	Fstat_all, replace
+			est	store	all_1st
+			est	drop	all`endovar'
+			
+				
+			*	1st-stage
+			esttab	bbce_1st	fp_dummy_1st	reportsimple_1st	vehexclall_1st	all_1st	using "${SNAP_outRaw}/WeakIV_1st.csv", ///
+					cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(Fstat, fmt(%8.3fc)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(_cons)*/	///
+					title(Weak IV_1st)		replace	
+					
+			*	2nd-stage
+			esttab	bbce_2nd	fp_dummy_2nd	reportsimple_2nd	vehexclall_2nd	all_2nd	using "${SNAP_outRaw}/WeakIV_2nd.csv", ///
+					cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(Fstat, fmt(%8.3fc)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(_cons)*/	///
+					title(Weak IV_2nd)		replace	
+		
+		estout bbce_1st, stats(Fstat)
+		
+		*estat firststage
+		*weakivtest
+		
+		local	depvar	PFS_glm
+		svy, subpop(if !mi(PFS_glm)):	ivregress	2sls	`depvar'	${indvars} ${demovars}	(FS_rec_wth	=	bbce)	
 		weakivtest
-		
-		svy, subpop(if !mi(PFS_glm)):	///
-			ivregress	`depvar'	${indvars} ${demovars}	// ${econvars}		${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${foodvars}*/	/*${changevars}*/	${regionvars}	${timevars}			
-
+		estat firststage
 		
 	}
 	
