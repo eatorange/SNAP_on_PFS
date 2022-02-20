@@ -44,7 +44,7 @@
    * I no longer use this code, as sharing the same ado files across the users (it is done in globals_setup.do file) would ensure better replicability. 
 
    *Standardize settings accross users
-   ssc install ietoolkit, replace
+   *ssc install ietoolkit, replace
    ieboilstart, version(14.1) maxvar(32767) matsize(11000)        //Set the version number to the oldest version used by anyone in the project team
    `r(version)'                        //This line is needed to actually set the version from the command above
 
