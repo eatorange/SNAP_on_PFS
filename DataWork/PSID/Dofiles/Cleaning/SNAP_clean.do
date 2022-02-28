@@ -175,13 +175,13 @@
 	local	fam_agg			0	//	Aggregate family-level variables across waves
 	local	ext_data		0	//	Prepare external data (CPI, TFP, etc.)
 	local	cr_panel		0	//	Create panel structure from ID variable
-	local	merge_data		1	//	Merge ind- and family- variables and import it into ID variable
+	local	merge_data		0	//	Merge ind- and family- variables and import it into ID variable
 		local	raw_reshape	0		//	Merge raw variables and reshape into long data (takes time)
 		local	add_clean	1		//	Do additional cleaning and import external data (CPI, TFP)
 		local	import_dta	1		//	Import aggregated variables into ID data. 
-	local	clean_vars		0	//	Clean variables and construct consistent variables
-	local	PFS_const		0	//	Construct PFS
-	local	summ_stats		0	//	Generate summary statistics (will be moved to another file later)
+	local	clean_vars		1	//	Clean variables and construct consistent variables
+	local	PFS_const		1	//	Construct PFS
+	local	summ_stats		1	//	Generate summary statistics (will be moved to another file later)
 	
 	
 	*	Aggregate individual-level variables
@@ -926,6 +926,69 @@
 	*	Prepare external data
 	if	`ext_data'==1	{
 		
+		*	State governors data
+		*	This data is based on "United States Governors 1775-2020" https://doi.org/10.3886/E102000V3
+		*	This data are not complete (ex. missing years in some state), so I added them manually.
+		import	excel	"${dataWorkFolder}/ICPSR/united_states_governors_1775_2020.xlsx", firstrow sheet(us_governors_1775_2021)	clear
+		
+			*	Clean data
+			
+				*	Keep relevant observations 
+				keep	if	inrange(year,1975,2021)	//	Year 1975-
+				keep	if	!mi(statecode)	//	Keep 48 continental states + AK, HA
+				
+				*	Clean variables
+				split time_in_office
+				destring time_in_office1, gen(start_year)
+				destring time_in_office3, gen(end_year)
+				drop	time_in_office?
+				
+				loc	var	governor_party
+				cap	drop	`var'
+				gen		`var'	=	1	if	party	==	"Democrat"
+				replace	`var'	=	2	if	party	==	"Republican"
+				replace	`var'	=	0	if	!inlist(party,"Democrat","Republican")
+				
+				label	define	`var'	0	"Others"	1	"Democrat"	2	"Republican"
+				label	value	`var'	`var'
+				
+				*	Handle observations with multiple governors within a year
+				duplicates tag	state	year, gen(multiple_governor)
+				
+					*	Temporarily drop observations with 3 or more duplicate values (23 obs total. ess than 1% of total obs). They need case-by-case cleaning so will take care of it later.
+					drop	if	multiple_governor>=2
+					
+				*	Determine former and latter governor.
+				**	Note: current code does not work to those who changed the party during the year. Need to think about how to handle it.
+				bys	state	year:	egen	start_year_dup	=	min(start_year)
+				gen		former	=	1	if	multiple_governor==1	&	start_year == start_year_dup
+				replace	former	=	0	if	multiple_governor==1	&	start_year != start_year_dup
+		
+				*	If former and latter governor have the same party, it is OK to drop either of former or latter (so just drop former)
+				duplicates tag	state	year	governor_party if multiple_governor==1, gen(same_party)
+				drop	if multiple_governor==1	&	same_party==1	&	former==1
+				
+				*	If new governor came in April or earlier months, drop new governor.
+				drop	if	multiple_governor==1	&	same_party==0	&	inrange(change_month,1,4)	&	former==0
+				
+				*	If new governor came in September or later months, drop former governor
+				drop	if	multiple_governor==1	&	same_party==0	&	inrange(change_month,9,12)	&	former==1
+				
+				*	If position changed between May to August, assign "Others" to governor's party and drop former (doesn't matter to drop former or latter)
+				replace	governor_party=0	if	multiple_governor==1	&	same_party==0	&	inrange(change_month,5,8)
+				drop	if	multiple_governor==1	&	same_party==0	&	inrange(change_month,5,8)	&	former==1
+				
+				duplicates	tag	state	year, gen(newdup)
+					*	As of now (2022/2/23) There is only one case that has duplicate. I can come back here and fix it later. SO drop it for now
+					drop if newdup==1
+					
+				isid	state	year
+				
+				*	Save
+				rename	statecode	rp_state
+				save	"${SNAP_dtInt}/Governors",	replace
+				
+				
 		*	SNAP policy dataset
 		import excel	"${dataWorkFolder}/USDA/SNAP_Policy_Database.xlsx", firstrow 	clear
 		
@@ -1712,6 +1775,9 @@
 			use	"${SNAP_dtInt}/Ind_vars/ID_sample_long.dta",	clear
 			merge	1:1	x11101ll	year	using "${SNAP_dtInt}/SNAP_ExtMerged_long", nogen assert(2 3) keep(3) 	
 								
+			*	Import Governor data
+			merge m:1 rp_state year using "${SNAP_dtInt}/Governors", nogen keep(1 3) keepusing(governor_party)
+			
 			*	Import SNAP policy data
 			merge m:1 rp_state prev_yrmonth using "${SNAP_dtInt}/SNAP_policy_data", nogen keep(1 3)
 			
@@ -3052,8 +3118,24 @@
 			est	store	`IV'_1st
 			est	drop	`IV'`endovar'
 			
+			*	Governors' party
+			
+				*	temporary modification
+				gen		governor_repub	=	0	if	inlist(governor_party,0,1)
+				replace	governor_repub	=	1	if	governor_party==2
+				
+			loc	IV	governor_repub
+			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}		${healthvars}	${empvars}		${familyvars}	${eduvars}	${regionvars}	${timevars}		(`endovar'	=	`IV'	/*i.fingerprint	reportsimple*/)	if	!mi(PFS_glm), robust	cluster(x11101ll) first savefirst savefprefix(`IV')
+			est	store	`IV'_2nd
+			scalar	Fstat_`IV'	=	e(widstat)
+			est	restore	`IV'`endovar'
+			estadd	scalar	Fstat	=	Fstat_`IV', replace
+			est	store	`IV'_1st
+			est	drop	`IV'`endovar'	
+			
+			
 			*	All IVs combined
-			loc	IV	bbce	fp_dummy	reportsimple	vehexclall
+			loc	IV	bbce	fp_dummy	reportsimple	vehexclall	governor_repub
 			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}		${healthvars}	${empvars}		${familyvars}	${eduvars}	${regionvars}	${timevars}		(`endovar'	=	`IV'	/*i.fingerprint	reportsimple*/)	if	!mi(PFS_glm), robust	cluster(x11101ll) first savefirst savefprefix(all)
 			est	store	all_2nd
 			scalar	Fstat_all	=	e(widstat)
@@ -3064,12 +3146,12 @@
 			
 				
 			*	1st-stage
-			esttab	bbce_1st	fp_dummy_1st	reportsimple_1st	vehexclall_1st	all_1st	using "${SNAP_outRaw}/WeakIV_1st.csv", ///
+			esttab	bbce_1st	fp_dummy_1st	reportsimple_1st	vehexclall_1st	governor_repub_1st	all_1st	using "${SNAP_outRaw}/WeakIV_1st.csv", ///
 					cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(Fstat, fmt(%8.3fc)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(_cons)*/	///
 					title(Weak IV_1st)		replace	
 					
 			*	2nd-stage
-			esttab	bbce_2nd	fp_dummy_2nd	reportsimple_2nd	vehexclall_2nd	all_2nd	using "${SNAP_outRaw}/WeakIV_2nd.csv", ///
+			esttab	bbce_2nd	fp_dummy_2nd	reportsimple_2nd	vehexclall_2nd	governor_repub_2nd	all_2nd	using "${SNAP_outRaw}/WeakIV_2nd.csv", ///
 					cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(Fstat, fmt(%8.3fc)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(_cons)*/	///
 					title(Weak IV_2nd)		replace	
 		
