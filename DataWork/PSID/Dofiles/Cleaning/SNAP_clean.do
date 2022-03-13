@@ -175,7 +175,7 @@
 	local	fam_agg			0	//	Aggregate family-level variables across waves
 	local	ext_data		0	//	Prepare external data (CPI, TFP, etc.)
 	local	cr_panel		0	//	Create panel structure from ID variable
-	local	merge_data		0	//	Merge ind- and family- variables and import it into ID variable
+	local	merge_data		1	//	Merge ind- and family- variables and import it into ID variable
 		local	raw_reshape	0		//	Merge raw variables and reshape into long data (takes time)
 		local	add_clean	1		//	Do additional cleaning and import external data (CPI, TFP)
 		local	import_dta	1		//	Import aggregated variables into ID data. 
@@ -929,7 +929,7 @@
 		*	State governors data
 		*	This data is based on "United States Governors 1775-2020" https://doi.org/10.3886/E102000V3
 		*	This data are not complete (ex. missing years in some state), so I added them manually.
-		import	excel	"${dataWorkFolder}/ICPSR/united_states_governors_1775_2020.xlsx", firstrow sheet(us_governors_1775_2021)	clear
+		import	excel	"${dataWorkFolder}/Politics/united_states_governors_1775_2020.xlsx", firstrow sheet(governors_1775_2021)	clear
 		
 			*	Clean data
 			
@@ -955,8 +955,15 @@
 				*	Handle observations with multiple governors within a year
 				duplicates tag	state	year, gen(multiple_governor)
 				
-					*	Temporarily drop observations with 3 or more duplicate values (23 obs total. ess than 1% of total obs). They need case-by-case cleaning so will take care of it later.
-					drop	if	multiple_governor>=2
+					*	There are a few caess where 3 or more changes happened within a year. We modify it manually for these cases					
+						drop	if	year==1994	&	state=="Alaska"			&	party!="Independent"	//	Alaska, 1994: Walter J. Hickel, independent as of Jan 1994 (later changed party)
+						drop	if	year==1979	&	state=="Maryland"		&	governor!="Harry Roe Hughes"	//	Maryland, 1979: Harry Roe Hughes as of the latest January governor
+						drop	if	year==2017	&	state=="New Hampshire"	&	governor!="Chris Sununu"
+						drop	if	year==2002	&	state=="New Jersey"		&	governor!="James E. McGreevey"
+						drop	if	year==1991	&	state=="Vermont"		&	governor!="Richard A. Snelling" // from Jan to Aug (death)
+						drop	if	year==2017	&	state=="West Virginia"	&	!(governor=="Jim Justice"	&	change_month==1) // Jim changed the party to Rep in Aug, but Dem as of Jan.
+						
+					*drop	if	multiple_governor>=2
 					
 				*	Determine former and latter governor.
 				**	Note: current code does not work to those who changed the party during the year. Need to think about how to handle it.
@@ -964,30 +971,100 @@
 				gen		former	=	1	if	multiple_governor==1	&	start_year == start_year_dup
 				replace	former	=	0	if	multiple_governor==1	&	start_year != start_year_dup
 		
-				*	If former and latter governor have the same party, it is OK to drop either of former or latter (so just drop former)
+							
+				*	For consistency with the NCSL state legislative partisan composition data, which are based as of Jan or Feb of each year, we determine governor party as of Jan.
+				
+					*	If governor changed in January, regard new governor as that year's governor so drop former governor. Otherwise, regard former governer as that year's governor so drop the latter
+					drop	if	multiple_governor==1	&	change_month==1	&	former==1
+					drop	if	multiple_governor==1	&	inrange(change_month,2,12)	&	former==0
+					
+					*	For those who changed the party within the year (so "former" variable can't be used), manually drop based on the month of party switch
+					drop	if	year==1991	&	state=="Louisiana"		&	party=="Republican"	//	Changed to Republic party in March, so drop it (Democrat as of Jan)
+					drop	if	year==2013	&	state=="Rhode Island"	&	party=="Democrat"	//	Changed to Democrat party in May, so drop it (Independent as of Jan)
+					
+					*	Other cases
+					drop	if	year==1978	&	state=="Maryland"	&	governor=="Marvin Mandel"	// wasn't in the office so there was an acting governor (Blair Lee). I treat Blair as the governor (doesn't really matter as they are both Democrat)
+					
+				
+				/*	Outdated codes as of March 12, 2022
+				*	If former and latter governor have the same party, it is OK to drop either former or latter (so just drop former)
 				duplicates tag	state	year	governor_party if multiple_governor==1, gen(same_party)
 				drop	if multiple_governor==1	&	same_party==1	&	former==1
 				
-				*	If new governor came in April or earlier months, drop new governor.
-				drop	if	multiple_governor==1	&	same_party==0	&	inrange(change_month,1,4)	&	former==0
+				*	If new governor came in April or earlier months, regard new governor as that year's governor (since new governor is in position for 8+ months) so drop the old governor
+				drop	if	multiple_governor==1	&	same_party==0	&	inrange(change_month,1,4)	&	former==1
 				
-				*	If new governor came in September or later months, drop former governor
-				drop	if	multiple_governor==1	&	same_party==0	&	inrange(change_month,9,12)	&	former==1
+				*	If new governor came in September or later months, regard old governor as that year's governor (since old governor is in position for 8+ months) so drop the new governor
+				drop	if	multiple_governor==1	&	same_party==0	&	inrange(change_month,9,12)	&	former==0
 				
 				*	If position changed between May to August, assign "Others" to governor's party and drop former (doesn't matter to drop former or latter)
 				replace	governor_party=0	if	multiple_governor==1	&	same_party==0	&	inrange(change_month,5,8)
 				drop	if	multiple_governor==1	&	same_party==0	&	inrange(change_month,5,8)	&	former==1
 				
-				duplicates	tag	state	year, gen(newdup)
+					duplicates	tag	state	year, gen(newdup)
 					*	As of now (2022/2/23) There is only one case that has duplicate. I can come back here and fix it later. SO drop it for now
 					drop if newdup==1
-					
+				*/
+				
+				
+				
 				isid	state	year
 				
 				*	Save
 				rename	statecode	rp_state
 				save	"${SNAP_dtInt}/Governors",	replace
 				
+			*	State legislative bipartisan composition
+			*	Main source: National Connference of State Legislatures (1978-2008 (even years)), (2009-2021), Balletpedia "Who Runs the States, Partisanship Report" (1993-2007 (odd years))
+			import	excel	"${dataWorkFolder}/Politics/united_states_governors_1775_2020.xlsx", firstrow sheet(state_partisan_comp)	clear
+			
+				rename	State state
+				drop	if	mi(state)
+				reshape	long	LegisComp, i(state) j(year)
+				
+				*	Generate legislator control (holding both house and senate) variable with 4 categores; Democrat, Republican, Divided, N/A
+				loc	var	legis_control
+				cap	drop	`var'
+				gen		`var'	=	0	if	inlist(LegisComp,"N/A","NA")	//	NA (ex. Nebraska)
+				replace	`var'	=	1	if	inlist(LegisComp,"D","Dem","Dem*","*Dem")	//	Democrat
+				replace	`var'	=	2	if	inlist(LegisComp,"R","Rep","Rep*")	//	Republican
+				replace	`var'	=	3	if	inlist(LegisComp,"Divided","Divided*","S","Split","Split*")	//	Divided
+				
+				label	define	`var'	0	"N/A"	1	"Democrat"	2	"Republican"	3	"Divided", replace
+				label	value	`var'	`var'
+				label var	`var'	"State Legislature Control"
+				
+				save	"${SNAP_dtInt}/State_control",	replace
+				
+			*	Merge governor and state control data
+			
+				use "${SNAP_dtInt}/Governors", clear
+				merge	m:1	state	year	using	"${SNAP_dtInt}/State_control", nogen assert(1 3) keepusing(legis_control)
+				
+				*	Replace D.C.'s legis control as "N.A"
+				replace	legis_control=0	if	state=="Washington D.C."
+				
+				*	Generate trifecta variable
+				*	Trifecta is the status when one political party holds governorship, state control (both houses)
+				loc	var	trifecta
+				cap	drop	`var'
+				gen	`var'	=	.
+				replace	`var'	=	1	if	governor_party==1	&	legis_control==1	//	Democrat trifecta
+				replace	`var'	=	2	if	governor_party==2	&	legis_control==2	//	Republic trifecta
+				
+				local	mixed	((governor_party!=legis_control	&	legis_control!=3)	|	///	*/	Governor party != legis control party and legis control is not N/A (*/
+								(governor_party==0)	|	///	/* governor party is independent*/
+								(legis_control==3))		/* legis control is divided*/
+				replace	`var'	=	3	if	(!mi(governor_party)	&	!mi(legis_control))	&	`mixed'	//	Mixed (neither party has trifecta status)
+				replace	`var'	=	0	if	legis_control==0	//	Nebraska and D.C.
+				replace	`var'	=	.	if	mi(governor_party)	|	mi(legis_control)	//	Missing data (legis_control)
+				
+				label	define	`var'	0	"N/A"	1	"Democrat Trifecta"	2	"Rep Trifecta"	3	"Divided"
+				label	value	`var'	`var'
+				label	var	`var'	"State Trifecta"
+				
+				*	Save
+				save	"${SNAP_dtInt}/State_politics",	replace
 				
 		*	SNAP policy dataset
 		import excel	"${dataWorkFolder}/USDA/SNAP_Policy_Database.xlsx", firstrow 	clear
@@ -1299,7 +1376,19 @@
 		merge	1:1	x11101ll	using	"${SNAP_dtInt}/Ind_vars/wgt_long_ind.dta",	nogen	assert(3)	//	Individual weight
 		merge	1:1	x11101ll	using	"${SNAP_dtInt}/Fam_vars/wgt_long_fam.dta",	nogen	assert(3)	//	Family weight
 		
-
+		*	Merge individual variables
+		cd "${SNAP_dtInt}/Ind_vars"
+		
+		global	varlist_ind	age_ind	/*wgt_long_ind*/	relrp	origfu_id	noresp_why
+		
+		foreach	var	of	global	varlist_ind	{
+			
+			merge 1:1 x11101ll using "`var'", keepusing(`var'*) nogen assert(2 3)	keep(3)	//	Longitudinal weight
+				
+		}
+			
+		
+		
 		*	Construct additional variable
 				
 			*	Sample source
@@ -1471,19 +1560,7 @@
 			merge	1:1	x11101ll	using	"${SNAP_dtInt}/Ind_vars/unique_vars.dta",	nogen assert(3) keepusing(gender)	//	
 			*merge	1:1	x11101ll	using	"${SNAP_dtInt}/Ind_vars/wgt_long_ind.dta",	nogen	assert(3)	//	Individual weight
 			*merge	1:1	x11101ll	using	"${SNAP_dtInt}/Fam_vars/wgt_long_fam.dta",	nogen	assert(3)	//	Family weight
-			
-			*	Merge individual variables
-			cd "${SNAP_dtInt}/Ind_vars"
-			
-			global	varlist_ind	age_ind	/*wgt_long_ind*/	relrp	origfu_id	noresp_why
-			
-			foreach	var	of	global	varlist_ind	{
-				
-				merge 1:1 x11101ll using "`var'", keepusing(`var'*) nogen assert(2 3)	keep(3)	//	Longitudinal weight
-					
-			}
-			
-					
+								
 			*	Merge family variables
 			cd "${SNAP_dtInt}/Fam_vars"
 		
@@ -1517,7 +1594,6 @@
 			*order	pn-fu_nonmiss,	after(x11101ll)
 			save	"${SNAP_dtInt}/SNAP_RawMerged_wide",	replace
 			
-			
 			*	Re-shape it into long format	
 			reshape long x11102_	xsqnr_	wgt_long_ind	wgt_long_fam	wgt_long_fam_adj	living_Sample tot_living_Sample	${varlist_ind}	${varlist_fam}, i(x11101ll) j(year)
 			order	x11101ll /*pn sampstat Sample*/ year x11102_ xsqnr_ 
@@ -1548,7 +1624,7 @@
 			label	var	rp_gender	"Gender of RP"
 
 			save	"${SNAP_dtInt}/SNAP_RawMerged_long",	replace
-							
+			
 			*	Appending extra variables 
 			**	Disabled by default. Run this code only when you have extra variable to append from the raw PSID data.
 			
@@ -1775,8 +1851,8 @@
 			use	"${SNAP_dtInt}/Ind_vars/ID_sample_long.dta",	clear
 			merge	1:1	x11101ll	year	using "${SNAP_dtInt}/SNAP_ExtMerged_long", nogen assert(2 3) keep(3) 	
 								
-			*	Import Governor data
-			merge m:1 rp_state year using "${SNAP_dtInt}/Governors", nogen keep(1 3) keepusing(governor_party)
+			*	State Politics data
+			merge m:1 rp_state year using "${SNAP_dtInt}/Governors", nogen keep(1 3) keepusing(governor_party legis_control trifecta)
 			
 			*	Import SNAP policy data
 			merge m:1 rp_state prev_yrmonth using "${SNAP_dtInt}/SNAP_policy_data", nogen keep(1 3)
