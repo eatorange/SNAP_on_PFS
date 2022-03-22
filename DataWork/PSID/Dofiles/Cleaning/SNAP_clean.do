@@ -94,9 +94,17 @@
 											1985,	1986,	1987,	1990,	1991,	1992,	1993,	1994,	1995,	1996,	1997,	1999,	2001,	2003,	2005,	2007,	///
 											2009,	2011,	2013,	2015,	2017,	2019
 	
-	label	define	yes1no0	0	"No"	1	"Yes",	replace
 	
-	label	define	policy_status	0	"No"	1	"Statewide"	2	"Select parts of the state"
+	global	seqnum_years	xsqnr_1976 xsqnr_1977 xsqnr_1978 xsqnr_1979 xsqnr_1980 xsqnr_1981 xsqnr_1982 xsqnr_1983 xsqnr_1984 xsqnr_1985 xsqnr_1986 xsqnr_1987 xsqnr_1990 ///
+							xsqnr_1991 xsqnr_1992 xsqnr_1993 xsqnr_1994 xsqnr_1995 xsqnr_1996 xsqnr_1997 xsqnr_1999 xsqnr_2001 xsqnr_2003 xsqnr_2005 xsqnr_2007 xsqnr_2009	///
+							xsqnr_2011 xsqnr_2013 xsqnr_2015 xsqnr_2017 xsqnr_2019
+							
+	global	seqnum_years_comma	xsqnr_1976, xsqnr_1977, xsqnr_1978, xsqnr_1979, xsqnr_1980, xsqnr_1981, xsqnr_1982, xsqnr_1983, xsqnr_1984, xsqnr_1985, xsqnr_1986, xsqnr_1987, xsqnr_1990, ///
+								xsqnr_1991, xsqnr_1992, xsqnr_1993, xsqnr_1994, xsqnr_1995, xsqnr_1996, xsqnr_1997, xsqnr_1999, xsqnr_2001, xsqnr_2003, xsqnr_2005, xsqnr_2007, xsqnr_2009,	///
+								xsqnr_2011, xsqnr_2013, xsqnr_2015, xsqnr_2017, xsqnr_2019
+	
+	label	define	yes1no0	0	"No"	1	"Yes",	replace
+
 	
 	*	States
 	*	Note: state codes here are slightly different from that in PFS paper, as Rhode Island (rp_state_enum39) exists here while it didnt exist in PFS paper...
@@ -175,7 +183,7 @@
 	local	fam_agg			0	//	Aggregate family-level variables across waves
 	local	ext_data		0	//	Prepare external data (CPI, TFP, etc.)
 	local	cr_panel		0	//	Create panel structure from ID variable
-	local	merge_data		1	//	Merge ind- and family- variables and import it into ID variable
+	local	merge_data		0	//	Merge ind- and family- variables and import it into ID variable
 		local	raw_reshape	0		//	Merge raw variables and reshape into long data (takes time)
 		local	add_clean	1		//	Do additional cleaning and import external data (CPI, TFP)
 		local	import_dta	1		//	Import aggregated variables into ID data. 
@@ -1068,7 +1076,9 @@
 				
 		*	SNAP policy dataset
 		import excel	"${dataWorkFolder}/USDA/SNAP_Policy_Database.xlsx", firstrow 	clear
-		
+			
+				
+			label	define	policy_status	0	"No"	1	"Statewide"	2	"Select parts of the state"
 		
 			*	Clean data
 			loc	var	rp_state
@@ -1269,7 +1279,52 @@
 			lab	var	`var'	"SOME vehicles excluded from the asset test"
 			label	value	`var'	yes1no0
 			note `var':	When a State removes the asset test due to its adoption of broad-based categorical eligibility, vehexclamt is assigned a value of 0.
-						
+			
+			*	Construct SNAP index (Stacy, Brian, Laura Tiehen, and David Marquardt. 2018. “Using a Policy Index To Capture Trends and Differences in State Administration of USDA’s Supplemental Nutrition Assistance Program.” ERR-244. Economic Research Report. United States Department of Agriculture, Economic Research Service. http://www.ers.usda.gov/publications/pub-details/?pubid=87095.)
+
+			loc	var_uw	SNAP_index_unweighted
+			loc	var_w	SNAP_index_weighted
+			cap	drop	`var_uw'	`var_w'
+			
+			gen	`var_uw'=0
+			gen	`var_w'=0
+			
+			lab	var	`var_uw'	"SNAP Index, unweighted"
+			lab	var	`var_w'	"SNAP Index, weighted"
+				
+				replace	`var_uw'	=	`var_uw'	+	1	if	vehexclone==1	//	Excludes at least one (but not all) vehicle but not all
+				replace	`var_w'		=	`var_w'	+	1.624	if	vehexclone==1	//	Excludes at least one (but not all) vehicle but not all
+				
+				replace	`var_uw'	=	`var_uw'	+	1	if	vehexclall==1	//	Excludes ALL vehicle
+				replace	`var_w'		=	`var_w'	+	1.552	if	vehexclall==1	//	Excludes ALL vehicle
+				
+				replace	`var_uw'	=	`var_uw'	+	1	if	bbce==1	//	BBCE
+				replace	`var_w'		=	`var_w'	+	1.828	if	bbce==1	//	BBCE
+				
+				replace	`var_uw'	=	`var_uw'	+	1	if	reportsimple==1	//	Simplified reporting
+				replace	`var_w'		=	`var_w'	+	1.132	if	reportsimple==1	//	Simplified reporting
+				
+				replace	`var_uw'	=	`var_uw'	+	1	if	oapp==1	//	Statewide online application
+				replace	`var_w'		=	`var_w'	+	0.456	if	oapp==1	//	Statewide online application
+				
+				replace	`var_uw'	=	`var_uw'	+	ebtissuance	//	Proportion of value issued by EBT
+				replace	`var_w'		=	`var_w'	+	(ebtissuance*0.276)	//	Proportion of value issued by EBT
+				
+				replace	`var_uw'	=	`var_uw'	+	1	if	!mi(outreach)	&	outreach>0	//	(paper doesn't mention how they use this variable to index, so I assume that add 1 to index if state spends non-zero amount)
+				replace	`var_w'		=	`var_w'	+	0.148	if	!mi(outreach)	&	outreach>0	//	(paper doesn't mention how they use this variable to index, so I assume that add 1 to index if state spends non-zero amount)
+				
+				replace	`var_uw'	=	`var_uw'	-	1	if	noncitadultfull==0	//	Legal non-citizen eligibility
+				replace	`var_w'		=	`var_w'	-	4.8	if	noncitadultfull==0	//	Legal non-citizen eligibility
+				
+				replace	`var_uw'	=	`var_uw'	-	certearn0103	//	Short recertification period (1-3 months)
+				replace	`var_w'		=	`var_w'		-	(certearn0103*3.180)	//	Short recertification period (1-3 months)
+				
+				replace	`var_uw'	=	`var_uw'	-	1	if	fingerprint==1	//	Statewide fingerprint requirement
+				replace	`var_w'	=	`var_w'	-	1.864	if	fingerprint==1	//	Statewide fingerprint requirement
+				
+				*	Scale unweighted index (as in the paper)
+				replace	`var_uw'	=	`var_uw'	+	4
+				
 			*	Save
 			save	"${SNAP_dtInt}/SNAP_policy_data",	replace
 			
@@ -1420,8 +1475,10 @@
 			drop	*1968	*1969	*1970	*1971	//	Years which I cannot separate FS amount from food expenditure
 			drop	*1972	*1974	//	Years without previous FS status
 			
-		*	Drop Latino sample
-			drop	if	sample_source==5
+		*	Drop subsamples we won't use in this study
+			drop	if	sample_source==5	//	Latino sample
+			drop	if	sample_source==4	//	2017 refresher
+			
 		
 		*	Set globals
 		qui	ds	x11102_1975-x11102_2019
@@ -1548,6 +1605,7 @@
 			label	var	wgt_long_fam_adj	"Longitudianl family weight, adjusted"	
 			
 			save	"${SNAP_dtInt}/Ind_vars/ID_sample_long.dta",	replace
+			use "${SNAP_dtInt}/Ind_vars/ID_sample_long.dta", clear
 	}
 	
 	*	Merge variables
@@ -1560,10 +1618,40 @@
 			merge	1:1	x11101ll	using	"${SNAP_dtInt}/Ind_vars/unique_vars.dta",	nogen assert(3) keepusing(gender)	//	
 			*merge	1:1	x11101ll	using	"${SNAP_dtInt}/Ind_vars/wgt_long_ind.dta",	nogen	assert(3)	//	Individual weight
 			*merge	1:1	x11101ll	using	"${SNAP_dtInt}/Fam_vars/wgt_long_fam.dta",	nogen	assert(3)	//	Family weight
+			
+			*	Merge individual variables
+			**	(2022-3-13) This code is added, as somehow existing code did not run properly ("age_ind" variable, which is required to merge with TFP cost data, didn't exist). We can see later what the problem is.
+			cd "${SNAP_dtInt}/Ind_vars"
+			
+			global	varlist_ind	age_ind	/*wgt_long_ind*/	relrp	origfu_id	noresp_why
+			
+			foreach	var	of	global	varlist_ind	{
+				
+				merge 1:1 x11101ll using "`var'", keepusing(`var'*) nogen assert(2 3)	keep(3)	//	Longitudinal weight
+					
+			}
+			
+			dir "${SNAP_dtInt}/Fam_vars/"
 								
 			*	Merge family variables
+			*	(2022-3-13) Instead of manually entering variables, I use "dir" command to load all variables in "Fam" folder.
 			cd "${SNAP_dtInt}/Fam_vars"
-		
+			local fam_files : dir "${SNAP_dtInt}/Fam_vars" files "*.dta", respectcase	//	"respectcase" preserves upper case when upper case is included
+			
+			
+			global	varlist_fam		//	Make a list of family variables (to be used in "reshape" command later. Initiate the global with blank entry)
+			foreach	filename	of	local	fam_files	{
+
+				di	"current filename is `filename'"
+				loc	varname	=	subinstr("`filename'",".dta","",.)
+				
+				di "current varname is `varname'"			
+				merge 1:1 x11101ll using "`varname'", keepusing(`varname'*) nogen assert(2 3)	keep(3)	
+				global	varlist_fam	${varlist_fam}	`varname'
+				
+			}
+						
+			/*	Outdated as of 2022-3-13
 			global	varlist_fam	svydate	svymonth	svyday	splitoff	///		/*survey info*/
 								rp_gender	rp_age	rp_marital	rp_race	///		/*	Demographics	*/
 								rp_gradecomp	rp_HS_GED	sp_HS_GED	rp_colattend	sp_colattend	rp_coldeg	///	/*	Education	*/
@@ -1587,7 +1675,7 @@
 				merge 1:1 x11101ll using "`var'", keepusing(`var'*) nogen assert(2 3)	keep(3)	
 				
 			}
-			
+			*/
 						
 			*	Save (wide-format)	
 			*order	hhid_agg,	before(x11101ll)
@@ -1595,7 +1683,8 @@
 			save	"${SNAP_dtInt}/SNAP_RawMerged_wide",	replace
 			
 			*	Re-shape it into long format	
-			reshape long x11102_	xsqnr_	wgt_long_ind	wgt_long_fam	wgt_long_fam_adj	living_Sample tot_living_Sample	${varlist_ind}	${varlist_fam}, i(x11101ll) j(year)
+			use	"${SNAP_dtInt}/SNAP_RawMerged_wide",	clear
+			reshape long x11102_	xsqnr_	wgt_long_ind	/*wgt_long_fam*/	wgt_long_fam_adj	living_Sample tot_living_Sample	${varlist_ind}	${varlist_fam}, i(x11101ll) j(year)
 			order	x11101ll /*pn sampstat Sample*/ year x11102_ xsqnr_ 
 			*drop	if	inlist(year,1973,1988,1989)	//	These years seem to be re-created during "reshape." Thus drop it again.
 			*drop	if	inrange(year,1968,1974)	//	Drop years which don't have last month food stamp information exist.
@@ -1627,7 +1716,7 @@
 			
 			*	Appending extra variables 
 			**	Disabled by default. Run this code only when you have extra variable to append from the raw PSID data.
-			
+			/*
 			{
 				local	var	stamp_ppl_month
 				cd "${SNAP_dtInt}/Fam_vars"
@@ -1647,7 +1736,7 @@
 					merge	1:1		x11101ll	year	using	``var'_ln',	keepusing(`var'*)	nogen	assert(1 3)
 					save	"${SNAP_dtInt}/SNAP_RawMerged_long",	replace
 			}
-			
+			*/
 			
 		
 		}
@@ -1849,10 +1938,14 @@
 		if	`import_dta'==1	{
 		    				
 			use	"${SNAP_dtInt}/Ind_vars/ID_sample_long.dta",	clear
+				*	Added 2022-3-13
+				*	Some variables will be used to construct panel data later (ex. relation to HH, indiv age).
+				*	As of 2022-3-13, they remain in ID data without being used, so drop them here and let it be merged from "SNAP_ExtMerged_long.dta" This code can be modified later
+				drop	age_ind???? relrp???? origfu_id???? noresp_why????
 			merge	1:1	x11101ll	year	using "${SNAP_dtInt}/SNAP_ExtMerged_long", nogen assert(2 3) keep(3) 	
 								
 			*	State Politics data
-			merge m:1 rp_state year using "${SNAP_dtInt}/Governors", nogen keep(1 3) keepusing(governor_party legis_control trifecta)
+			merge m:1 rp_state year using "${SNAP_dtInt}/State_politics", nogen keep(1 3) keepusing(governor_party legis_control trifecta)
 			
 			*	Import SNAP policy data
 			merge m:1 rp_state prev_yrmonth using "${SNAP_dtInt}/SNAP_policy_data", nogen keep(1 3)
@@ -1869,6 +1962,7 @@
 				
 			compress
 			save	"${SNAP_dtInt}/SNAP_Merged_long",	replace
+			use "${SNAP_dtInt}/SNAP_Merged_long", clear
 		}
 		
 	}	//	merge_data
@@ -3141,19 +3235,64 @@
 		
 		
 		*	Weak IV test (preliminary, unweighted)
+		use	 "${SNAP_dtInt}/SNAP_long_PFS",	clear	
 		local	endovar	FS_rec_wth
 		local	depvar	PFS_glm
 		
-		
+		*	Temporary renaming
+		rename	(SNAP_index_unweighted	SNAP_index_weighted)	(SNAP_index_uw	SNAP_index_w)
+		lab	var	SNAP_index_uw 	"Unweighted SNAP index"
+		lab	var	SNAP_index_w 	"Weighted SNAP index"
+			
+			*	Finger print
 			*	Fingerprint (dummy)
 			loc	var	fp_dummy
 			cap	drop	`var'
 			gen	`var'=fingerprint
 			replace	`var'=1	if	`var'==2	//	"Partially exists" also have the value 1
 			
+			loc	IV	fp_dummy
+			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}		${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/		(`endovar'	=	`IV'	/*i.fingerprint	reportsimple*/)	if	!mi(PFS_glm), robust	cluster(x11101ll) first savefirst savefprefix(`IV')
+			est	store	`IV'_2nd
+			scalar	Fstat_`IV'	=	e(widstat)
+			est	restore	`IV'`endovar'
+			estadd	scalar	Fstat	=	Fstat_`IV', replace
+			est	store	`IV'_1st
+			est	drop	`IV'`endovar'
+			
+			*	SNAP index (unweighted)
+			loc	IV	SNAP_index_uw
+			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}		${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/		(`endovar'	=	`IV'	/*i.fingerprint	reportsimple*/)	if	!mi(PFS_glm), robust	cluster(x11101ll) first savefirst savefprefix(`IV')
+			est	store	`IV'_2nd
+			scalar	Fstat_`IV'	=	e(widstat)
+			est	restore	`IV'`endovar'
+			estadd	scalar	Fstat	=	Fstat_`IV', replace
+			est	store	`IV'_1st
+			est	drop	`IV'`endovar'
+			
+			*	SNAP index (weighted)
+			loc	IV	SNAP_index_w
+			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}		${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/		(`endovar'	=	`IV'	/*i.fingerprint	reportsimple*/)	if	!mi(PFS_glm), robust	cluster(x11101ll) first savefirst savefprefix(`IV')
+			est	store	`IV'_2nd
+			scalar	Fstat_`IV'	=	e(widstat)
+			est	restore	`IV'`endovar'
+			estadd	scalar	Fstat	=	Fstat_`IV', replace
+			est	store	`IV'_1st
+			est	drop	`IV'`endovar'
+			
+			*	State trifecta
+			loc	IV	trifecta
+			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}		${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/		(`endovar'	=	`IV'	/*i.fingerprint	reportsimple*/)	if	!mi(PFS_glm), robust	cluster(x11101ll) first savefirst savefprefix(`IV')
+			est	store	`IV'_2nd
+			scalar	Fstat_`IV'	=	e(widstat)
+			est	restore	`IV'`endovar'
+			estadd	scalar	Fstat	=	Fstat_`IV', replace
+			est	store	`IV'_1st
+			est	drop	`IV'`endovar'
 		
 				*ivregress	2sls	`depvar'	${indvars} ${demovars} ${econvars}		${healthvars}	${empvars}		${familyvars}	${eduvars}	${regionvars}	${timevars}		(FS_rec_wth	=	bbce	/*i.fingerprint	reportsimple*/)	if	!mi(PFS_glm), robust	cluster(x11101ll) first
 			
+			/*			
 			*	BBCE
 			loc	IV	bbce
 			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}		${healthvars}	${empvars}		${familyvars}	${eduvars}	${regionvars}	${timevars}		(`endovar'	=	`IV'	/*i.fingerprint	reportsimple*/)	if	!mi(PFS_glm), robust	cluster(x11101ll) first savefirst savefprefix(`IV')
@@ -3163,17 +3302,7 @@
 			estadd	scalar	Fstat	=	Fstat_`IV', replace
 			est	store	`IV'_1st
 			est	drop	`IV'`endovar'
-			
-			*	Finger print
-			loc	IV	fp_dummy
-			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}		${healthvars}	${empvars}		${familyvars}	${eduvars}	${regionvars}	${timevars}		(`endovar'	=	`IV'	/*i.fingerprint	reportsimple*/)	if	!mi(PFS_glm), robust	cluster(x11101ll) first savefirst savefprefix(`IV')
-			est	store	`IV'_2nd
-			scalar	Fstat_`IV'	=	e(widstat)
-			est	restore	`IV'`endovar'
-			estadd	scalar	Fstat	=	Fstat_`IV', replace
-			est	store	`IV'_1st
-			est	drop	`IV'`endovar'
-			
+						
 			*	Simplified reporting
 			loc	IV	reportsimple
 			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}		${healthvars}	${empvars}		${familyvars}	${eduvars}	${regionvars}	${timevars}		(`endovar'	=	`IV'	/*i.fingerprint	reportsimple*/)	if	!mi(PFS_glm), robust	cluster(x11101ll) first savefirst savefprefix(`IV')
@@ -3208,11 +3337,11 @@
 			estadd	scalar	Fstat	=	Fstat_`IV', replace
 			est	store	`IV'_1st
 			est	drop	`IV'`endovar'	
-			
+			*/
 			
 			*	All IVs combined
-			loc	IV	bbce	fp_dummy	reportsimple	vehexclall	governor_repub
-			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}		${healthvars}	${empvars}		${familyvars}	${eduvars}	${regionvars}	${timevars}		(`endovar'	=	`IV'	/*i.fingerprint	reportsimple*/)	if	!mi(PFS_glm), robust	cluster(x11101ll) first savefirst savefprefix(all)
+			loc	IV	/*bbce	reportsimple	vehexclall	governor_repub*/	fp_dummy	SNAP_index_uw	SNAP_index_w	trifecta
+			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}		${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV'	/*i.fingerprint	reportsimple*/)	if	!mi(PFS_glm), robust	cluster(x11101ll) first savefirst savefprefix(all)
 			est	store	all_2nd
 			scalar	Fstat_all	=	e(widstat)
 			est	restore	all`endovar'
@@ -3222,12 +3351,12 @@
 			
 				
 			*	1st-stage
-			esttab	bbce_1st	fp_dummy_1st	reportsimple_1st	vehexclall_1st	governor_repub_1st	all_1st	using "${SNAP_outRaw}/WeakIV_1st.csv", ///
+			esttab	/*bbce_1st	reportsimple_1st	vehexclall_1st	governor_repub_1st*/	fp_dummy_1st	SNAP_index_uw_1st	SNAP_index_w_1st	trifecta_1st	all_1st	using "${SNAP_outRaw}/WeakIV_1st.csv", ///
 					cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(Fstat, fmt(%8.3fc)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(_cons)*/	///
 					title(Weak IV_1st)		replace	
 					
 			*	2nd-stage
-			esttab	bbce_2nd	fp_dummy_2nd	reportsimple_2nd	vehexclall_2nd	governor_repub_2nd	all_2nd	using "${SNAP_outRaw}/WeakIV_2nd.csv", ///
+			esttab	/*bbce_2nd	reportsimple_2nd	vehexclall_2nd	governor_repub_2nd*/	fp_dummy_2nd	SNAP_index_uw_2nd	SNAP_index_w_2nd	trifecta_2nd	all_2nd	using "${SNAP_outRaw}/WeakIV_2nd.csv", ///
 					cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(Fstat, fmt(%8.3fc)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(_cons)*/	///
 					title(Weak IV_2nd)		replace	
 		
@@ -3235,12 +3364,12 @@
 		
 		*estat firststage
 		*weakivtest
-		
+		/*
 		local	depvar	PFS_glm
 		svy, subpop(if !mi(PFS_glm)):	ivregress	2sls	`depvar'	${indvars} ${demovars}	(FS_rec_wth	=	bbce)	
 		weakivtest
 		estat firststage
-		
+		*/
 	}
 	
 	*	Summary stats	
