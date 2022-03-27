@@ -182,9 +182,9 @@
 	local	ind_agg			0	//	Aggregate individual-level variables across waves
 	local	fam_agg			0	//	Aggregate family-level variables across waves
 	local	ext_data		0	//	Prepare external data (CPI, TFP, etc.)
-	local	cr_panel		0	//	Create panel structure from ID variable
-	local	merge_data		0	//	Merge ind- and family- variables and import it into ID variable
-		local	raw_reshape	0		//	Merge raw variables and reshape into long data (takes time)
+	local	cr_panel		1	//	Create panel structure from ID variable
+	local	merge_data		1	//	Merge ind- and family- variables and import it into ID variable
+		local	raw_reshape	1		//	Merge raw variables and reshape into long data (takes time)
 		local	add_clean	1		//	Do additional cleaning and import external data (CPI, TFP)
 		local	import_dta	1		//	Import aggregated variables into ID data. 
 	local	clean_vars		1	//	Clean variables and construct consistent variables
@@ -1025,10 +1025,20 @@
 			*	State legislative bipartisan composition
 			*	Main source: National Connference of State Legislatures (1978-2008 (even years)), (2009-2021), Balletpedia "Who Runs the States, Partisanship Report" (1993-2007 (odd years))
 			import	excel	"${dataWorkFolder}/Politics/united_states_governors_1775_2020.xlsx", firstrow sheet(state_partisan_comp)	clear
-			
+							
+				*	For missing early years, copy the data of the last year available (ex. Use 1974 data for 1975)
+				forval	year=1975(2)1991	{
+					
+					local	prevyear=`year'-1
+					gen	LegisComp`year'=LegisComp`prevyear'
+							
+				}
+				
+				*	Re-shape data
 				rename	State state
 				drop	if	mi(state)
 				reshape	long	LegisComp, i(state) j(year)
+				drop	if	year==1974
 				
 				*	Generate legislator control (holding both house and senate) variable with 4 categores; Democrat, Republican, Divided, N/A
 				loc	var	legis_control
@@ -1047,7 +1057,7 @@
 			*	Merge governor and state control data
 			
 				use "${SNAP_dtInt}/Governors", clear
-				merge	m:1	state	year	using	"${SNAP_dtInt}/State_control", nogen assert(1 3) keepusing(legis_control)
+				merge	m:1	state	year	using	"${SNAP_dtInt}/State_control" , nogen assert(1 3) keepusing(legis_control)
 				
 				*	Replace D.C.'s legis control as "N.A"
 				replace	legis_control=0	if	state=="Washington D.C."
@@ -3243,6 +3253,9 @@
 		rename	(SNAP_index_unweighted	SNAP_index_weighted)	(SNAP_index_uw	SNAP_index_w)
 		lab	var	SNAP_index_uw 	"Unweighted SNAP index"
 		lab	var	SNAP_index_w 	"Weighted SNAP index"
+		
+		*	Temporary dummy creation
+		tab	trifecta, gen(trifecta_cat)
 			
 			*	Finger print
 			*	Fingerprint (dummy)
@@ -3280,15 +3293,16 @@
 			est	store	`IV'_1st
 			est	drop	`IV'`endovar'
 			
-			*	State trifecta
-			loc	IV	trifecta
-			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}		${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/		(`endovar'	=	`IV'	/*i.fingerprint	reportsimple*/)	if	!mi(PFS_glm), robust	cluster(x11101ll) first savefirst savefprefix(`IV')
-			est	store	`IV'_2nd
-			scalar	Fstat_`IV'	=	e(widstat)
-			est	restore	`IV'`endovar'
-			estadd	scalar	Fstat	=	Fstat_`IV', replace
-			est	store	`IV'_1st
-			est	drop	`IV'`endovar'
+			*	State trifecta as dummy (N/A is omitted as base category)
+			loc	IV	trifecta_cat2 trifecta_cat3 trifecta_cat4
+			loc	IVname	trifecta
+			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}		${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/		(`endovar'	=	`IV'	/*i.fingerprint	reportsimple*/)	if	!mi(PFS_glm), robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
+			est	store	`IVname'_2nd
+			scalar	Fstat_`IVname'	=	e(widstat)
+			est	restore	`IVname'`endovar'
+			estadd	scalar	Fstat	=	Fstat_`IVname', replace
+			est	store	`IVname'_1st
+			est	drop	`IVname'`endovar'
 		
 				*ivregress	2sls	`depvar'	${indvars} ${demovars} ${econvars}		${healthvars}	${empvars}		${familyvars}	${eduvars}	${regionvars}	${timevars}		(FS_rec_wth	=	bbce	/*i.fingerprint	reportsimple*/)	if	!mi(PFS_glm), robust	cluster(x11101ll) first
 			
@@ -3340,7 +3354,7 @@
 			*/
 			
 			*	All IVs combined
-			loc	IV	/*bbce	reportsimple	vehexclall	governor_repub*/	fp_dummy	SNAP_index_uw	SNAP_index_w	trifecta
+			loc	IV	/*bbce	reportsimple	vehexclall	governor_repub*/	fp_dummy	SNAP_index_uw	SNAP_index_w	trifecta_cat2 trifecta_cat3 trifecta_cat4
 			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}		${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV'	/*i.fingerprint	reportsimple*/)	if	!mi(PFS_glm), robust	cluster(x11101ll) first savefirst savefprefix(all)
 			est	store	all_2nd
 			scalar	Fstat_all	=	e(widstat)
@@ -3360,7 +3374,7 @@
 					cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(Fstat, fmt(%8.3fc)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(_cons)*/	///
 					title(Weak IV_2nd)		replace	
 		
-		estout bbce_1st, stats(Fstat)
+		*estout bbce_1st, stats(Fstat)
 		
 		*estat firststage
 		*weakivtest
