@@ -137,20 +137,6 @@ fre smrp1719 if sn19==1  /*7,990 FUs had same RP in both waves (87% of FU) */
 		egen	zero_seq_7519	=	anycount(xsqnr_1975-xsqnr_2019), values(0)	//	 Counts the number of sequence variables with zero values
 		drop	if	zero_seq_7519==32	//	Drop individuals who have zero values across all sequence variables
 		drop	zero_seq_7519
-		
-		
-			/*	outdated
-			*	Tag the number of periods appearing in the survey by counting the number of non-missing household IDs during the period
-			**	Note: There are households which are missing across all the study periods, possibly because they appeared only outside the period (ex. 1968-1974)
-			**	We might also consider households that appear only once, as we need at least two consecutive periods
-			
-			egen	fu_nonmiss=rownonmiss(${hhid_all_1975})
-			label variable	fu_nonmiss	"Number of non-missing survey period as head/PR"
-			*drop	if	fu_nonmiss==1	//	Drop if there's only 1 observation per household.
-			drop	if	fu_nonmiss==0	//	These are individuals that don't appear at all during the study period. I assume they appear only outside the study period.
-			
-			*/
-		
 			
 		*	Relation to HH
 		*	As a panel data construction process, I make the code consistent across years
@@ -408,117 +394,13 @@ fre smrp1719 if sn19==1  /*7,990 FUs had same RP in both waves (87% of FU) */
 			replace	`var'=1	if	Sample==1	&	inlist(1,baseline_indiv,splitoff_indiv)
 			label	var	`var'	"=1 if in study sample"
 
-		/*	*	This code is outdated, as I wrote above we don't need sequence number condition
-		
-		*	We can easily see this by running this outdated code and see two-way tabulate of both conditions; there's no individuals whose satisfy (2) but not (1).		
-		*	Individuals who have always been RP when residing.
-		*	These individuals should satisfy the following conditions
-				*	(1)	Their sequence number should be 1 when residing. In other words, their seq.number should only be 0, 1, or somewhere between 51 to 89 (institution, moved out or dead)
-				*	(2) Their relation to RP should always be 0 (when moved out or dead) or 1 (when RP)
-			*	They belong to the benchmark definition of "same household over time" as "same RP"
-			
-				*	(1) Sequence number condition
-				cap	drop	count_rp_die7519	seqnum_cond7519
-				egen	count_rp_die7519	=	anycount(xsqnr_1975-xsqnr_2019), values(0 1 51 52 53 54 55 56 57 58 59 71 72 73 74 75 76 77 78 79 80 81 82 83 84 85 86 87 88 89) //	 Counts the number of sequence variables belong to this case
-				gen		seqnum_cond7519=0
-				replace	seqnum_cond7519=1	if	count_rp_die7519==32	//	Those who satisfying (1)
-				
-				
-				*	(2) Relation to RP conditions
-				cap	drop	count_relrp7519	relrp_cond7519
-				egen	count_relrp7519	=	anycount(relrp_recode1975-relrp_recode2019), values(0 1)
-				gen		relrp_cond7519=0
-				replace	relrp_cond7519=1	if	count_relrp7519==32	//	Those who satisfying (2)
-				
-				tab	seqnum_cond7519	relrp_cond7519
-				
-			*	Generate an indicator which satisfies both conditions
-			gen		rp7619=0
-			replace	rp7619=1	if	seqnum_cond7619==1	&	relrp_cond7619==1
-			lab	var	rp7619	"Individuals who have always been RP"
-			drop	count_rp_die7619		seqnum_cond7619	count_relrp7619	relrp_cond7619
-			
+		*	Overview of sample
+		duplicates tag hhid_agg_1st if in_sample==1, gen(dup)
+		tab	dup	//	91.6% of individuals have unit 1st-stage HHID (series of sequence numbers over waves). 8% have non-unique, mostly RP with SP/ch.
+		drop	dup
 		
 		
-		
-			*	Individuals who were once a child/grandchild, and then became "RP" (once they became RP, their role don't change until they attrit)
-			*	Children have non-fixed sequence number, so this time I will only use "relation to RP" condition only (NOT CERTAIN if this is the right condition)
-			**	IMPORTANT: Currently this code include individuals who were RP and then later became children (ex. returning to parents' house). I do not want to include this so need to think about how to exclude it.
-			**	IMPORTANT: Currently this code does NOT include those who were once children and then becamse "spouse of RP" without changing roles. I do not include it for now, as they will be dropped when I drop indivdiuals who have never been RP
-			**	Need to think about how we will handle this.
-			cap	drop	childrp7619
-			cap	drop	count_childrp7619
-			cap	drop	count_childrpsp7619
-			egen	count_childrp7619	=	anycount(relrp_recode1976-relrp_recode2019), values(0 1 3 6)	//	 Only "inapp", "RP", "child" and "grandchild"
-			egen	count_childrpsp7619	=	anycount(relrp_recode1976-relrp_recode2019), values(0 1 2 3 6)	//	 Only "inapp", "RP", "child" and "grandchild"
-			gen		childrp7619=0
-			replace	childrp7619=1	if	count_childrp7619==31	//	Individual that have always been RP or RP's child (or grandchild+)
-			gen		childrpsp7619=0
-			replace	childrpsp7619=1	if	count_childrpsp7619==31	//	Individual that have always been RP or RP's child (or grandchild+)
-			label	var	childrp7619	"Individuals who have always been RP or RP's heirs'"
-			label	var	childrpsp7619	"Individuals who have always been RP, RP's wife or RP's heirs'"
-			drop	count_childrp7619
-			drop	count_childrpsp7619
-			
-		*	Now, keep individuals only who belong to either of the two categories (always RP, always RP or child of RP) above.
-		*	Note that in current version (2022/3/22), category 2 includes category 1.
-		*keep	if	inlist(1,rp7619,childrp7619)
-	*/
-		
-			
-		/* Outdated
-		Tag in-study sample
-		capture	drop	in_sample_rponly
-		capture drop	in_sample_rpsp
-		capture	drop	in_sample_rpspch
-		
-		gen		in_sample_rponly=0
-		replace	in_sample_rponly=1	if	rp_any==1	&	///	Has to be RP at any point... but is it necesasry? Because it won't capture females who were child and later become spouse only!
-										Sample==1	&	
-		gen		in_sample_rpsp=0
-		replace	in_sample_rpsp=1	if	childrp7619==1	&	rp_any==1	&	Sample==1
-		gen		in_sample_rpspch=0
-		replace	in_sample_rpspch=1	if	childrpsp7619==1	&	rp_any==1	&	Sample==1
-			
-			*	Now see how many individuals of unique set of HHIDs over the period.
-			*	(2022-3-22) I temporarily disable this code. I will re-activate this after I finalize sample-determining code.
-			
-			capture	drop	dup_hhid_agg_1st
-			duplicates tag hhid_agg_1st, gen(dup_hhid_agg_1st)
-			
-				*	As of 2022/3/22, there are 32 dups.
-				*	I manually checked those obs, and they are mostly a parent and a child.
-				*	I manually drop those whom I can safely drop.
-				drop	if	x11101ll==178033	//	Child of 178004. Has been living together. Became RP once, but immediately attrited.
-				drop	if	x11101ll==368032	//	Child of 368003. Has been living together. Just became RP in 2019
-				drop	if	x11101ll==753003	//	Child of 753001. Has been living together. Once became RP in 1979 but immediately attrited
-				drop	if	x11101ll==825003	//	Child of 825001. Has been living together. Became RP in 1986 but immediately attrited
-				drop	if	x11101ll==2151004	//	Child of 2151001. Has been living together. Became RP in 1992 but immediately attrited
-				drop	if	x11101ll==2508003	//	Child of 2508001. Has been living together. Became RP in 2007 but immediately attrited
-				drop	if	x11101ll==2850004	//	Child of 2850002. Has been living together. Became RP in 1999 but immediately attrited
-				drop	if	x11101ll==3074002	//	Child of 3074001. Has been living together. Just became RP in 2019
-				drop	if	x11101ll==5017171	//	Child of 5017032. Has been living together. Just became RP in 2019
-				drop	if	x11101ll==5299055	//	Child of 5299010. Has been living together. Just became RP in 2019
-				drop	if	x11101ll==5617002	//	Child of 5617001. Has been living together. Became RP in 1979 but immediately attrited
-				drop	if	x11101ll==5993035	//	Grandchild of 5993001. Has been living together. Became RP in 1996 but immediately attrited
-				drop	if	x11101ll==6120175	//	Child of 6120004. Has been living together. Became RP in 1994 but immediately attrited
-				drop	if	x11101ll==6221003	//	Child of 6221001. Has been living together. Became RP in 1986 but immediately attrited
-				drop	if	x11101ll==6430031	//	Child of 6430001. Has been living together. Became RP in 1995 but immediately attrited
-				drop	if	x11101ll==6527002	//	Child of 6527001. Has been living together. Became RP in 1980 but immediately attrited
-			
-			
-			*	Finally, check if each obs have unique ID
-			isid	hhid_agg_1st
-		*/	
-		
-		tempfile temp3
-		save	`temp3'
-		
-		*	Generate a new household id which uniquely identifies a combination of household wave IDs with selected individuals only
-		*cap drop hhid_agg_2nd	
-		*egen hhid_agg_1st = group(x11102_1975-x11102_2019), missing
-		
-		
+		*	This code is to see what individuals have changed the status 
 		*	Browsing relevant variables
 		sort	x11102_1975	xsqnr_1975
 		
@@ -549,4 +431,4 @@ fre smrp1719 if sn19==1  /*7,990 FUs had same RP in both waves (87% of FU) */
 		*	keep  
 		*	
 		*restore
-		
+		*/
