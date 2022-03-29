@@ -82,10 +82,18 @@
 								1985	1986	1987	1990	1991	1992	1993	1994	1995	1996	1997	1999	2001	2003	2005	2007	///
 								2009	2011	2013	2015	2017	2019
 		
+	global	sample_years_1975	/*1968	1969	1970	1971	1972	1974*/	1975	1976	1977	1978	1979	1980	1981	1982	1983	1984	///
+								1985	1986	1987	1990	1991	1992	1993	1994	1995	1996	1997	1999	2001	2003	2005	2007	///
+								2009	2011	2013	2015	2017	2019
+	
 	global	sample_years_comma	/*1968,	1969,	1970,	1971,	1972,	1974,	1975,*/	1976,	1977,	1978,	1979,	1980,	1981,	1982,	1983,	1984,	///
 									1985,	1986,	1987,	1990,	1991,	1992,	1993,	1994,	1995,	1996,	1997,	1999,	2001,	2003,	2005,	2007,	///
 									2009,	2011,	2013,	2015,	2017,	2019
 									
+	global	sample_years_1975_comma	/*1968,	1969,	1970,	1971,	1972,	1974,*/	1975,	1976,	1977,	1978,	1979,	1980,	1981,	1982,	1983,	1984,	///
+									1985,	1986,	1987,	1990,	1991,	1992,	1993,	1994,	1995,	1996,	1997,	1999,	2001,	2003,	2005,	2007,	///
+									2009,	2011,	2013,	2015,	2017,	2019
+	
 	global	sample_years_no1968		/*1969	1970	1971	1972	1974	1975*/	1976	1977	1978	1979	1980	1981	1982	1983	1984	///
 										1985	1986	1987	1990	1991	1992	1993	1994	1995	1996	1997	1999	2001	2003	2005	2007	///
 										2009	2011	2013	2015	2017	2019
@@ -99,9 +107,13 @@
 							xsqnr_1991 xsqnr_1992 xsqnr_1993 xsqnr_1994 xsqnr_1995 xsqnr_1996 xsqnr_1997 xsqnr_1999 xsqnr_2001 xsqnr_2003 xsqnr_2005 xsqnr_2007 xsqnr_2009	///
 							xsqnr_2011 xsqnr_2013 xsqnr_2015 xsqnr_2017 xsqnr_2019
 							
-	global	seqnum_years_comma	xsqnr_1976, xsqnr_1977, xsqnr_1978, xsqnr_1979, xsqnr_1980, xsqnr_1981, xsqnr_1982, xsqnr_1983, xsqnr_1984, xsqnr_1985, xsqnr_1986, xsqnr_1987, xsqnr_1990, ///
-								xsqnr_1991, xsqnr_1992, xsqnr_1993, xsqnr_1994, xsqnr_1995, xsqnr_1996, xsqnr_1997, xsqnr_1999, xsqnr_2001, xsqnr_2003, xsqnr_2005, xsqnr_2007, xsqnr_2009,	///
-								xsqnr_2011, xsqnr_2013, xsqnr_2015, xsqnr_2017, xsqnr_2019
+	global	seqnum_years_1975	xsqnr_1975 xsqnr_1976 xsqnr_1977 xsqnr_1978 xsqnr_1979 xsqnr_1980 xsqnr_1981 xsqnr_1982 xsqnr_1983 xsqnr_1984 xsqnr_1985 xsqnr_1986 xsqnr_1987 xsqnr_1990 ///
+								xsqnr_1991 xsqnr_1992 xsqnr_1993 xsqnr_1994 xsqnr_1995 xsqnr_1996 xsqnr_1997 xsqnr_1999 xsqnr_2001 xsqnr_2003 xsqnr_2005 xsqnr_2007 xsqnr_2009	///
+								xsqnr_2011 xsqnr_2013 xsqnr_2015 xsqnr_2017 xsqnr_2019
+	
+	global	seqnum_years_1975_comma	xsqnr_1975, xsqnr_1976, xsqnr_1977, xsqnr_1978, xsqnr_1979, xsqnr_1980, xsqnr_1981, xsqnr_1982, xsqnr_1983, xsqnr_1984, xsqnr_1985, xsqnr_1986, xsqnr_1987, xsqnr_1990, ///
+									xsqnr_1991, xsqnr_1992, xsqnr_1993, xsqnr_1994, xsqnr_1995, xsqnr_1996, xsqnr_1997, xsqnr_1999, xsqnr_2001, xsqnr_2003, xsqnr_2005, xsqnr_2007, xsqnr_2009,	///
+									xsqnr_2011, xsqnr_2013, xsqnr_2015, xsqnr_2017, xsqnr_2019
 	
 	label	define	yes1no0	0	"No"	1	"Yes",	replace
 
