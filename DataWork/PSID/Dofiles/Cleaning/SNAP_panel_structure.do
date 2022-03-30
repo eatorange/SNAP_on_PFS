@@ -47,8 +47,15 @@ fre smrp1719 if sn19==1  /*7,990 FUs had same RP in both waves (87% of FU) */
 
 
 
-
-
+		*	Create a panel structre
+		*	This study covers 50-year period with different family composition changes, thus we need to carefully consider that.
+		*	Basically we will track the two different types of families
+			*	(1) Families that initially existed in 1975 (first year of the study)
+			*	(2) Families that split-off from the original families (1st category)
+		*	Also, we define family over time as the same family as long as the same individual remain either RP or spouse.
+		
+		*	First, we create a individual-level aggregated data using "psid use command" with necessary variables to further investigate family change.
+			
 	
 			
 		*	Merge ID with unique vars as well as other survey variables needed for panel data creation
@@ -67,10 +74,34 @@ fre smrp1719 if sn19==1  /*7,990 FUs had same RP in both waves (87% of FU) */
 			merge 1:1 x11101ll using "`var'", keepusing(`var'*) nogen assert(2 3)	keep(3)	//	Longitudinal weight
 				
 		}
+		
+				
+		*	Drop years outside study sample	
+			drop	*1973	*1988	*1989	//	Years without food expenditures (1973, 1988, 1989)
+			drop	*1968	*1969	*1970	*1971	//	Years which I cannot separate FS amount from food expenditure
+			drop	*1972	*1974	//	Years without previous FS status
+		
+				
+		*	Set globals
+		*	Here we include 1975 variables, as we want to consider the conditions of 1975 as well.
+		qui	ds	x11102_1975-x11102_2019
+		global	hhid_all_1975	`r(varlist)'
+		
+		qui	ds	xsqnr_1975-xsqnr_2019
+		global	seqnum_all_1975	`r(varlist)'
+		
+		
+		*	Construct additional variables
 			
+			/*
+			*	Generate a 1968 sequence number variable from person number variable
+			**	Note: 1968 sequence number is used to determine whether an individual was head/RP in 1968 or not. Don't use it for other purposes, unless it is not consistent with other sequence variables.
+			**	It Should be dropped after use to avoid confusion.		
+			gen		xsqnr_1968	=	pn
+			replace	xsqnr_1968	=	0	if	!inrange(xsqnr_1968,1,20)	
+			order	xsqnr_1968,	before(xsqnr_1969)
+			*/
 		
-		
-		*	Construct additional variable
 				
 			*	Sample source
 			cap	drop	sample_source
@@ -88,143 +119,108 @@ fre smrp1719 if sn19==1  /*7,990 FUs had same RP in both waves (87% of FU) */
 												5	"Latino Sample (1990-1992)",	replace
 			label	values		sample_source		sample_source
 			label	variable	sample_source	"Source of Sample"	
-		
-		*	Generate a 1968 sequence number variable from person number variable
-		**	Note: 1968 sequence number is used to determine whether an individual was head/RP in 1968 or not. Don't use it for other purposes, unless it is not consistent with other sequence variables.
-		**	It Should be dropped after use to avoid confusion.		
-		gen		xsqnr_1968	=	pn
-		replace	xsqnr_1968	=	0	if	!inrange(xsqnr_1968,1,20)	
-		order	xsqnr_1968,	before(xsqnr_1969)
-		
-		*	Drop years outside study sample	
-			drop	*1973	*1988	*1989	//	Years without food expenditures (1973, 1988, 1989)
-			drop	*1968	*1969	*1970	*1971	//	Years which I cannot separate FS amount from food expenditure
-			drop	*1972	*1974	//	Years without previous FS status
 			
-		*	Drop Latino sample
-			drop	if	sample_source==5	//	Latino sample
-			drop	if	sample_source==4	//	2017 refresher
-		
-		*	Set globals
-		*	Here we include 1975 variables, as we want to consider the conditions of 1975 as well.
-		qui	ds	x11102_1975-x11102_2019
-		global	hhid_all_1975	`r(varlist)'
-		
-		qui	ds	xsqnr_1975-xsqnr_2019
-		global	seqnum_all_1975	`r(varlist)'
-
-		tempfile	temp
-		save	`temp'
-		
-		*	Create a panel structre
-		*	This study covers 50-year period with different family composition changes, thus we need to carefully consider that.
-		*	Basically we will track the two different types of families
-			*	(1) Families that initially existed in 1975 (first year of the study)
-			*	(2) Families that split-off from the original families (1st category)
-		*	Also, we define family over time as the same family as long as the same individual remain either RP or spouse.
-		
-		*	First, we create a individual-level aggregated data using "psid use command" with necessary variables to further investigate family change.
+					
+			*	Sample status defind by the PSID
+			cap	drop	Sample
+			gen		Sample=0	if	inlist(sampstat,0,5,6)		//	Non-sample, followable non-sample parent and nonsample elderydrop
+			replace	Sample=1	if	inlist(sampstat,1,2,3,4)	//	Original, born-in, moved and join inclusion sample
+			*drop	if	Sample==0
+			label	var	Sample "=1 if PSID Sample member"
 			
-		*	Generate a household id which uniquely identifies a combination of household wave IDs.
-		**	Note: This is a tepmorary variable where it would have duplicate household ids after applying family panel structure (this is why I named this variabe as "1st")
-		cap drop hhid_agg_1st	
-		egen hhid_agg_1st = group(x11102_1975-x11102_2019), missing
-		
-		*	Keep only the individuals that appear at least once during the study period (1976-2019)
-		*	I do this by counting the number of sequence variables with non-zero values (zero value in sequence number means inappropriate (not surveyed)
-		*	This code is updated as of 2022-3-21. Previously I used the number of missing household IDs, as below.
-		cap	drop	zero_seq_7519
-		egen	zero_seq_7519	=	anycount(xsqnr_1975-xsqnr_2019), values(0)	//	 Counts the number of sequence variables with zero values
-		drop	if	zero_seq_7519==32	//	Drop individuals who have zero values across all sequence variables
-		drop	zero_seq_7519
+			*	Relation to HH
+			*	As a panel data construction process, I make the code consistent across years
+			loc	var	relrp_recode
 			
-		*	Relation to HH
-		*	As a panel data construction process, I make the code consistent across years
-		loc	var	relrp_recode
-		
-		foreach	year	of	global	sample_years_1975	{
-			
-			
-			cap	drop	`var'`year'
-			gen		`var'`year'=0	if	relrp`year'==0	//	Inapp
-			
-			*	1976-1982
-			*	Mostly the same, but need to change a little bit
-			if	inrange(`year',1975,1982) {
+			foreach	year	of	global	sample_years_1975	{
 				
-				replace	`var'`year'=relrp`year'	//	Copy original "relation to head" variable, as they are mostly the same
-				replace	`var'`year'=2	if	relrp`year'==9	//	Recode "husband of head" as spouse
+				
+				cap	drop	`var'`year'
+				gen		`var'`year'=0	if	relrp`year'==0	//	Inapp
+				
+				*	1976-1982
+				*	Mostly the same, but need to change a little bit
+				if	inrange(`year',1975,1982) {
+					
+					replace	`var'`year'=relrp`year'	//	Copy original "relation to head" variable, as they are mostly the same
+					replace	`var'`year'=2	if	relrp`year'==9	//	Recode "husband of head" as spouse
+					
+				}
+				
+				*	1983-2019
+				*	They have more detailed info, so need to simplify them
+				
+				else	{
+				
+					replace	`var'`year'=1	if	relrp`year'==10	//	Reference Person
+					replace	`var'`year'=2	if	inlist(relrp`year',20,22,88,90,92)	//	Spouse, partner, first-year cohabitor, legal spouse
+					replace	`var'`year'=3	if	inrange(relrp`year',30,38) | relrp`year'==83	//	Child (including son-in-law, daughter-in-law, stepchild, etc.)
+					replace	`var'`year'=4	if	inrange(relrp`year',40,48)	//	Sibling (including in-law, that of cohabitor)
+					replace	`var'`year'=5	if	inrange(relrp`year',50,58)	//	Parent (including in-law, that of cohabitor)
+					replace	`var'`year'=6	if	inrange(relrp`year',60,65)	//	Grandchild or lower generation
+					replace	`var'`year'=7	if	inrange(relrp`year',66,69)	|	inrange(relrp`year',70,75) | inrange(relrp`year',95,97) 	// Other relative (grand-parent, etc.)
+					replace	`var'`year'=8	if	relrp`year'==98 	//	Other non-relative
+				
+				}
+				
+				label	var	`var'`year'	"Relation to RP (modified) in `year'"
+				
+			}
+		
+			label	define	relrp_recode	0	"Inapp"	1	"RP"	2	"Spouse/Partner"	3	"Child"	4	"Sibling"	5	"Parent"	6	"Grandchild or lower"	7	"Other relative"	8	"Other non-relative", replace
+			label	value	relrp_recode????	relrp_recode
+			
+			*	Generate string version of variables for comparison
+			foreach	year	of	global	sample_years_1975	{
+				
+				cap	drop	x11102_`year'_str	relrp_recode`year'_str
+				tostring	x11102_`year',	gen(x11102_`year'_str)
+				decode 		relrp_recode`year', gen(relrp_recode`year'_str)
 				
 			}
 			
-			*	1983-2019
-			*	They have more detailed info, so need to simplify them
 			
-			else	{
+			*	Generate residential status variable
+			loc	var	resid_status
+			lab	define	resid_status	0	"Inapp"	1	"Resides"	2	"Institution"	3	"Moved Out"	4	"Died", replace
+			foreach	year	of	global	sample_years_1975	{
 			
-				replace	`var'`year'=1	if	relrp`year'==10	//	Reference Person
-				replace	`var'`year'=2	if	inlist(relrp`year',20,22,88,90,92)	//	Spouse, partner, first-year cohabitor, legal spouse
-				replace	`var'`year'=3	if	inrange(relrp`year',30,38) | relrp`year'==83	//	Child (including son-in-law, daughter-in-law, stepchild, etc.)
-				replace	`var'`year'=4	if	inrange(relrp`year',40,48)	//	Sibling (including in-law, that of cohabitor)
-				replace	`var'`year'=5	if	inrange(relrp`year',50,58)	//	Parent (including in-law, that of cohabitor)
-				replace	`var'`year'=6	if	inrange(relrp`year',60,65)	//	Grandchild or lower generation
-				replace	`var'`year'=7	if	inrange(relrp`year',66,69)	|	inrange(relrp`year',70,75) | inrange(relrp`year',95,97) 	// Other relative (grand-parent, etc.)
-				replace	`var'`year'=8	if	relrp`year'==98 	//	Other non-relative
-			
+				cap	drop	`var'`year'	`var'`year'_str
+				gen		`var'`year'=0
+				replace	`var'`year'=1	if	inrange(xsqnr_`year',1,20)	//	In HH
+				replace	`var'`year'=2	if	inrange(xsqnr_`year',51,59)	//	In institution (ex. college)
+				replace	`var'`year'=3	if	inrange(xsqnr_`year',71,79)	//	Moved out and cannot be traced
+				replace	`var'`year'=3	if	inrange(xsqnr_`year',80,89)	//	Passed away
+				
+				lab	var	`var'`year'	"Residential status in `year'"
+				
+				label	value	`var'`year'	resid_status
+				decode	`var'`year', gen(`var'`year'_str)
+				
 			}
 			
-			label	var	`var'`year'	"Relation to RP (modified) in `year'"
+			*	Combine Variables - ID, relation and status
+			*	This variable is not directly used for analysis, but to check individual status more clearly.
+			foreach	year	of	global	sample_years_1975	{
 			
-		}
-	
-		label	define	relrp_recode	0	"Inapp"	1	"RP"	2	"Spouse/Partner"	3	"Child"	4	"Sibling"	5	"Parent"	6	"Grandchild or lower"	7	"Other relative"	8	"Other non-relative", replace
-		label	value	relrp_recode????	relrp_recode
-		
-		*	Generate string version of variables for comparison
-		foreach	year	of	global	sample_years_1975	{
+				cap	drop	status_combined`year'
+				gen		status_combined`year'	=	x11102_`year'_str + "_" + relrp_recode`year'_str	+	"_"	+	resid_status`year'_str
+				label	var	status_combined`year'	"Combined status in `year'"
+			}
 			
-			cap	drop	x11102_`year'_str	relrp_recode`year'_str
-			tostring	x11102_`year',	gen(x11102_`year'_str)
-			decode 		relrp_recode`year', gen(relrp_recode`year'_str)
+			*	Keep only the individuals that appear at least once during the study period (1976-2019)
+			*	I do this by counting the number of sequence variables with non-zero values (zero value in sequence number means inappropriate (not surveyed)
+			*	This code is updated as of 2022-3-21. Previously I used the number of missing household IDs, as below.
+			loc	var	zero_seq_7519
+			cap	drop	`var'
+			cap	drop	count_seq_7519
+			egen	count_seq_7519	=	anycount(xsqnr_1975-xsqnr_2019), values(0)	//	 Counts the number of sequence variables with zero values
+			gen		`var'=0
+			replace	`var'=1	if	count_seq_7519==32
+			*drop	if	`var'==1	//	Drop individuals who have zero values across all sequence variables
+			drop	count_seq_7519
 			
-		}
-		
-		
-		*	Generate residential status variable
-		loc	var	resid_status
-		lab	define	resid_status	0	"Inapp"	1	"Resides"	2	"Institution"	3	"Moved Out"	4	"Died", replace
-		foreach	year	of	global	sample_years_1975	{
-		
-			cap	drop	`var'`year'	`var'`year'_str
-			gen		`var'`year'=0
-			replace	`var'`year'=1	if	inrange(xsqnr_`year',1,20)	//	In HH
-			replace	`var'`year'=2	if	inrange(xsqnr_`year',51,59)	//	In institution (ex. college)
-			replace	`var'`year'=3	if	inrange(xsqnr_`year',71,79)	//	Moved out and cannot be traced
-			replace	`var'`year'=3	if	inrange(xsqnr_`year',80,89)	//	Passed away
 			
-			lab	var	`var'`year'	"Residential status in `year'"
-			
-			label	value	`var'`year'	resid_status
-			decode	`var'`year', gen(`var'`year'_str)
-			
-		}
-		
-		*	Combine Variables - ID, relation and status
-		foreach	year	of	global	sample_years_1975	{
-		
-			cap	drop	status_combined`year'
-			gen		status_combined`year'	=	x11102_`year'_str + "_" + relrp_recode`year'_str	+	"_"	+	resid_status`year'_str
-			label	var	status_combined`year'	"Combined status in `year'"
-		}
-		
-		
-		
-		tempfile temp2
-		save `temp2'
-		
-		
-		*	Create individual-level indicators
-		
 			*	Individuals who were RP in 1975
 			*	These individuals form families that existed in 1975, which I define as "baseline family"
 			*	RP should satisfy two conditions; (1) sequence number is 1 (2) relation to head is him/herself
@@ -295,7 +291,6 @@ fre smrp1719 if sn19==1  /*7,990 FUs had same RP in both waves (87% of FU) */
 			lab	var	`var'	"=1 if RP/SP over study period"
 			drop	count_relrp7519	
 			
-			
 			*	Now we can determine baseline individuals who represent same baseline family over time.
 			*	Baseline individuals; (1) RP/SP in 1975, and (2) RP/SP over the period while residing (including attrition)
 			loc	var	baseline_indiv
@@ -311,6 +306,7 @@ fre smrp1719 if sn19==1  /*7,990 FUs had same RP in both waves (87% of FU) */
 			*	(Final size will be smaller once we exclude non-Sample individuals)
 			*	We treat each individuals as each family. Say, we have 8,756 families. To fill in this gap, we adjust the weight.
 			
+		
 			
 			*	Now we move to the second type of family; split-off family formed by children after 1975
 				*	Both children who were living in 1975 as well as born after 1975
@@ -369,9 +365,7 @@ fre smrp1719 if sn19==1  /*7,990 FUs had same RP in both waves (87% of FU) */
 			gen		`var'=0
 			replace	`var'=1	if	inlist(1,baseline_indiv,splitoff_indiv)
 			label	var	`var'	"=1 if baseline or split-off individual"
-			
-			*	Additionally, tag (1) those who have never been RP and (2) non-Sample member.
-		
+				
 			*	Those who have ever been RP
 			*	IMPORTANT: we no longer use "rp_any" as our sample condition, as there are individuals who represent family as spouse without being RP.
 			*	We just create it as a reference
@@ -380,13 +374,28 @@ fre smrp1719 if sn19==1  /*7,990 FUs had same RP in both waves (87% of FU) */
 			*drop	if	rp_any!=1
 			label	var	rp_any "=1 if RP in any period"
 			*drop	rp_any
+
+	
+		*	Now we keep only relevant observations.
 			
-			*	Second, Sample status defind by the PSID
-			cap	drop	Sample
-			gen		Sample=0	if	inlist(sampstat,0,5,6)		//	Non-sample, followable non-sample parent and nonsample elderydrop
-			replace	Sample=1	if	inlist(sampstat,1,2,3,4)	//	Original, born-in, moved and join inclusion sample
-			*drop	if	Sample==0
-			label	var	Sample "=1 if PSID Sample member"
+		*	Drop Latino sample
+			drop	if	sample_source==5	//	Latino sample
+			drop	if	sample_source==4	//	2017 refresher
+			
+		*	Drop those who never appeared during the study period
+			drop	if	zero_seq_7519==1
+		
+			*	Generate a household id which uniquely identifies a combination of household wave IDs.
+			**	Note: This is a tepmorary variable where it would have duplicate household ids after applying family panel structure (this is why I named this variabe as "1st")
+			cap drop hhid_agg_1st	
+			egen hhid_agg_1st = group(x11102_1975-x11102_2019), missing	
+
+		*	Drop non-Sample individuals
+		*	Note: Previous analysis were done without dropping them. Make sure to drop it carefully.
+			drop	if	Sample==0
+			
+			
+		*	Tab study-sample without dropping.
 			
 			loc	var	in_sample
 			cap	drop	`var'
