@@ -291,12 +291,24 @@ fre smrp1719 if sn19==1  /*7,990 FUs had same RP in both waves (87% of FU) */
 			lab	var	`var'	"=1 if RP/SP over study period"
 			drop	count_relrp7519	
 			
+			*	RP/SP at least in one wave
+			*	This indicator is based on Chris' suggestion where he suggested to include ALL individuals who were RP/SP at least once.
+			*	It allows to capture many individuals we drop from earlier criteria, including "those who later become a parent" and "those who first split-off as sibling and later become RP/SP
+			loc	var		rpsponce7519
+			cap	drop	`var'
+			cap	drop	count_relrp7519
+			egen	count_relrp7519	=	anycount(relrp_recode1975-relrp_recode2019), values(1 2)
+			gen		`var'=0
+			replace	`var'=1	if	count_relrp7519>=1	//	At least having child/grandchild status in one wave
+			lab	var	`var'	"=1 if RP/SP at least in one year"
+			drop	count_relrp7519	
+						
 			*	Now we can determine baseline individuals who represent same baseline family over time.
-			*	Baseline individuals; (1) RP/SP in 1975, and (2) RP/SP over the period while residing (including attrition)
+			*	Baseline individuals; (1) RP/SP in 1975, and (2) RP or SP at least once.
 			loc	var	baseline_indiv
 			cap	drop	`var'
 			gen		`var'=0
-			replace	`var'=1	if	rpsp1975==1	&	rpsp7519==1
+			replace	`var'=1	if	rpsp1975==1	&	/*rpsp7519==1*/	rpsponce7519==1
 			label	var	`var'	"=1 if baseline individual"
 			
 			tab	baseline_indiv	//	8,756 individuals
@@ -314,7 +326,7 @@ fre smrp1719 if sn19==1  /*7,990 FUs had same RP in both waves (87% of FU) */
 				*	(1)	Children/grandchild or inapp in 1975 (to exclude baseline individuals; avoid duplicate counting)
 				*	(2) Children/grandchild at least in one wave
 				*	(3) RP/SP at least in one wave (to exclude those who never had a family they represent)
-				*	(4) Status no other than Ch/RP/SP while residing (to exclude those who do not represent SAME family over time)
+					*---	(4) Status no other than Ch/RP/SP while residing (to exclude those who do not represent SAME family over time)	--- // Removed this condition as of 2022/3/30
 			**	Note: this code is incomplete as it fails to capture the following indivdiuals
 				*	(1) Those who first split-off as non-RP/SP, but kept RP/SP status once they became RP/SP
 					*	ex)6785033: First split-off as sibling of RP in 2009, but formed own HH in 2011 and remaind RP/SP status till 2019
@@ -330,16 +342,7 @@ fre smrp1719 if sn19==1  /*7,990 FUs had same RP in both waves (87% of FU) */
 			lab	var	`var'	"=1 if child at least in one year"
 			drop	count_relrp7519	
 			
-			*	RP/SP at least in one wave
-			loc	var		rpsponce7519
-			cap	drop	`var'
-			cap	drop	count_relrp7519
-			egen	count_relrp7519	=	anycount(relrp_recode1975-relrp_recode2019), values(1 2)
-			gen		`var'=0
-			replace	`var'=1	if	count_relrp7519>=1	//	At least having child/grandchild status in one wave
-			lab	var	`var'	"=1 if RP/SP at least in one year"
-			drop	count_relrp7519	
-			
+			/*	We no longer use this condition
 			*	Status no other than Ch/RP/SP
 			loc	var		rpspch7519
 			cap	drop	`var'
@@ -349,12 +352,13 @@ fre smrp1719 if sn19==1  /*7,990 FUs had same RP in both waves (87% of FU) */
 			replace	`var'=1	if	count_relrp7519==32	//	Those who satisfy relation condition; RP or SP (residing) or inapp (not residing) across all 32 waves
 			lab	var	`var'	"=1 if Ch/RP/SP over study period"
 			drop	count_relrp7519	
+			*/
 			
 			*	With the indicators constructed above, now we can determine individuals that represent split-off families.
 			loc	var	splitoff_indiv
 			cap	drop	`var'
 			gen		`var'=0
-			replace	`var'=1	if	chinapp1975==1	&	chonce7519==1	&	rpsponce7519==1	&	rpspch7519==1
+			replace	`var'=1	if	chinapp1975==1	&	chonce7519==1	&	rpsponce7519==1	/*&	rpspch7519==1*/
 			label	var	`var'	"=1 if split-off individual"
 			
 			tab	splitoff_indiv	//	10,281 individuals
