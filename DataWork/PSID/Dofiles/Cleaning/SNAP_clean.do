@@ -946,6 +946,40 @@
 	*	Prepare external data
 	if	`ext_data'==1	{
 		
+		*	State data with unique PSID code
+		*	This data will be merged with other data which has state name
+		
+		*	State and local finance
+		import	excel	"${dataWorkFolder}/Census/state_local_finance_1977_2019.xlsx", firstrow sheet(results)	clear
+			
+			*	Clean data
+			rename (State Year) (state year)
+			drop if mi(state)
+			replace	state="Washington D.C." if state=="DC"
+			merge	m:1	state using "${SNAP_dtRaw}/Statecode.dta", assert(1 3) keep(3) nogen
+			
+			rename (E013GeneralExpenditure-E090PublicWelfDirectExp) (genexp dirgenexp elemdirexp higheddirexp healthdirexp highwaydirexp housedirexp policedirexp welfaredirexp)
+			
+			*	Create necessary variables
+			egen		edudirexp=rowtotal(elemdirexp higheddirexp)
+			lab	var		edudirexp	"Total Ed-Direct Exp"
+			
+			*	Share of total direct expenditure on 4 different categories - education, public welfare, health and housing
+			gen	share_edu		=	edudirexp/dirgenexp
+			gen	share_welfare	=	welfaredirexp/dirgenexp
+			gen	share_health	=	healthdirexp/dirgenexp
+			gen	share_housing	=	housedirexp/dirgenexp
+			
+			egen	SSI	=	rowtotal(share_edu-share_housing)
+			
+			lab	var	share_edu		"Share of Dir Exp on Education"
+			lab	var	share_welfare	"Share of Dir Exp on Pub Welfare Exp"
+			lab	var	share_health	"Share of Dir Exp on Health"
+			lab	var	share_housing	"Share of Dir Exp on Housing"
+			lab	var	SSI				"Social Spending Index"
+		
+		merge	
+		
 		*	State governors data
 		*	This data is based on "United States Governors 1775-2020" https://doi.org/10.3886/E102000V3
 		*	This data are not complete (ex. missing years in some state), so I added them manually.
