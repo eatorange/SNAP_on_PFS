@@ -193,14 +193,14 @@
 	
 	local	ind_agg			0	//	Aggregate individual-level variables across waves
 	local	fam_agg			0	//	Aggregate family-level variables across waves
-	local	ext_data		0	//	Prepare external data (CPI, TFP, etc.)
+	local	ext_data		1	//	Prepare external data (CPI, TFP, etc.)
 	local	cr_panel		0	//	Create panel structure from ID variable
 		local	panel_view	0	//	Create an excel file showing the change of certain clan over time (for internal data-check only)
 	local	merge_data		0	//	Merge ind- and family- variables and import it into ID variable
-		local	raw_reshape	1		//	Merge raw variables and reshape into long data (takes time)
-		local	add_clean	1		//	Do additional cleaning and import external data (CPI, TFP)
-		local	import_dta	0		//	Import aggregated variables into ID data. 
-	local	clean_vars		1	//	Clean variables and construct consistent variables
+		local	raw_reshape	0		//	Merge raw variables and reshape into long data (takes time)
+		local	add_clean	0		//	Do additional cleaning and import external data (CPI, TFP)
+		local	import_dta	1		//	Import aggregated variables into ID data. 
+	local	clean_vars		0	//	Clean variables and construct consistent variables
 	local	PFS_const		1	//	Construct PFS
 	local	summ_stats		0	//	Generate summary statistics (will be moved to another file later)
 	
@@ -950,41 +950,302 @@
 		*	State data with unique PSID code
 		*	This data will be merged with other data which has state name
 		
-		*	State and local finance
-		import	excel	"${dataWorkFolder}/Census/state_local_finance_1977_2019.xlsx", firstrow sheet(results)	clear
+		*	State GDP
 			
+			*	1976-1996
+			import	delimited	"${clouldfolder}/DataWork/BEA/SAGDP/SAGDP2S__ALL_AREAS_1963_1997.csv", clear
+			
+			*	Keep relevant information only
+			keep	if	description=="All industry total"
+			drop	if	inlist(geoname,"Far West","Great Lakes","Plains","Southeast","Southwest","Mideast","Rocky Mountain")
+			drop	if	inlist(geoname,"United States","United States *","New England")
+			drop	geofips	region	tablename	linecode	industryclassification	description	unit
+			rename v# GDP#, renumber(1963)
+			destring	GDP*, replace
+			
+			reshape	long	GDP, i(geoname) j(year)
+			
+			
+			rename	geoname	state
+			rename	GDP	GDP_old 	//	temporary
+			drop	if	inrange(year,1963,1974)
+			replace	state="Washington D.C." if state=="District of Columbia"
+			
+			lab	var	state	"State"
+			lab	var	year	"Year"
+			*lab	var	GDP		"GDP (Nominal, M)"
+					
+			tempfile	GDP_pre1997
+			save		`GDP_pre1997'
+		
+			*	1997-2019
+			import	delimited	"${clouldfolder}/DataWork/BEA/SAGDP/SAGDP2N__ALL_AREAS_1997_2021.csv", clear
+		
+			*	Keep relevant information only
+			keep	if	description=="All industry total"
+			drop	if	inlist(geoname,"Far West","Great Lakes","Plains","Southeast","Southwest","Mideast","Rocky Mountain")
+			drop	if	inlist(geoname,"United States","United States *","New England")
+			drop	geofips	region	tablename	linecode	industryclassification	description	unit
+			rename v# GDP#, renumber(1997)
+			destring	GDP*, replace
+			
+			reshape	long	GDP, i(geoname) j(year)
+			
+			
+			rename	geoname	state
+			rename	GDP	GDP_new 	//	temporary
+			drop	if	inrange(year,2020,2021)
+			replace	state="Washington D.C." if state=="District of Columbia"
+			
+			
+			
+			*	Merge old and new GDP
+			merge	1:1	state	year	using	`GDP_pre1997', nogen
+			
+				*	Create a single var that has all GDP
+				gen		GDP=GDP_old	if	year<=1996
+				replace	GDP=GDP_new	if	year>=1997
+				lab	var	GDP	"State GDP (M)"
+			
+				*	Generate gap var between old and new GDP, for 1997
+				gen	GDP_diff	=	(GDP_new - GDP_old) / GDP_new
+				
+				*	Generate indicator that tags post 1996 data 
+				gen		post_1996=0
+				replace	post_1996=1	if	year>=1996
+			
+			*	Merge statecode
+			merge	m:1	state using "${SNAP_dtRaw}/Statecode.dta", assert(3) nogen
+			rename	statecode	rp_state
+			
+			*	Save
+			sort	rp_state	year
+			compress
+			save	"${SNAP_dtInt}/GDP_1975_2019",	replace
+			
+		
+		*	Finance information (1977-2019)
+			*	Original U.S. Census data do not have state govt data pre-1997 (except 1972)
+			*	Primary source: the Urban Institute (https://state-local-finance-data.taxpolicycenter.org/)
+			*	Additional source: the Government Finance Database (https://willamette.edu/mba/research-impact/public-datasets/index.html)	//	To fill in missing state & local data of 2001 & 2003
+		*	This data has state and local expenditure information
+		*	The data strongly recommended to use "state and local" level for inter-state comparison for following reason
+			/*
+			Important: For inter-state comparisons, we highly recommend using the "State and Local" analysis level.
+			The distribution of activity between state and local governments varies greatly from state to state: only the "State and Local" analysis level will fully capture government activity within a state.
+			*/
+		*	However, "state and local" have data missing in 2001 and 2003, while "state" level has complete info from 1977 to 2019
+			*	"state" data is missing in DC
+		*	Ideas
+			*	(1) Use "state and local" as a base, and use state-only expenditure in 2001 and 2003
+			*	(2)	Use "state" as a base, and import "state and local" expenditure for missing DC.
+			*	(2022-4-11) For now I use (2) (state as base) for the folowing reasons
+				*	1. Weak IV test from both ideas are both strong
+				*	2. In "state and local"-level data of DC in the UT's raw data, they only included "Washington DC" finance information, not sub-level organizations (ex. housing authority, public transit).
+				*		Therefore, using DC expenditure as "state"-level information is more consistent than using 2001/2003 "state" expenditures as "state and local" expenditure for all non-DC states in 2001/2003
+		
+			*	Total expenditure (thousands), nominal dollars
+			import	delimited	"${dataWorkFolder}/Census/StateData.csv", clear
+			
+				*	Keep relevant information only
+				drop	if	year4==1972
+				keep	year4	name	
+				
+				*	State and local 
+				import	excel	"${dataWorkFolder}/Census/state_local_finance_1977_2019.xlsx", firstrow sheet(s&l_total_K_nominal)	clear
+				drop	if	mi(Year)
+				drop	if	State=="United States"
+				rename	(E013GeneralExpenditure-E090PublicWelfDirectExp)	///
+						(genexp_tot dirgenexp_tot edudirexp_tot healthdirexp_tot highwaydirexp_tot housedirexp_tot policedirexp_tot welfaredirexp_tot)
+				rename *tot sl_= 
+				isid State Year
+				tempfile	state_local_total_exp
+				save		`state_local_total_exp'
+				
+				*	State only
+				import	excel	"${dataWorkFolder}/Census/state_local_finance_1977_2019.xlsx", firstrow sheet(state_total_K_nominal)	clear
+				drop	if	mi(Year)
+				drop	if	State=="United States"
+				rename	(E013GeneralExpenditure-E090PublicWelfDirectExp)	///
+						(genexp_tot dirgenexp_tot edudirexp_tot healthdirexp_tot highwaydirexp_tot housedirexp_tot policedirexp_tot welfaredirexp_tot)
+				drop	if State=="DC"	//	No data
+				destring	*tot, replace
+				rename *tot s_= 
+				isid State Year
+				tempfile	state_total_exp
+				save		`state_total_exp'
+			
+			*	Per capita expenditure, 2019 real dollars, state and local
+				
+				*	State and local
+				import	excel	"${dataWorkFolder}/Census/state_local_finance_1977_2019.xlsx", firstrow sheet(s&l_pc_real2019)	clear
+				drop	if	State=="United States"
+				drop	if	mi(Year)
+				rename	(E013GeneralExpenditure-E090PublicWelfDirectExp)	///
+						(genexp_pc_real dirgenexp_pc_real edudirexp_pc_real	healthdirexp_pc_real highwaydirexp_pc_real housedirexp_pc_real policedirexp_pc_real welfaredirexp_pc_real)
+				rename *real sl_= 
+				isid State Year
+				tempfile	state_local_pc_exp
+				save		`state_local_pc_exp'
+				
+				*	State only
+				import	excel	"${dataWorkFolder}/Census/state_local_finance_1977_2019.xlsx", firstrow sheet(state_pc_real2019)	clear
+				drop	if	State=="United States"
+				drop	if	mi(Year)
+				rename	(E013GeneralExpenditure-E090PublicWelfDirectExp)	///
+						(genexp_pc_real dirgenexp_pc_real edudirexp_pc_real	healthdirexp_pc_real highwaydirexp_pc_real housedirexp_pc_real policedirexp_pc_real welfaredirexp_pc_real)
+				rename *real s_= 
+				isid State Year
+				tempfile	state_pc_exp
+				save		`state_pc_exp'
+				
+						
+			*	Merge dataset
+			use	`state_local_total_exp', clear
+			merge	1:1	State Year using `state_local_pc_exp', assert(1 3)
+				assert	inlist(Year,2001,2003)	&	State=="DC" if _merge==1	//	2 unmatched record from 2001/2003 DC expenditure (doesn't exist in UI data. I manually added them from Govt Finance Data)
+				drop	_merge
+			merge	1:1	State Year using `state_total_exp' //, assert(2 3) nogen
+				assert	State=="DC"	if	_merge==1
+				assert	inlist(Year,2001,2003) if _merge==2
+				drop	_merge
+			merge	1:1	State Year using `state_pc_exp', assert(1 3)
+				assert	State=="DC"	if	_merge==1
+				drop	_merge
+			
+					
 			*	Clean data
 			rename (State Year) (state year)
-			drop if mi(state)
 			replace	state="Washington D.C." if state=="DC"
-			merge	m:1	state using "${SNAP_dtRaw}/Statecode.dta", assert(1 3) keep(3) nogen
+			merge	m:1	state using "${SNAP_dtRaw}/Statecode.dta" , assert(3) nogen
 			
-			rename (E013GeneralExpenditure-E090PublicWelfDirectExp) (genexp dirgenexp elemdirexp higheddirexp healthdirexp highwaydirexp housedirexp policedirexp welfaredirexp)
-			
-			*	Create necessary variables
-			egen		edudirexp=rowtotal(elemdirexp higheddirexp)
-			lab	var		edudirexp	"Total Ed-Direct Exp"
-			
-			*	Share of total direct expenditure on 4 different categories - education, public welfare, health and housing
-			gen	share_edu		=	edudirexp/dirgenexp
-			gen	share_welfare	=	welfaredirexp/dirgenexp
-			gen	share_health	=	healthdirexp/dirgenexp
-			gen	share_housing	=	housedirexp/dirgenexp
-			
-			*	Social Spending Index (SSI)
-			egen	SSI	=	rowtotal(share_edu-share_housing)
-			
-			lab	var	share_edu		"Share of Dir Exp on Education"
-			lab	var	share_welfare	"Share of Dir Exp on Pub Welfare Exp"
-			lab	var	share_health	"Share of Dir Exp on Health"
-			lab	var	share_housing	"Share of Dir Exp on Housing"
-			lab	var	SSI				"Social Spending Index"
-		
 			*	Save
 			rename	statecode	rp_state
 			compress
-			save	"${SNAP_dtInt}/SSI",	replace
+			save	"${SNAP_dtInt}/state_local_finance",	replace
+			
+			*	Merge GDP and state/local finance
+			use	"${SNAP_dtInt}/GDP_1975_2019",	clear
+			merge	1:1	rp_state year	using	"${SNAP_dtInt}/state_local_finance", assert(1 3)
+				assert	inlist(year,1975,1976)	if	_merge==1	//	Unmatched record from 1975/1976 GDP (no expenditure data available during these years)
+				drop	if	_merge==1	//	Drop 1975/1976
+				drop	_merge
+				
+			
+				*	Import missing data from another source
+				*	Note that "per capita" expenditure will still be missing in many cases (ex. DC), so we will use "total" expenditure as our analysis
+				foreach	expvar	in	genexp dirgenexp edudirexp healthdirexp highwaydirexp housedirexp policedirexp welfaredirexp	{
+					
+					*	Import missing	2001/2003 "state & local" expenditures from "state" expenditure (except DC where I manually added total expenditure from another source, and per capita expenditure is also missing)
+					replace	sl_`expvar'_tot		=	s_`expvar'_tot		if	inlist(year,2001,2003)	&	state!="Washington D.C."
+					replace	sl_`expvar'_pc_real	=	s_`expvar'_pc_real	if	inlist(year,2001,2003)	&	state!="Washington D.C."
+	
+					*	Import missing	"state" DC total expenditures from "state & local" total expenditures
+					replace	s_`expvar'_tot		=	sl_`expvar'_tot		if	state=="Washington D.C."	
+					
+				}
+				
+				*	Generate 2001/2003 and DC indicator, to test whether imported data in state & local level make singificant changes in IV strength in the first stage.
+				**	But I don't think "DC" indicator is necessary, since "state" variation is missing just by definitino, thus using "state and local"-level dc expenditure for "state" expenditure isn't likely to cause an issue.
+				**	Also, as of 2022-4-11, I do not use state&local level data (use state-level only) so these indicators won't be used in the analyses anyway.
+				gen		year_01_03=0
+				replace	year_01_03=1	if	inlist(year,2001,2003)
+				
+				gen		DC=0
+				replace	DC=1	if	rp_state==8	//	DC
 		
+				*	Share of total direct expenditure on 4 different categories - education, public welfare, health and housing
+				*	We generate different shares using different numerator/denominators for robustness check.
+				local	eduvar		edudirexp_tot
+				local	welfvar		welfaredirexp_tot
+				local	healthvar	healthdirexp_tot
+				local	housevar	housedirexp_tot
+				
+					*	Share of expenditure on spendings ("State and local")
+					local	denominator	sl_dirgenexp_tot
+					
+					gen	share_edu_exp_sl		=	sl_`eduvar'	/	`denominator'
+					gen	share_welfare_exp_sl	=	sl_`welfvar'	/	`denominator'
+					gen	share_health_exp_sl		=	sl_`healthvar'	/	`denominator'
+					gen	share_housing_exp_sl	=	sl_`housevar'	/	`denominator'
+					egen	SSI_exp_sl	=	rowtotal(share_edu_exp_sl	share_welfare_exp_sl	share_health_exp_sl	share_housing_exp_sl)
+					
+					*	Share of expenditure on spendings ("State")
+					local	denominator	s_dirgenexp_tot
+					
+					gen	share_edu_exp_s			=	s_`eduvar'	/	`denominator'
+					gen	share_welfare_exp_s		=	s_`welfvar'	/	`denominator'
+					gen	share_health_exp_s		=	s_`healthvar'	/	`denominator'
+					gen	share_housing_exp_s		=	s_`housevar'	/	`denominator'
+					egen	SSI_exp_s	=	rowtotal(share_edu_exp_s	share_welfare_exp_s	share_health_exp_s	share_housing_exp_s)
+					
+					*	Share of GDP on spendings	("State and local")
+					*	Note that GDP is in millions while expenditure is in thousands, thus need to multiply denominator by 1,000 to make unit consistent
+					local	denominator	GDP
+					
+					gen	share_edu_GDP_sl		=	sl_`eduvar'		/	(`denominator'*1000)
+					gen	share_welfare_GDP_sl	=	sl_`welfvar'	/	(`denominator'*1000)
+					gen	share_health_GDP_sl		=	sl_`healthvar'	/	(`denominator'*1000)
+					gen	share_housing_GDP_sl	=	sl_`housevar'	/	(`denominator'*1000)
+					egen	SSI_GDP_sl	=	rowtotal(share_edu_GDP_sl	share_welfare_GDP_sl	share_health_GDP_sl	share_housing_GDP_sl)
+					
+					*	Share of GDP on spendings ("State")
+					local	denominator	GDP
+					
+					gen	share_edu_GDP_s		=	s_`eduvar'		/	(`denominator'*1000)
+					gen	share_welfare_GDP_s	=	s_`welfvar'		/	(`denominator'*1000)
+					gen	share_health_GDP_s	=	s_`healthvar'	/	(`denominator'*1000)
+					gen	share_housing_GDP_s	=	s_`housevar'	/	(`denominator'*1000)
+					egen	SSI_GDP_s	=	rowtotal(share_edu_GDP_s	share_welfare_GDP_s	share_health_GDP_s	share_housing_GDP_s)
+					
+					
+				*	Label variables
+				*	(2022-4-11) I only label state-level as I don't use state & local level. Will add label if needed later
+					label	var	share_edu_exp_s	"\% of total Exp on Education"
+					label	var	share_welfare_exp_s	"\% of total Exp on Pub. Welfare"
+					label	var	share_health_exp_s	"\% of total Exp on Health and Hospital"
+					label	var	share_housing_exp_s	"\% of total Exp on Housing and Comm Dev"
+					label	var	SSI_exp_s	"Social Spending Index (Exp)"
+					
+					label	var	share_edu_GDP_s	"\% of GDP on Education"
+					label	var	share_welfare_GDP_s	"\% of GDP on Pub. Welfare"
+					label	var	share_health_GDP_s	"\% of GDP on Health and Hospital"
+					label	var	share_housing_GDP_s	"\% of GDP on Housing and Comm Dev"
+					label	var	SSI_GDP_s	"Social Spending Index (GDP)"
+					
+			*	Robustness check between SSI from old GDP (pre-1997) and from new GDP (post-1997)
+					
+					*	Share using old GDP
+					local	denominator	GDP_old
+					
+					gen	share_edu_oldGDP_s		=	s_`eduvar'		/	(`denominator'*1000)
+					gen	share_welfare_oldGDP_s	=	s_`welfvar'		/	(`denominator'*1000)
+					gen	share_health_oldGDP_s	=	s_`healthvar'	/	(`denominator'*1000)
+					gen	share_housing_oldGDP_s	=	s_`housevar'	/	(`denominator'*1000)
+					egen	SSI_oldGDP_s	=	rowtotal(share_edu_oldGDP_s	share_welfare_oldGDP_s	share_health_oldGDP_s	share_housing_oldGDP_s)
+					
+					*	Share using new GDP
+					local	denominator	GDP_new
+					
+					gen	share_edu_newGDP_s		=	s_`eduvar'		/	(`denominator'*1000)
+					gen	share_welfare_newGDP_s	=	s_`welfvar'		/	(`denominator'*1000)
+					gen	share_health_newGDP_s	=	s_`healthvar'	/	(`denominator'*1000)
+					gen	share_housing_newGDP_s	=	s_`housevar'	/	(`denominator'*1000)
+					egen	SSI_newGDP_s	=	rowtotal(share_edu_newGDP_s	share_welfare_newGDP_s	share_health_newGDP_s	share_housing_newGDP_s)
+					
+					
+					*	Difference in SSI b/w old and new GDP (only available in 1997 which has both old and new GDP)
+					*	We cannot reject the null hypothesis that mean difference is zero, implying that we can combine old and new GDP into one variable for our analyses.
+					ttest	SSI_oldGDP_s==SSI_newGDP_s	if	year==1997
+					
+					drop	*oldGDP*	*newGDP*
+					
+					
+					*	Save
+					compress
+					save	"${SNAP_dtInt}/SSI",	replace
+		
+		use	"${SNAP_dtInt}/SSI",	clear
 		*	State governors data
 		*	This data is based on "United States Governors 1775-2020" https://doi.org/10.3886/E102000V3
 		*	This data are not complete (ex. missing years in some state), so I added them manually.
@@ -1904,8 +2165,6 @@
 			replace	`var'=1	if	Sample==1	&	inlist(1,baseline_indiv,splitoff_indiv)
 			label	var	`var'	"=1 if in study sample"
 			
-			keep	if	in_sample==1
-
 		*	Overview of sample
 		if	`panel_view'==1	{		
 		
@@ -1930,17 +2189,20 @@
 			
 			global	browsevars	`browsevars'	
 			
-			order	x11101ll	gender	hhid_agg_1st	rp_any	Sample		${browsevars}
-			br		x11101ll	gender	hhid_agg_1st	rp_any	Sample		${browsevars} if x11102_1976==488
+			order	x11101ll	gender	hhid_agg_1st	rpsp1975 chinapp1975 rpsp7519 chonce7519 rpsponce7519  baseline_indiv splitoff_indiv bs_splitoff_indiv Sample in_sample	${browsevars}
+			br		x11101ll	gender	hhid_agg_1st	rpsp1975 chinapp1975 rpsp7519 chonce7519 rpsponce7519  baseline_indiv splitoff_indiv bs_splitoff_indiv Sample in_sample	${browsevars} if x11102_1976==488
 			
 			sort x11101ll
 			
 			loc	year	1976
 			sort	x11102_`year'	xsqnr_`year'
 			
-			export excel	x11101ll	gender	hhid_agg_1st	rpsp1975 chinapp1975 rpsp7519 chonce7519 rpsponce7519 rpspch7519 baseline_indiv splitoff_indiv bs_splitoff_indiv rp_any Sample in_sample	${browsevars}	using "C:\Users\Seungmin Lee\Desktop\family_status_v3.xlsx"	if	x11102_1976==488,  firstrow(variables)	replace
+			export excel	x11101ll	gender	hhid_agg_1st	rpsp1975 chinapp1975 rpsp7519 chonce7519 rpsponce7519  baseline_indiv splitoff_indiv bs_splitoff_indiv Sample in_sample	${browsevars}	using "C:\Users\Seungmin Lee\Desktop\family_status_v4.xlsx"	if	x11102_1976==488,  firstrow(variables)	replace
 		
-	}
+		}
+		
+			keep	if	in_sample==1
+					
 		
 		*	Third, we adjust family weight by the number of valid individuals in each wave
 		*	If there are multiple Sample individuals who has ever been an RP within a family at certain wave, their family variables will be counted multiple times (duplicate)
@@ -2349,8 +2611,8 @@
 				//drop	age_ind origfu_id noresp_why
 			merge	1:1	x11101ll	year	using "${SNAP_dtInt}/SNAP_ExtMerged_long", nogen assert(2 3) keep(3) 	
 								
-			*	State expenditure data
-			merge	m:1	rp_state year	using	"${SNAP_dtInt}/SSI", nogen keep(1 3) keepusing(genexp-SSI)
+			*	SSI data
+			merge	m:1	rp_state year	using	"${SNAP_dtInt}/SSI", nogen keep(1 3) // keepusing(genexp-SSI)
 			
 			*	State Politics data
 			merge m:1 rp_state year using "${SNAP_dtInt}/State_politics", nogen keep(1 3) keepusing(major_control_dem major_control_rep major_control_mix)
@@ -3651,40 +3913,70 @@
 		rename	(SNAP_index_unweighted	SNAP_index_weighted)	(SNAP_index_uw	SNAP_index_w)
 		lab	var	SNAP_index_uw 	"Unweighted SNAP index"
 		lab	var	SNAP_index_w 	"Weighted SNAP index"
+		
+		*	Temporary generate interaction variable
+		*gen	int_SSI_exp_sl_01_03	=	SSI_exp_sl	*	year_01_03
+		*gen	int_SSI_GDP_sl_01_03	=	SSI_GDP_sl	*	year_01_03
+		*gen	int_SSI_GDP_sl_post96	=	SSI_GDP_sl	*	post_1996
+		*gen	int_SSI_GDP_s_post96	=	SSI_GDP_s	*	post_1996
 
 		*	Regression test
-		
-			*	SSI
-			loc	IV	SSI
-			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/		(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	if	!mi(PFS_glm),	///
-								robust	cluster(x11101ll) first savefirst savefprefix(`IV')
-			est	store	`IV'_2nd
-			scalar	Fstat_`IV'	=	e(widstat)
-			est	restore	`IV'`endovar'
-			estadd	scalar	Fstat	=	Fstat_`IV', replace
-			est	store	`IV'_1st
-			est	drop	`IV'`endovar'	
 			
 			/*
-			*	Finger print
-			*	Fingerprint (dummy)
-			loc	var	fp_dummy
-			cap	drop	`var'
-			gen	`var'=fingerprint
-			replace	`var'=1	if	`var'==2	//	"Partially exists" also have the value 1
-			
-			loc	IV	fp_dummy
-			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}		${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/		(`endovar'	=	`IV'	/*i.fingerprint	reportsimple*/)	if	!mi(PFS_glm), robust	cluster(x11101ll) first savefirst savefprefix(`IV')
-			est	store	`IV'_2nd
-			scalar	Fstat_`IV'	=	e(widstat)
-			est	restore	`IV'`endovar'
-			estadd	scalar	Fstat	=	Fstat_`IV', replace
-			est	store	`IV'
+			*	SSI (share of s&l exp on s&l exp), with 2001/2003 interaction
+			loc	IV	SSI_exp_sl
+			loc	IVname	SSI_exp_sl
+			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	int_SSI_exp_sl_01_03		(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+				if	!mi(PFS_glm),	robust	cluster(x11101ll) first savefirst savefprefix(`IV')
+			est	store	`IVname'_2nd
+			scalar	Fstat_`IVname'	=	e(widstat)
+			est	restore	`IVname'`endovar'
+			estadd	scalar	Fstat	=	Fstat_`IVname', replace
+			est	store	`IVname'_1st
+			est	drop	`IVname'`endovar'
 			*/
+						
+			*	SSI (share of state exp on state exp)
+			loc	IV	SSI_exp_s
+			loc	IVname	SSI_exp_s
+			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	if	!mi(PFS_glm),	///
+								robust	cluster(x11101ll) first savefirst savefprefix(`IV')
+			est	store	`IVname'_2nd
+			scalar	Fstat_`IVname'	=	e(widstat)
+			est	restore	`IVname'`endovar'
+			estadd	scalar	Fstat	=	Fstat_`IVname', replace
+			est	store	`IVname'_1st
+			est	drop	`IVname'`endovar'
+			
+			/*
+			*	SSI (share of GDP on s&l exp), with 2001/2003 interaction and post-1996 interactions
+			loc	IV	SSI_GDP_sl
+			loc	IVname	SSI_GDP_sl
+			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	int_SSI_exp_sl_01_03	int_SSI_GDP_sl_post96		(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+				if	!mi(PFS_glm),	robust	cluster(x11101ll) first savefirst savefprefix(`IV')
+			est	store	`IVname'_2nd
+			scalar	Fstat_`IVname'	=	e(widstat)
+			est	restore	`IVname'`endovar'
+			estadd	scalar	Fstat	=	Fstat_`IVname', replace
+			est	store	`IVname'_1st
+			est	drop	`IVname'`endovar'
+			*/
+			
+			*	SSI (share of GDP on s exp)
+			loc	IV	SSI_GDP_s
+			loc	IVname	SSI_GDP_s
+			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/		(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+				if	!mi(PFS_glm),	robust	cluster(x11101ll) first savefirst savefprefix(`IV')
+			est	store	`IVname'_2nd
+			scalar	Fstat_`IVname'	=	e(widstat)
+			est	restore	`IVname'`endovar'
+			estadd	scalar	Fstat	=	Fstat_`IVname', replace
+			est	store	`IVname'_1st
+			est	drop	`IVname'`endovar'
 			
 			*	State control ("mixed" is omitted as base category)
 			loc	IV	major_control_dem major_control_rep
-			loc	IVname	state_control
+			loc	IVname	politics
 			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}		${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	if	!mi(PFS_glm),	///
 								robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
 			est	store	`IVname'_2nd
@@ -3715,12 +4007,11 @@
 			estadd	scalar	Fstat	=	Fstat_`IV', replace
 			est	store	`IV'_1st
 			est	drop	`IV'`endovar'
-		
 			
-			*	SSI and state control (1977-2019)
-			loc	IV	SSI	major_control_dem major_control_rep	
-			loc	IVname	SSI_state_control
-			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}		${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	if	!mi(PFS_glm),	///
+			*	SSI (exp_s) and state control (1977-2019)
+			loc	IV	SSI_exp_s	major_control_dem major_control_rep	
+			loc	IVname	SSI_exp_s_pol
+			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	if	!mi(PFS_glm),	///
 								robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
 			est	store	`IVname'_2nd
 			scalar	Fstat_`IVname'	=	e(widstat)
@@ -3729,8 +4020,21 @@
 			est	store	`IVname'_1st
 			est	drop	`IVname'`endovar'
 			
+			*	SSI (GDP_s) and state control (1977-2019)
+			loc	IV	SSI_GDP_s	major_control_dem major_control_rep	
+			loc	IVname	SSI_GDP_s_pol
+			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	if	!mi(PFS_glm),	///
+								robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
+			est	store	`IVname'_2nd
+			scalar	Fstat_`IVname'	=	e(widstat)
+			est	restore	`IVname'`endovar'
+			estadd	scalar	Fstat	=	Fstat_`IVname', replace
+			est	store	`IVname'_1st
+			est	drop	`IVname'`endovar'
+			
+			
 			*	All IVs (including SNAP index)
-			loc	IV	SSI	major_control_dem major_control_rep	SNAP_index_uw	SNAP_index_w
+			loc	IV	SSI_exp_s	SSI_GDP_s	major_control_dem major_control_rep	SNAP_index_w
 			loc	IVname	all
 			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}		${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	if	!mi(PFS_glm),	///
 								robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
@@ -3740,9 +4044,10 @@
 			estadd	scalar	Fstat	=	Fstat_`IVname', replace
 			est	store	`IVname'_1st
 			est	drop	`IVname'`endovar'
-				
+			
+			
 			*	1st-stage
-			esttab	SSI_1st	state_control_1st	SNAP_index_w_1st	SSI_state_control_1st	all_1st	using "${SNAP_outRaw}/WeakIV_1st.csv", ///
+			esttab	SSI_exp_s_1st	SSI_GDP_s_1st	SSI_exp_s_pol_1st	SSI_GDP_s_pol_1st	all_1st	using "${SNAP_outRaw}/WeakIV_1st.csv", ///
 					cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(Fstat, fmt(%8.3fc)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(_cons)*/	///
 					title(Weak IV_1st)		replace	
 					
