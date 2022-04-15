@@ -201,7 +201,7 @@
 		local	add_clean	0		//	Do additional cleaning and import external data (CPI, TFP)
 		local	import_dta	1		//	Import aggregated variables into ID data. 
 	local	clean_vars		0	//	Clean variables and construct consistent variables
-	local	PFS_const		1	//	Construct PFS
+	local	PFS_const		0	//	Construct PFS
 	local	summ_stats		0	//	Generate summary statistics (will be moved to another file later)
 	
 	
@@ -1045,14 +1045,16 @@
 				*		Therefore, using DC expenditure as "state"-level information is more consistent than using 2001/2003 "state" expenditures as "state and local" expenditure for all non-DC states in 2001/2003
 		
 			*	Total expenditure (thousands), nominal dollars
-			import	delimited	"${dataWorkFolder}/Census/StateData.csv", clear
+			*import	delimited	"${dataWorkFolder}/Census/StateData.csv", clear
+			import	delimited	"${clouldfolder}/DataWork/Census/StateData.csv",	clear
 			
 				*	Keep relevant information only
 				drop	if	year4==1972
 				keep	year4	name	
 				
 				*	State and local 
-				import	excel	"${dataWorkFolder}/Census/state_local_finance_1977_2019.xlsx", firstrow sheet(s&l_total_K_nominal)	clear
+				*import	excel	"${dataWorkFolder}/Census/state_local_finance_1977_2019.xlsx", firstrow sheet(s&l_total_K_nominal)	clear
+				import	excel	"${clouldfolder}/DataWork/Census/state_local_finance_1977_2019.xlsx", firstrow sheet(s&l_total_K_nominal)	clear
 				drop	if	mi(Year)
 				drop	if	State=="United States"
 				rename	(E013GeneralExpenditure-E090PublicWelfDirectExp)	///
@@ -1063,7 +1065,8 @@
 				save		`state_local_total_exp'
 				
 				*	State only
-				import	excel	"${dataWorkFolder}/Census/state_local_finance_1977_2019.xlsx", firstrow sheet(state_total_K_nominal)	clear
+				*import	excel	"${dataWorkFolder}/Census/state_local_finance_1977_2019.xlsx", firstrow sheet(state_total_K_nominal)	clear
+				import	excel	"${clouldfolder}/DataWork/Census/state_local_finance_1977_2019.xlsx", firstrow sheet(state_total_K_nominal)	clear
 				drop	if	mi(Year)
 				drop	if	State=="United States"
 				rename	(E013GeneralExpenditure-E090PublicWelfDirectExp)	///
@@ -1078,7 +1081,8 @@
 			*	Per capita expenditure, 2019 real dollars, state and local
 				
 				*	State and local
-				import	excel	"${dataWorkFolder}/Census/state_local_finance_1977_2019.xlsx", firstrow sheet(s&l_pc_real2019)	clear
+				*import	excel	"${dataWorkFolder}/Census/state_local_finance_1977_2019.xlsx", firstrow sheet(s&l_pc_real2019)	clear
+				import	excel	"${clouldfolder}/DataWork/Census/state_local_finance_1977_2019.xlsx", firstrow sheet(s&l_pc_real2019)	clear
 				drop	if	State=="United States"
 				drop	if	mi(Year)
 				rename	(E013GeneralExpenditure-E090PublicWelfDirectExp)	///
@@ -1089,7 +1093,8 @@
 				save		`state_local_pc_exp'
 				
 				*	State only
-				import	excel	"${dataWorkFolder}/Census/state_local_finance_1977_2019.xlsx", firstrow sheet(state_pc_real2019)	clear
+				*import	excel	"${dataWorkFolder}/Census/state_local_finance_1977_2019.xlsx", firstrow sheet(state_pc_real2019)	clear
+				import	excel	"${clouldfolder}/DataWork/Census/state_local_finance_1977_2019.xlsx", firstrow sheet(state_pc_real2019)	clear				
 				drop	if	State=="United States"
 				drop	if	mi(Year)
 				rename	(E013GeneralExpenditure-E090PublicWelfDirectExp)	///
@@ -1246,11 +1251,14 @@
 					save	"${SNAP_dtInt}/SSI",	replace
 		
 		use	"${SNAP_dtInt}/SSI",	clear
+		
+		
 		*	State governors data
 		*	This data is based on "United States Governors 1775-2020" https://doi.org/10.3886/E102000V3
 		*	This data are not complete (ex. missing years in some state), so I added them manually.
-		import	excel	"${dataWorkFolder}/Politics/united_states_governors_1775_2020.xlsx", firstrow sheet(governors_1775_2021)	clear
-		
+		*import	excel	"${dataWorkFolder}/Politics/united_states_governors_1775_2020.xlsx", firstrow sheet(governors_1775_2021)	clear
+		import	excel	"${clouldfolder}/DataWork/Politics/united_states_governors_1775_2020.xlsx", firstrow sheet(governors_1775_2021)	clear
+			
 			*	Clean data
 			
 				*	Keep relevant observations 
@@ -1334,8 +1342,10 @@
 				
 			*	State legislative bipartisan composition (other than Nebraska and D.C)
 			*	Main source: National Connference of State Legislatures (1978-2008 (even years)), (2009-2021), Balletpedia "Who Runs the States, Partisanship Report" (1993-2007 (odd years))
-			import	excel	"${dataWorkFolder}/Politics/united_states_governors_1775_2020.xlsx", firstrow sheet(state_partisan_comp)	clear
-							
+			*import	excel	"${dataWorkFolder}/Politics/united_states_governors_1775_2020.xlsx", firstrow sheet(state_partisan_comp)	clear
+			import	excel	"${clouldfolder}/DataWork/Politics/united_states_governors_1775_2020.xlsx", firstrow sheet(state_partisan_comp)	clear
+			
+			
 				*	For missing early years, copy the data of the last year available (ex. Use 1974 data for 1975)
 				forval	year=1975(2)1991	{
 					
@@ -1365,7 +1375,8 @@
 				save	"${SNAP_dtInt}/State_control",	replace
 				
 			*	City council data (D.C.)
-			import	excel	"${dataWorkFolder}/Politics/united_states_governors_1775_2020.xlsx", firstrow sheet(DC)	clear
+			*import	excel	"${dataWorkFolder}/Politics/united_states_governors_1775_2020.xlsx", firstrow sheet(DC)	clear
+			import	excel	"${clouldfolder}/DataWork/Politics/united_states_governors_1775_2020.xlsx", firstrow sheet(DC)	clear		
 			
 				*	Clean variable
 				rename	(Year State) (year state)
@@ -1393,8 +1404,9 @@
 				
 			*	Attorney General and Secretary of State (Nebraska)
 			*	Since Nebraska is unicameral without official party associations, we use triplex (one party holds governor, attorney general and secretary of state at the same time) as majority control
-			import	excel	"${dataWorkFolder}/Politics/united_states_governors_1775_2020.xlsx", firstrow sheet(Nebraska)	clear
-				
+			*import	excel	"${dataWorkFolder}/Politics/united_states_governors_1775_2020.xlsx", firstrow sheet(Nebraska)	clear
+			import	excel	"${clouldfolder}/DataWork/Politics/united_states_governors_1775_2020.xlsx", firstrow sheet(Nebraska)	clear
+		
 				*	Clean variable
 				rename	(Year State) (year state)
 				
@@ -1442,7 +1454,7 @@
 					replace	`var_rep'=1	if	rp_state==26	&	governor_party==2	&	atgen_sos_party==2	//	Both republic
 					replace	`var_mix'=1	if	rp_state==26	&	`var_dem'!=1 & `var_rep'!=1	//	Neither
 					
-					*	For all  other sattes, we determine majority if one party has both governship and majority in both chambers
+					*	For all other sattes, we determine majority if one party has both governship and majority in both chambers
 					*	This status is called "trifecta"
 					replace	`var_dem'=1	if	!inlist(rp_state,8,26)	&	governor_party==1	&	legis_control==1	//	Both democrat
 					replace	`var_rep'=1	if	!inlist(rp_state,8,26)	&	governor_party==2	&	legis_control==2	//	Both republic
@@ -1482,8 +1494,8 @@
 				save	"${SNAP_dtInt}/State_politics",	replace
 				
 		*	SNAP policy dataset
-		import excel	"${dataWorkFolder}/USDA/SNAP_Policy_Database.xlsx", firstrow 	clear
-			
+		*import excel	"${dataWorkFolder}/USDA/SNAP_Policy_Database.xlsx", firstrow 	clear
+		import excel	"${clouldfolder}/DataWork/USDA/SNAP_Policy_Database.xlsx", firstrow 	clear
 				
 			label	define	policy_status	0	"No"	1	"Statewide"	2	"Select parts of the state"
 		
@@ -1772,6 +1784,26 @@
 		lab	var	total_costs		"Total costs ($ B)"
 		
 		save	"${SNAP_dtInt}/SNAP_summary",	replace
+		
+		*	SNAP state-level participatoin rates
+		import	excel	"${clouldfolder}/Datawork/USDA/DataSets/Raw/SNAP-state-participation-rates.xlsx", firstrow sheet(2019) clear
+		
+		rename	(State Alleligiblepeople Workingpoorpeople Elderlypeople)	(state partrate_all partrate_wkpoor	partrate_elderly)
+		drop	if	inlist(state,"Virgin Islands","Guam")
+		replace	state="Washington D.C." if state=="District of Columbia"
+		gen	year=2019
+		
+		recast	double	partrate_all partrate_wkpoor	partrate_elderly
+		foreach	var	in	partrate_all partrate_wkpoor	partrate_elderly	{
+			
+			replace	`var'	=	`var'/100
+			
+		}
+		
+		*	Merge with state-level polictis data
+		merge	1:m	state	using	"${SNAP_dtInt}/State_politics"
+		
+		bys	trifecta:	summ	partrate_all	if	year==2019
 		
 		
 		*	Unemployment Rate (BLS)
