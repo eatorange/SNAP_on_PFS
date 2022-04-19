@@ -193,17 +193,17 @@
 	
 	local	ind_agg			0	//	Aggregate individual-level variables across waves
 	local	fam_agg			0	//	Aggregate family-level variables across waves
-	local	ext_data		1	//	Prepare external data (CPI, TFP, etc.)
+	local	ext_data		0	//	Prepare external data (CPI, TFP, etc.)
 	local	cr_panel		0	//	Create panel structure from ID variable
 		local	panel_view	0	//	Create an excel file showing the change of certain clan over time (for internal data-check only)
-	local	merge_data		0	//	Merge ind- and family- variables and import it into ID variable
+	local	merge_data		1	//	Merge ind- and family- variables and import it into ID variable
 		local	raw_reshape	0		//	Merge raw variables and reshape into long data (takes time)
-		local	add_clean	0		//	Do additional cleaning and import external data (CPI, TFP)
+		local	add_clean	1		//	Do additional cleaning and import external data (CPI, TFP)
 		local	import_dta	1		//	Import aggregated variables into ID data. 
-	local	clean_vars		0	//	Clean variables and construct consistent variables
-	local	PFS_const		0	//	Construct PFS
+	local	clean_vars		1	//	Clean variables and construct consistent variables
+	local	PFS_const		1	//	Construct PFS
 	local	summ_stats		0	//	Generate summary statistics (will be moved to another file later)
-	
+	local	IV_reg			0	//	Run IV-2SLS regression
 	
 	*	Aggregate individual-level variables
 	if	`ind_agg'==1	{
@@ -732,6 +732,15 @@
 			keep	x11101ll	`var'*
 			save	"${SNAP_dtInt}/Fam_vars/`var'", replace
 			}			
+		
+		*	Reason for not participating in the FSP
+			loc	var	why_no_FSP
+			psid use || `var'   [77]V5539 [80]V7271 [81]V7965 [87]V14490	///
+			using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
+				
+			keep	x11101ll	`var'*
+			save	"${SNAP_dtInt}/Fam_vars/`var'", replace
+			
 		
 		*	Food expenditure
 
@@ -1785,26 +1794,32 @@
 		
 		save	"${SNAP_dtInt}/SNAP_summary",	replace
 		
-		*	SNAP state-level participatoin rates
+		*	SNAP state-level participation rates
 		import	excel	"${clouldfolder}/Datawork/USDA/DataSets/Raw/SNAP-state-participation-rates.xlsx", firstrow sheet(2019) clear
 		
-		rename	(State Alleligiblepeople Workingpoorpeople Elderlypeople)	(state partrate_all partrate_wkpoor	partrate_elderly)
-		drop	if	inlist(state,"Virgin Islands","Guam")
-		replace	state="Washington D.C." if state=="District of Columbia"
-		gen	year=2019
-		
-		recast	double	partrate_all partrate_wkpoor	partrate_elderly
-		foreach	var	in	partrate_all partrate_wkpoor	partrate_elderly	{
+			rename	(State Alleligiblepeople Workingpoorpeople Elderlypeople)	(state partrate_all partrate_wkpoor	partrate_elderly)
+			drop	if	inlist(state,"Virgin Islands","Guam")
+			replace	state="Washington D.C." if state=="District of Columbia"
+			gen	year=2019
 			
-			replace	`var'	=	`var'/100
+			recast	double	partrate_all partrate_wkpoor	partrate_elderly
+			foreach	var	in	partrate_all partrate_wkpoor	partrate_elderly	{
+				
+				replace	`var'	=	`var'/100
+				
+			}
 			
-		}
-		
-		*	Merge with state-level polictis data
-		merge	1:m	state	using	"${SNAP_dtInt}/State_politics"
-		
-		bys	trifecta:	summ	partrate_all	if	year==2019
-		
+			*	Merge with state-level polictis data
+			merge	1:m	state	using	"${SNAP_dtInt}/State_politics", nogen assert(3)
+			
+			summ	partrate_all	if	major_control_dem==1
+			summ	partrate_all	if	major_control_rep==1
+			summ	partrate_all	if	major_control_mix==1
+			
+			summ	partrate_all	if	major_control_dem==1	&	year==2019
+			summ	partrate_all	if	major_control_rep==1	&	year==2019
+			summ	partrate_all	if	major_control_mix==1	&	year==2019
+			
 		
 		*	Unemployment Rate (BLS)
 		import excel "${clouldfolder}/DataWork/BLS/unemp_rate.xlsx", sheet("BLS Data Series") cellrange(A12)  firstrow clear
@@ -2416,7 +2431,7 @@
 			**	Disabled by default. Run this code only when you have extra variable to append from the raw PSID data.
 			/*
 			{
-				local	var	stamp_ppl_month
+				local	var	why_no_FSP
 				cd "${SNAP_dtInt}/Fam_vars"
 				
 					*	Wide
@@ -3139,6 +3154,27 @@
 		*	Quick summary stat
 			tab FS_rec_wth FS_rec_crtyr_wth if inrange(year,1999,2007)
 			tab FS_rec_wth if inrange(year,1999,2007) & FS_rec_crtyr_wth==1	//	FU that used FS this year, but not last month
+		
+		
+		*	Reason for not participating SNAP (1977, 1980, 1981, 1987)
+		*	Note that this is just for the first mention.
+		loc	var	reason_no_FSP
+		cap	drop	`var'
+		gen		`var'=.n	if	why_no_FSP==0
+		replace	`var'=1		if	((why_no_FSP==3	&	year==1977)	|	(why_no_FSP==2	&	inlist(year,1980,1981,1987)))	//	Admin hassle
+		replace	`var'=2		if	((why_no_FSP==6	&	year==1977)	|	(why_no_FSP==3	&	inlist(year,1980,1981,1987)))	//	Lack of information (Didn't know)
+		replace	`var'=3		if	((why_no_FSP==5	&	year==1977)	|	(why_no_FSP==4	&	inlist(year,1980,1981,1987)))	//	Physical access problem
+		replace	`var'=4		if	((why_no_FSP==7	&	year==1977)	|	(why_no_FSP==5	&	inlist(year,1980,1981,1987)))	//	Didn't need it (I can live without it, other people will need more, etc.)
+		replace	`var'=5		if	((why_no_FSP==8	&	year==1977)	|	(why_no_FSP==6	&	inlist(year,1980,1981,1987)))	//	Personal attributes (too embarrased, don't like it)
+		replace	`var'=6		if	((why_no_FSP==9	&	year==1977)	|	(why_no_FSP==7	&	inlist(year,1980,1981,1987)))	//	Never bothered.
+		replace	`var'=7		if	((inlist(why_no_FSP,1,2,4)	&	year==1977)	|	(inlist(why_no_FSP,1,8,9)	&	inlist(year,1980,1981,1987)))	//	Never bothered.
+		
+		lab	define	`var'	1	"Admin hassle"	2	"Lack of information"	3	"Physical access problem"	4	"Didn't need it"	5	"Personal attributes"	6	"Never bothered"	7	"Others"
+		lab	value	`var'	`var'
+		lab	var	`var'	"Reason for non-participation"
+		
+		*	Harmonize different values based on 
+		
 		
 		/*	The code below is outdated. I use new code above.
 		{
@@ -3934,170 +3970,6 @@
 		
 		
 		*	
-		
-		
-		*	Weak IV test (preliminary, unweighted)
-		use	 "${SNAP_dtInt}/SNAP_long_PFS",	clear	
-		local	endovar	FS_rec_wth
-		local	depvar	PFS_glm
-		
-		*	Temporary renaming
-		rename	(SNAP_index_unweighted	SNAP_index_weighted)	(SNAP_index_uw	SNAP_index_w)
-		lab	var	SNAP_index_uw 	"Unweighted SNAP index"
-		lab	var	SNAP_index_w 	"Weighted SNAP index"
-		
-		*	Temporary generate interaction variable
-		*gen	int_SSI_exp_sl_01_03	=	SSI_exp_sl	*	year_01_03
-		*gen	int_SSI_GDP_sl_01_03	=	SSI_GDP_sl	*	year_01_03
-		*gen	int_SSI_GDP_sl_post96	=	SSI_GDP_sl	*	post_1996
-		*gen	int_SSI_GDP_s_post96	=	SSI_GDP_s	*	post_1996
-
-		*	Regression test
-			
-			/*
-			*	SSI (share of s&l exp on s&l exp), with 2001/2003 interaction
-			loc	IV	SSI_exp_sl
-			loc	IVname	SSI_exp_sl
-			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	int_SSI_exp_sl_01_03		(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
-				if	!mi(PFS_glm),	robust	cluster(x11101ll) first savefirst savefprefix(`IV')
-			est	store	`IVname'_2nd
-			scalar	Fstat_`IVname'	=	e(widstat)
-			est	restore	`IVname'`endovar'
-			estadd	scalar	Fstat	=	Fstat_`IVname', replace
-			est	store	`IVname'_1st
-			est	drop	`IVname'`endovar'
-			*/
-						
-			*	SSI (share of state exp on state exp)
-			loc	IV	SSI_exp_s
-			loc	IVname	SSI_exp_s
-			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	if	!mi(PFS_glm),	///
-								robust	cluster(x11101ll) first savefirst savefprefix(`IV')
-			est	store	`IVname'_2nd
-			scalar	Fstat_`IVname'	=	e(widstat)
-			est	restore	`IVname'`endovar'
-			estadd	scalar	Fstat	=	Fstat_`IVname', replace
-			est	store	`IVname'_1st
-			est	drop	`IVname'`endovar'
-			
-			/*
-			*	SSI (share of GDP on s&l exp), with 2001/2003 interaction and post-1996 interactions
-			loc	IV	SSI_GDP_sl
-			loc	IVname	SSI_GDP_sl
-			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	int_SSI_exp_sl_01_03	int_SSI_GDP_sl_post96		(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
-				if	!mi(PFS_glm),	robust	cluster(x11101ll) first savefirst savefprefix(`IV')
-			est	store	`IVname'_2nd
-			scalar	Fstat_`IVname'	=	e(widstat)
-			est	restore	`IVname'`endovar'
-			estadd	scalar	Fstat	=	Fstat_`IVname', replace
-			est	store	`IVname'_1st
-			est	drop	`IVname'`endovar'
-			*/
-			
-			*	SSI (share of GDP on s exp)
-			loc	IV	SSI_GDP_s
-			loc	IVname	SSI_GDP_s
-			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/		(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
-				if	!mi(PFS_glm),	robust	cluster(x11101ll) first savefirst savefprefix(`IV')
-			est	store	`IVname'_2nd
-			scalar	Fstat_`IVname'	=	e(widstat)
-			est	restore	`IVname'`endovar'
-			estadd	scalar	Fstat	=	Fstat_`IVname', replace
-			est	store	`IVname'_1st
-			est	drop	`IVname'`endovar'
-			
-			*	State control ("mixed" is omitted as base category)
-			loc	IV	major_control_dem major_control_rep
-			loc	IVname	politics
-			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}		${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	if	!mi(PFS_glm),	///
-								robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
-			est	store	`IVname'_2nd
-			scalar	Fstat_`IVname'	=	e(widstat)
-			est	restore	`IVname'`endovar'
-			estadd	scalar	Fstat	=	Fstat_`IVname', replace
-			est	store	`IVname'_1st
-			est	drop	`IVname'`endovar'
-			
-			*	SNAP index (unweighted)
-			loc	IV	SNAP_index_uw
-			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/		(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	if	!mi(PFS_glm),	///
-								robust	cluster(x11101ll) first savefirst savefprefix(`IV')
-			est	store	`IV'_2nd
-			scalar	Fstat_`IV'	=	e(widstat)
-			est	restore	`IV'`endovar'
-			estadd	scalar	Fstat	=	Fstat_`IV', replace
-			est	store	`IV'_1st
-			est	drop	`IV'`endovar'
-			
-			*	SNAP index (weighted)
-			loc	IV	SNAP_index_w
-			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/		(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	if	!mi(PFS_glm),	///
-								robust	cluster(x11101ll) first savefirst savefprefix(`IV')
-			est	store	`IV'_2nd
-			scalar	Fstat_`IV'	=	e(widstat)
-			est	restore	`IV'`endovar'
-			estadd	scalar	Fstat	=	Fstat_`IV', replace
-			est	store	`IV'_1st
-			est	drop	`IV'`endovar'
-			
-			*	SSI (exp_s) and state control (1977-2019)
-			loc	IV	SSI_exp_s	major_control_dem major_control_rep	
-			loc	IVname	SSI_exp_s_pol
-			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	if	!mi(PFS_glm),	///
-								robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
-			est	store	`IVname'_2nd
-			scalar	Fstat_`IVname'	=	e(widstat)
-			est	restore	`IVname'`endovar'
-			estadd	scalar	Fstat	=	Fstat_`IVname', replace
-			est	store	`IVname'_1st
-			est	drop	`IVname'`endovar'
-			
-			*	SSI (GDP_s) and state control (1977-2019)
-			loc	IV	SSI_GDP_s	major_control_dem major_control_rep	
-			loc	IVname	SSI_GDP_s_pol
-			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	if	!mi(PFS_glm),	///
-								robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
-			est	store	`IVname'_2nd
-			scalar	Fstat_`IVname'	=	e(widstat)
-			est	restore	`IVname'`endovar'
-			estadd	scalar	Fstat	=	Fstat_`IVname', replace
-			est	store	`IVname'_1st
-			est	drop	`IVname'`endovar'
-			
-			
-			*	All IVs (including SNAP index)
-			loc	IV	SSI_exp_s	SSI_GDP_s	major_control_dem major_control_rep	SNAP_index_w
-			loc	IVname	all
-			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}		${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	if	!mi(PFS_glm),	///
-								robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
-			est	store	`IVname'_2nd
-			scalar	Fstat_`IVname'	=	e(widstat)
-			est	restore	`IVname'`endovar'
-			estadd	scalar	Fstat	=	Fstat_`IVname', replace
-			est	store	`IVname'_1st
-			est	drop	`IVname'`endovar'
-			
-			
-			*	1st-stage
-			esttab	SSI_exp_s_1st	SSI_GDP_s_1st	SSI_exp_s_pol_1st	SSI_GDP_s_pol_1st	all_1st	using "${SNAP_outRaw}/WeakIV_1st.csv", ///
-					cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(Fstat, fmt(%8.3fc)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(_cons)*/	///
-					title(Weak IV_1st)		replace	
-					
-			*	2nd-stage
-			esttab	SSI_2nd	state_control_2nd	SNAP_index_w_2nd	SSI_state_control_2nd	all_2nd	using "${SNAP_outRaw}/WeakIV_2nd.csv", ///
-					cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(Fstat, fmt(%8.3fc)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(_cons)*/	///
-					title(Weak IV_2nd)		replace	
-		
-		*estout bbce_1st, stats(Fstat)
-		
-		*estat firststage
-		*weakivtest
-		/*
-		local	depvar	PFS_glm
-		svy, subpop(if !mi(PFS_glm)):	ivregress	2sls	`depvar'	${indvars} ${demovars}	(FS_rec_wth	=	bbce)	
-		weakivtest
-		estat firststage
-		*/
 	}
 	
 	*	Summary stats	
@@ -4212,8 +4084,7 @@
 				label var	`var'		"Total FS used throughouth the period"
 				label var	`var'_uniq	"Total FS used throughouth the period"
 				
-				*	% of FS redeemed (# FS redeemed/# surveyed)
-				
+				*	% of FS redeemed (# FS redeemed/# surveyed)		
 				loc	var	share_FS_used
 				cap	drop	`var'
 				cap	drop	`var'_uniq
@@ -4236,6 +4107,9 @@
 				bys x11101ll:	gen `var'_uniq	=	`var' if _n==1
 				label var	`var'		"# of cumulative FS used"
 				label var	`var'_uniq	"# of cumulative FS used"
+				
+				*	Reason for non-participation (1977,1980,1981,1987)
+				svy, subpop(if !mi(PFS_glm)):	tab reason_no_FSP
 				
 				*	Create temporary variable for summary table (will be integrated into "clean" part)
 				cap	drop	fam_income_month_pc_real
@@ -4600,6 +4474,176 @@
 		
 		*	Modeling
 	
+	}
+	
+	*	IV regression
+	if	`IV_reg'==1	{
+		
+		
+		
+		*	Weak IV test (preliminary, unweighted)
+		use	 "${SNAP_dtInt}/SNAP_long_PFS",	clear	
+		local	endovar	FS_rec_wth
+		local	depvar	PFS_glm
+		
+		*	Temporary renaming
+		rename	(SNAP_index_unweighted	SNAP_index_weighted)	(SNAP_index_uw	SNAP_index_w)
+		lab	var	SNAP_index_uw 	"Unweighted SNAP index"
+		lab	var	SNAP_index_w 	"Weighted SNAP index"
+		
+		*	Temporary generate interaction variable
+		*gen	int_SSI_exp_sl_01_03	=	SSI_exp_sl	*	year_01_03
+		*gen	int_SSI_GDP_sl_01_03	=	SSI_GDP_sl	*	year_01_03
+		*gen	int_SSI_GDP_sl_post96	=	SSI_GDP_sl	*	post_1996
+		*gen	int_SSI_GDP_s_post96	=	SSI_GDP_s	*	post_1996
+
+		*	Regression test
+			
+			/*
+			*	SSI (share of s&l exp on s&l exp), with 2001/2003 interaction
+			loc	IV	SSI_exp_sl
+			loc	IVname	SSI_exp_sl
+			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	int_SSI_exp_sl_01_03		(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+				if	!mi(PFS_glm),	robust	cluster(x11101ll) first savefirst savefprefix(`IV')
+			est	store	`IVname'_2nd
+			scalar	Fstat_`IVname'	=	e(widstat)
+			est	restore	`IVname'`endovar'
+			estadd	scalar	Fstat	=	Fstat_`IVname', replace
+			est	store	`IVname'_1st
+			est	drop	`IVname'`endovar'
+			*/
+						
+			*	SSI (share of state exp on state exp)
+			loc	IV	SSI_exp_s
+			loc	IVname	SSI_exp_s
+			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	if	!mi(PFS_glm),	///
+								robust	cluster(x11101ll) first savefirst savefprefix(`IV')
+			est	store	`IVname'_2nd
+			scalar	Fstat_`IVname'	=	e(widstat)
+			est	restore	`IVname'`endovar'
+			estadd	scalar	Fstat	=	Fstat_`IVname', replace
+			est	store	`IVname'_1st
+			est	drop	`IVname'`endovar'
+			
+			/*
+			*	SSI (share of GDP on s&l exp), with 2001/2003 interaction and post-1996 interactions
+			loc	IV	SSI_GDP_sl
+			loc	IVname	SSI_GDP_sl
+			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	int_SSI_exp_sl_01_03	int_SSI_GDP_sl_post96		(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+				if	!mi(PFS_glm),	robust	cluster(x11101ll) first savefirst savefprefix(`IV')
+			est	store	`IVname'_2nd
+			scalar	Fstat_`IVname'	=	e(widstat)
+			est	restore	`IVname'`endovar'
+			estadd	scalar	Fstat	=	Fstat_`IVname', replace
+			est	store	`IVname'_1st
+			est	drop	`IVname'`endovar'
+			*/
+			
+			*	SSI (share of GDP on s exp)
+			loc	IV	SSI_GDP_s
+			loc	IVname	SSI_GDP_s
+			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/		(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+				if	!mi(PFS_glm),	robust	cluster(x11101ll) first savefirst savefprefix(`IV')
+			est	store	`IVname'_2nd
+			scalar	Fstat_`IVname'	=	e(widstat)
+			est	restore	`IVname'`endovar'
+			estadd	scalar	Fstat	=	Fstat_`IVname', replace
+			est	store	`IVname'_1st
+			est	drop	`IVname'`endovar'
+			
+			*	State control ("mixed" is omitted as base category)
+			loc	IV	major_control_dem major_control_rep
+			loc	IVname	politics
+			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}		${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	if	!mi(PFS_glm),	///
+								robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
+			est	store	`IVname'_2nd
+			scalar	Fstat_`IVname'	=	e(widstat)
+			est	restore	`IVname'`endovar'
+			estadd	scalar	Fstat	=	Fstat_`IVname', replace
+			est	store	`IVname'_1st
+			est	drop	`IVname'`endovar'
+			
+			*	SNAP index (unweighted)
+			loc	IV	SNAP_index_uw
+			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/		(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	if	!mi(PFS_glm),	///
+								robust	cluster(x11101ll) first savefirst savefprefix(`IV')
+			est	store	`IV'_2nd
+			scalar	Fstat_`IV'	=	e(widstat)
+			est	restore	`IV'`endovar'
+			estadd	scalar	Fstat	=	Fstat_`IV', replace
+			est	store	`IV'_1st
+			est	drop	`IV'`endovar'
+			
+			*	SNAP index (weighted)
+			loc	IV	SNAP_index_w
+			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/		(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	if	!mi(PFS_glm),	///
+								robust	cluster(x11101ll) first savefirst savefprefix(`IV')
+			est	store	`IV'_2nd
+			scalar	Fstat_`IV'	=	e(widstat)
+			est	restore	`IV'`endovar'
+			estadd	scalar	Fstat	=	Fstat_`IV', replace
+			est	store	`IV'_1st
+			est	drop	`IV'`endovar'
+			
+			*	SSI (exp_s) and state control (1977-2019)
+			loc	IV	SSI_exp_s	major_control_dem major_control_rep	
+			loc	IVname	SSI_exp_s_pol
+			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	if	!mi(PFS_glm),	///
+								robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
+			est	store	`IVname'_2nd
+			scalar	Fstat_`IVname'	=	e(widstat)
+			est	restore	`IVname'`endovar'
+			estadd	scalar	Fstat	=	Fstat_`IVname', replace
+			est	store	`IVname'_1st
+			est	drop	`IVname'`endovar'
+			
+			*	SSI (GDP_s) and state control (1977-2019)
+			loc	IV	SSI_GDP_s	major_control_dem major_control_rep	
+			loc	IVname	SSI_GDP_s_pol
+			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	if	!mi(PFS_glm),	///
+								robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
+			est	store	`IVname'_2nd
+			scalar	Fstat_`IVname'	=	e(widstat)
+			est	restore	`IVname'`endovar'
+			estadd	scalar	Fstat	=	Fstat_`IVname', replace
+			est	store	`IVname'_1st
+			est	drop	`IVname'`endovar'
+			
+			
+			*	All IVs (including SNAP index)
+			loc	IV	SSI_exp_s	SSI_GDP_s	major_control_dem major_control_rep	SNAP_index_w
+			loc	IVname	all
+			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}		${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	if	!mi(PFS_glm),	///
+								robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
+			est	store	`IVname'_2nd
+			scalar	Fstat_`IVname'	=	e(widstat)
+			est	restore	`IVname'`endovar'
+			estadd	scalar	Fstat	=	Fstat_`IVname', replace
+			est	store	`IVname'_1st
+			est	drop	`IVname'`endovar'
+			
+			
+			*	1st-stage
+			esttab	SSI_exp_s_1st	SSI_GDP_s_1st	SSI_exp_s_pol_1st	SSI_GDP_s_pol_1st	all_1st	using "${SNAP_outRaw}/WeakIV_1st.csv", ///
+					cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(Fstat, fmt(%8.3fc)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(_cons)*/	///
+					title(Weak IV_1st)		replace	
+					
+			*	2nd-stage
+			esttab	SSI_2nd	state_control_2nd	SNAP_index_w_2nd	SSI_state_control_2nd	all_2nd	using "${SNAP_outRaw}/WeakIV_2nd.csv", ///
+					cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(Fstat, fmt(%8.3fc)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(_cons)*/	///
+					title(Weak IV_2nd)		replace	
+		
+		*estout bbce_1st, stats(Fstat)
+		
+		*estat firststage
+		*weakivtest
+		/*
+		local	depvar	PFS_glm
+		svy, subpop(if !mi(PFS_glm)):	ivregress	2sls	`depvar'	${indvars} ${demovars}	(FS_rec_wth	=	bbce)	
+		weakivtest
+		estat firststage
+		*/
+		
 	}
 	
 /*
