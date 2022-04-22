@@ -65,6 +65,7 @@
 		SECTION 1: Retrieve variables on interest and construct a panel data
 	****************************************************************/	
 	
+	{	//	Globals
 	global	numJan=1
 	global	numFeb=2
 	global	numMar=3
@@ -190,17 +191,18 @@
 									43	"Utah"			44	"Vermont"			45	"Virginia"	///
 									46	"Washington"	47	"West Virginia"		48	"Wisconsin"	///
 									49	"Wyoming"		50	"Alaska"			51	"Hawaii"	99	"DK/NA",	replace
+	}
 	
 	local	ind_agg			0	//	Aggregate individual-level variables across waves
 	local	fam_agg			0	//	Aggregate family-level variables across waves
-	local	ext_data		0	//	Prepare external data (CPI, TFP, etc.)
+	local	ext_data		1	//	Prepare external data (CPI, TFP, etc.)
 	local	cr_panel		0	//	Create panel structure from ID variable
 		local	panel_view	1	//	Create an excel file showing the change of certain clan over time (for internal data-check only)
-	local	merge_data		0	//	Merge ind- and family- variables and import it into ID variable
+	local	merge_data		1	//	Merge ind- and family- variables and import it into ID variable
 		local	raw_reshape	1		//	Merge raw variables and reshape into long data (takes time)
 		local	add_clean	1		//	Do additional cleaning and import external data (CPI, TFP)
 		local	import_dta	1		//	Import aggregated variables into ID data. 
-	local	clean_vars		0	//	Clean variables and construct consistent variables
+	local	clean_vars		1	//	Clean variables and construct consistent variables
 	local	PFS_const		0	//	Construct PFS
 	local	summ_stats		1	//	Generate summary statistics (will be moved to another file later)
 	local	IV_reg			0	//	Run IV-2SLS regression
@@ -2319,6 +2321,7 @@
 			
 			save	"${SNAP_dtInt}/Ind_vars/ID_sample_long.dta",	replace
 			use "${SNAP_dtInt}/Ind_vars/ID_sample_long.dta", clear
+			
 	}
 	
 	*	Merge variables
@@ -3852,8 +3855,8 @@
 		global	familyvars		famnum	ratio_child
 		global	empvars			rp_employed
 		global	eduvars			rp_NoHS rp_somecol rp_col
-		global	foodvars		FS_rec_wth
-		global	regionvars		rp_state_enum1-rp_state_enum31 rp_state_enum33-rp_state_enum50 	//	Exclusing NY (rp_state_enum32) and outside 48 states (1, 52, 53). The latter should be excluded when running regression
+		global	foodvars		FS_rec_wth	//	Note that this variable is excluded by default in contructing PFS, not to violate exclusion restriction.
+		global	regionvars		rp_state_enum1-rp_state_enum31 rp_state_enum33-rp_state_enum50 	//	Excluding NY (rp_state_enum32) and outside 48 states (1, 52, 53). The latter should be excluded when running regression
 		global	timevars		year_enum2-year_enum32
 		global	indvars			ind_female	age_ind	age_ind_sq
 
@@ -3861,10 +3864,17 @@
 		*	Declare variables
 		local	depvar		foodexp_tot_inclFS_pc
 		
+			*	Summary state of dep.var
+			summ	`depvar', d
+			*unique x11101ll if in_sample==1	&	!mi(foodexp_tot_inclFS_pc)
+		
 		*	Step 1
 		*	IMPORTANT: Unlike Lee et al. (2021), I exclude a binary indicator whether HH received SNAP or not (FS_rec_wth), as including it will violate exclusion restriction of IV
-		svy: glm 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}*/	${indvars}	${regionvars}	${timevars}		, family(gamma)	link(log)
-		*svy: reg 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}*/	${indvars}	${regionvars}	${timevars}	
+		svy: glm 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}*/	${indvars}	${regionvars}	${timevars}	, family(gamma)	link(log)
+		
+			*glm 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}*/	${indvars}	${regionvars}	${timevars}	[aw=wgt_long_fam_adj], family(gamma)	link(log)
+		
+			*svy: reg 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}*/	${indvars}	${regionvars}	${timevars}	
 		ereturn list
 		est	sto	glm_step1
 			
@@ -3874,6 +3884,10 @@
 		predict double e1_foodexp_glm	if	glm_step1_sample==1,r
 		gen e1_foodexp_sq_glm = (e1_foodexp_glm)^2
 		
+			*	Issue: mean in residuals are small, but standard deviation is large, meaning greater dispersion in residual.
+			*	It implies that 1st-stage is not working well in predicting mean.
+			
+			
 			*	As a robustness check, run step 1 "with" FS redemption (just like Lee et al. (2021)) and compare the variation captured.
 			svy: glm 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	${foodvars}	${indvars}	${regionvars}	${timevars}	, family(gamma)	link(log)
 			ereturn list
@@ -3883,9 +3897,7 @@
 			svy: glm 	`depvar'	${statevars}	${demovars}	/*${econvars}*/	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}*/	${indvars}	${regionvars}	${timevars}	, family(gamma)	link(log)
 			ereturn list
 			est	sto	glm_step1_woFS_woinc
-			
 								
-					
 			*	Output robustness check (comparing step 1 w/o FS and with FS)
 			esttab	glm_step1_withFS	glm_step1	glm_step1_woFS_woinc	using "${SNAP_outRaw}/GLM_pooled_FS.csv", ///
 					cells(b(star fmt(%8.2f)) se(fmt(2) par)) stats(N_sub /*r2*/) label legend nobaselevels star(* 0.10 ** 0.05 *** 0.01)	///
@@ -3906,6 +3918,9 @@
 		gen	glm_step2_sample=1	if	e(sample)==1 & `=e(subpop)'
 		*svy:	reg `e(depvar)' `e(selected)'
 		predict	double	var1_foodexp_glm	if	glm_step2_sample==1	
+		
+			*	Shows the list of variables to manually observe issues (ex. too many negative predicted values)
+			br x11101ll year foodexp_tot_inclFS_pc mean1_foodexp_glm e1_foodexp_glm e1_foodexp_sq_glm var1_foodexp_glm
 		
 		
 		*	Output
@@ -4516,14 +4531,32 @@
 			*	SSI (share of state exp on state exp)
 			loc	IV	SSI_exp_s
 			loc	IVname	SSI_exp_s
-			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	if	!mi(PFS_glm),	///
-								robust	cluster(x11101ll) first savefirst savefprefix(`IV')
-			est	store	`IVname'_2nd
-			scalar	Fstat_`IVname'	=	e(widstat)
-			est	restore	`IVname'`endovar'
-			estadd	scalar	Fstat	=	Fstat_`IVname', replace
-			est	store	`IVname'_1st
-			est	drop	`IVname'`endovar'
+				
+				*	Manual 1st-stage reg (analytic weight)
+				reg	`endovar'	`IV'	${indvars} ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	///
+					[aw=wgt_long_fam_adj]	if	!mi(PFS_glm), robust	cluster(x11101ll)
+					
+				*	Manual 1st-stage reg (survey structure)
+				svy: reg	`endovar'	`IV'	${indvars} ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	///
+					if	!mi(PFS_glm)
+				
+				*	IV-reg (with analytic weight)
+				ivregress	2sls 	`depvar'	${indvars} ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	if	!mi(PFS_glm)
+				
+				*	IV-reg (with survey structure)
+				svy: ivregress	2sls 	`depvar'	${indvars} ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')	if	!mi(PFS_glm)
+				
+				*	IV-reg (with analytic weight, ivreg2 does not allow survey structure)
+				ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	if	!mi(PFS_glm),	///
+									robust	cluster(x11101ll) first savefirst savefprefix(`IV')
+									
+									
+				est	store	`IVname'_2nd
+				scalar	Fstat_`IVname'	=	e(widstat)
+				est	restore	`IVname'`endovar'
+				estadd	scalar	Fstat	=	Fstat_`IVname', replace
+				est	store	`IVname'_1st
+				est	drop	`IVname'`endovar'
 			
 			/*
 			*	SSI (share of GDP on s&l exp), with 2001/2003 interaction and post-1996 interactions
@@ -4632,6 +4665,9 @@
 			esttab	SSI_2nd	state_control_2nd	SNAP_index_w_2nd	SSI_state_control_2nd	all_2nd	using "${SNAP_outRaw}/WeakIV_2nd.csv", ///
 					cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(Fstat, fmt(%8.3fc)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(_cons)*/	///
 					title(Weak IV_2nd)		replace	
+		
+		
+		
 		
 		*estout bbce_1st, stats(Fstat)
 		
