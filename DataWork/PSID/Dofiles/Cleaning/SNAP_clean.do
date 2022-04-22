@@ -195,14 +195,14 @@
 	local	fam_agg			0	//	Aggregate family-level variables across waves
 	local	ext_data		0	//	Prepare external data (CPI, TFP, etc.)
 	local	cr_panel		0	//	Create panel structure from ID variable
-		local	panel_view	0	//	Create an excel file showing the change of certain clan over time (for internal data-check only)
-	local	merge_data		1	//	Merge ind- and family- variables and import it into ID variable
-		local	raw_reshape	0		//	Merge raw variables and reshape into long data (takes time)
+		local	panel_view	1	//	Create an excel file showing the change of certain clan over time (for internal data-check only)
+	local	merge_data		0	//	Merge ind- and family- variables and import it into ID variable
+		local	raw_reshape	1		//	Merge raw variables and reshape into long data (takes time)
 		local	add_clean	1		//	Do additional cleaning and import external data (CPI, TFP)
 		local	import_dta	1		//	Import aggregated variables into ID data. 
-	local	clean_vars		1	//	Clean variables and construct consistent variables
-	local	PFS_const		1	//	Construct PFS
-	local	summ_stats		0	//	Generate summary statistics (will be moved to another file later)
+	local	clean_vars		0	//	Clean variables and construct consistent variables
+	local	PFS_const		0	//	Construct PFS
+	local	summ_stats		1	//	Generate summary statistics (will be moved to another file later)
 	local	IV_reg			0	//	Run IV-2SLS regression
 	
 	*	Aggregate individual-level variables
@@ -1504,7 +1504,7 @@
 				
 		*	SNAP policy dataset
 		*import excel	"${dataWorkFolder}/USDA/SNAP_Policy_Database.xlsx", firstrow 	clear
-		import excel	"${clouldfolder}/DataWork/USDA/SNAP_Policy_Database.xlsx", firstrow 	clear
+		import excel	"${clouldfolder}/DataWork/USDA/DataSets/Raw/SNAP_Policy_Database.xlsx", firstrow 	clear
 				
 			label	define	policy_status	0	"No"	1	"Statewide"	2	"Select parts of the state"
 		
@@ -2244,7 +2244,7 @@
 			loc	year	1976
 			sort	x11102_`year'	xsqnr_`year'
 			
-			export excel	x11101ll	gender	hhid_agg_1st	rpsp1975 chinapp1975 rpsp7519 chonce7519 rpsponce7519  baseline_indiv splitoff_indiv bs_splitoff_indiv Sample in_sample	${browsevars}	using "C:\Users\Seungmin Lee\Desktop\family_status_v4.xlsx"	if	x11102_1976==488,  firstrow(variables)	replace
+			export excel	x11101ll	gender	hhid_agg_1st	rpsp1975 chinapp1975 rpsp7519 chonce7519 rpsponce7519  baseline_indiv splitoff_indiv bs_splitoff_indiv Sample in_sample	${browsevars}	using "${SNAP_dtInt}\family_status_v4.xlsx"	if	x11102_1976==488,  firstrow(variables)	replace
 		
 		}
 		
