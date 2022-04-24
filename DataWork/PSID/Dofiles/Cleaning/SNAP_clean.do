@@ -509,7 +509,7 @@
 		
 		*	Food stamp usage & amount
 		*	Previusoly I planned to use previous year's food stamp redemption amount, but I decided to use previous "MONTH" amount for more accurate match with expenditure
-			*	Expenditure questions differ based on previosu "MONTH" redemption, and food expenditure recall period are often "WEEKLY" or "MONTHLY"
+			*	Expenditure questions differ based on previous "MONTH" redemption, and food expenditure recall period are often "WEEKLY" or "MONTHLY"
 			
 			*	Stamp amount used last MONTH
 			*	I combine three series of variables: (1) Amount saved last month (1975-1997) (2) Current year with free recall period (so I can convert it to monthly amount) (1999-2007) (3) Last month (2009-2019)
@@ -550,7 +550,7 @@
 			save	"${SNAP_dtInt}/Fam_vars/`var'", replace
 			
 			*	Number of people in HH issued food stamp last MONTH
-				*	Note: Although PSID year-by-year index categorized it as "previosu year", they are actually asking about "last month" (in early years. Need to check whether it is true in later years)
+				*	Note: Although PSID year-by-year index categorized it as "previous year", they are actually asking about "last month" (in early years. Need to check whether it is true in later years)
 				**	Note: These variables are codded differently (ex. different top-coded value) in different years, so should not be "directly" used in analyses across years unless carefully harmonized.
 				**	This variable will only be used to determine whether HH received food stamp (=0) or not (>0), especially in early years (see pg 42 of 1977 file description)
 			loc	var	stamp_ppl_month
@@ -3857,9 +3857,12 @@
 		global	eduvars			rp_NoHS rp_somecol rp_col
 		global	foodvars		FS_rec_wth	//	Note that this variable is excluded by default in contructing PFS, not to violate exclusion restriction.
 		global	regionvars		rp_state_enum1-rp_state_enum31 rp_state_enum33-rp_state_enum50 	//	Excluding NY (rp_state_enum32) and outside 48 states (1, 52, 53). The latter should be excluded when running regression
-		global	timevars		year_enum2-year_enum32
+		global	timevars		year_enum4-year_enum13 year_enum15-year_enum32	//	Exclude 1990 (year_enum14 since no lagged food exp available)
 		global	indvars			ind_female	age_ind	age_ind_sq
 
+		*	Sample where PFS will be constructed upon
+		*	They include (i) in_sample family (2) HH from 1977 to 2019
+		global	PFS_sample		in_sample==1	&	inrange(year,1977,2019)
 		
 		*	Declare variables
 		local	depvar		foodexp_tot_inclFS_pc
@@ -3870,7 +3873,7 @@
 		
 		*	Step 1
 		*	IMPORTANT: Unlike Lee et al. (2021), I exclude a binary indicator whether HH received SNAP or not (FS_rec_wth), as including it will violate exclusion restriction of IV
-		svy: glm 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}*/	${indvars}	${regionvars}	${timevars}	, family(gamma)	link(log)
+		svy, subpop(if ${PFS_sample}): glm 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}*/	${indvars}	${regionvars}	${timevars}	, family(gamma)	link(log)
 		
 			*glm 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}*/	${indvars}	${regionvars}	${timevars}	[aw=wgt_long_fam_adj], family(gamma)	link(log)
 		
@@ -3879,13 +3882,15 @@
 		est	sto	glm_step1
 			
 		*	Predict fitted value and residual
-		gen	glm_step1_sample=1	if	e(sample)==1 & `=e(subpop)'	//	We need =`e(subpop)' condition, as e(sample) includes both subpopulation and non-subpopulation.
+		gen	glm_step1_sample=1	if	e(sample)==1  & ${PFS_sample}	// e(sample) includes both subpopulation and non-subpopulation, so we need to include subpop condition here to properly restrict regression sample.
 		predict double mean1_foodexp_glm	if	glm_step1_sample==1
 		predict double e1_foodexp_glm	if	glm_step1_sample==1,r
 		gen e1_foodexp_sq_glm = (e1_foodexp_glm)^2
 		
 			*	Issue: mean in residuals are small, but standard deviation is large, meaning greater dispersion in residual.
 			*	It implies that 1st-stage is not working well in predicting mean.
+			summ	foodexp_tot_inclFS_pc	mean1_foodexp_glm	e1_foodexp_glm	e1_foodexp_sq_glm
+			summ	e1_foodexp_glm,d
 			
 			
 			*	As a robustness check, run step 1 "with" FS redemption (just like Lee et al. (2021)) and compare the variation captured.
