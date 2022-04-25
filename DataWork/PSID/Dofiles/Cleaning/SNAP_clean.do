@@ -204,7 +204,7 @@
 		local	import_dta	1		//	Import aggregated variables into ID data. 
 	local	clean_vars		1	//	Clean variables and construct consistent variables
 	local	PFS_const		0	//	Construct PFS
-	local	summ_stats		1	//	Generate summary statistics (will be moved to another file later)
+	local	summ_stats		0	//	Generate summary statistics (will be moved to another file later)
 	local	IV_reg			0	//	Run IV-2SLS regression
 	
 	*	Aggregate individual-level variables
@@ -511,10 +511,12 @@
 		*	Previusoly I planned to use previous year's food stamp redemption amount, but I decided to use previous "MONTH" amount for more accurate match with expenditure
 			*	Expenditure questions differ based on previous "MONTH" redemption, and food expenditure recall period are often "WEEKLY" or "MONTHLY"
 			
-			*	Stamp amount used last MONTH
+			*	Stamp amount used last MONTH (or Current )
 			*	I combine three series of variables: (1) Amount saved last month (1975-1997) (2) Current year with free recall period (so I can convert it to monthly amount) (1999-2007) (3) Last month (2009-2019)
 				**	Note: For earlier periods (1975-1979), where HH had to pay for food stamps, "amount saved" must be combined with "amount paid" to get the total value of food from stamp. (check page 42 of 1977 file description for detail)
-				**	It should be in cleaning stage
+					**	It should be in cleaning stage
+				**	For "current year" amount (1999-2007), it should be converted into monthly amount NOT simply by dividing it by 12, but based on the number of months FS redeemed (assuming equal amounts are redeemed)
+					**	Number of months redeemed 
 			*	This variable is important as households' food expenditure are separately collected based on this response.
 			loc	var	stamp_useamt_month
 			psid use || `var'		[75]V3846 [76]V4359 [77]V5269 [78]V5768 [79]V6374 [80]V6970 [81]V7562 [82]V8254 [83]V8862 [84]V10233 [85]V11373 [86]V12772 [87]V13874 [90]V17805 [91]V19105 [92]V20405 [93]V21703 [94]ER3076 [95]ER6075 [96]ER8172 [97]ER11066	///	/* first series*/
@@ -550,7 +552,7 @@
 			save	"${SNAP_dtInt}/Fam_vars/`var'", replace
 			
 			*	Number of people in HH issued food stamp last MONTH
-				*	Note: Although PSID year-by-year index categorized it as "previous year", they are actually asking about "last month" (in early years. Need to check whether it is true in later years)
+				*	Note: Although PSID year-by-year index categorized it as "previous year", they are actually asking about "last month" (confirmed by the PSID. Check the email thread I first sent on 2022/3/10)
 				**	Note: These variables are codded differently (ex. different top-coded value) in different years, so should not be "directly" used in analyses across years unless carefully harmonized.
 				**	This variable will only be used to determine whether HH received food stamp (=0) or not (>0), especially in early years (see pg 42 of 1977 file description)
 			loc	var	stamp_ppl_month
@@ -574,6 +576,7 @@
 			
 			*	FS used (each month) (1999-2007)
 			*	These variables can be used to see monthly distribution of FS usage, and can also be used to construct "FS used last month" when such dummy is not available (1999-2007)
+			*	Also, we need to use this variable to calculate the number of months FS redeemed, to correctly impute yearly to monthly food stamp value.
 			{
 				*	FS used (Jan)
 				loc	var	stamp_usewth_crtJan
@@ -3066,17 +3069,17 @@
 		cap	drop	`var'
 		gen		`var'=.	
 		
-			*	1975-1977
+			*	1975-1993
 			*	Here we determine FS status by "the number of people FS issued", based on 1977 file description document (page 42)
 			*	Note: in 1985, among 786 HHs where at least one person received FS, 97% of them (762 HHs) redeemed non-zero amount (code: tab V3844 if V3843!=0 from 1975 raw data)
-			replace	`var'=0	if	inrange(year,1975,1977)		&	stamp_ppl_month==0	//	No FS
-			replace	`var'=1	if	inrange(year,1975,1977)		&	inrange(stamp_ppl_month,1,9)	//	FS
+			replace	`var'=0	if	inrange(year,1975,1993)		&	stamp_ppl_month==0	//	No FS
+			replace	`var'=1	if	inrange(year,1975,1993)		&	inrange(stamp_ppl_month,1,9)	//	FS
 			
-			*	1978-1997, 2009-2019
+			*	1994-1997, 2009-2019
 			*	Here we have indicator dummy of last month usage so we can directly import it
 			*	Any non-missing value other than "yes" (ex. no, wild code, na/dk, inapp) are categorized as "no"
-			replace	`var'=0	if	(inrange(year,1978,1997)	|	inrange(year,2009,2019))	&	!mi(stamp_usewth_month)	&	stamp_usewth_month!=1
-			replace	`var'=1	if	(inrange(year,1978,1997)	|	inrange(year,2009,2019))	&	!mi(stamp_usewth_month)	&	stamp_usewth_month==1
+			replace	`var'=0	if	(inrange(year,1994,1997)	|	inrange(year,2009,2019))	&	!mi(stamp_usewth_month)	&	stamp_usewth_month!=1
+			replace	`var'=1	if	(inrange(year,1994,1997)	|	inrange(year,2009,2019))	&	!mi(stamp_usewth_month)	&	stamp_usewth_month==1
 			
 			label	value	`var' yes1no0
 			label var	`var'		"FS used last month"
@@ -3384,10 +3387,10 @@
  				******	CAUTION	****
 				*	For 1999-2007, food exps are collected between FS user and non-FS user of "current year"
 				*	It implies that even if FS answered "yes" to that question (so (1) and (2) are collected), that doesn't necessarily mean HH used FS last month
-				*	Therefore, when we compare "food exp excluding FS amount", we shouuld be very carefully consider it.
+				*	Therefore, when we compare "food exp excluding FS amount", we should be very carefully consider it.
 				******	CAUTION	****
 							
-					*	For FS user (the amounte here is food exp "in addition to" FS redeemed)
+					*	For FS user (the amount here is food exp "in addition to" FS redeemed)
 					
 					local	var	`var_extamt'
 					local	rawvar			foodexp_home_stamp
