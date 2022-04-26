@@ -195,10 +195,10 @@
 	
 	local	ind_agg			0	//	Aggregate individual-level variables across waves
 	local	fam_agg			0	//	Aggregate family-level variables across waves
-	local	ext_data		1	//	Prepare external data (CPI, TFP, etc.)
+	local	ext_data		0	//	Prepare external data (CPI, TFP, etc.)
 	local	cr_panel		0	//	Create panel structure from ID variable
-		local	panel_view	1	//	Create an excel file showing the change of certain clan over time (for internal data-check only)
-	local	merge_data		1	//	Merge ind- and family- variables and import it into ID variable
+		local	panel_view	0	//	Create an excel file showing the change of certain clan over time (for internal data-check only)
+	local	merge_data		0	//	Merge ind- and family- variables and import it into ID variable
 		local	raw_reshape	1		//	Merge raw variables and reshape into long data (takes time)
 		local	add_clean	1		//	Do additional cleaning and import external data (CPI, TFP)
 		local	import_dta	1		//	Import aggregated variables into ID data. 
@@ -3861,7 +3861,7 @@
 		global	foodvars		FS_rec_wth	//	Note that this variable is excluded by default in contructing PFS, not to violate exclusion restriction.
 		global	regionvars		rp_state_enum1-rp_state_enum31 rp_state_enum33-rp_state_enum50 	//	Excluding NY (rp_state_enum32) and outside 48 states (1, 52, 53). The latter should be excluded when running regression
 		global	timevars		year_enum4-year_enum13 year_enum15-year_enum32	//	Exclude 1990 (year_enum14 since no lagged food exp available)
-		global	indvars			ind_female	age_ind	age_ind_sq
+		*global	indvars			ind_female	age_ind	age_ind_sq
 
 		*	Sample where PFS will be constructed upon
 		*	They include (i) in_sample family (2) HH from 1977 to 2019
@@ -3876,7 +3876,7 @@
 		
 		*	Step 1
 		*	IMPORTANT: Unlike Lee et al. (2021), I exclude a binary indicator whether HH received SNAP or not (FS_rec_wth), as including it will violate exclusion restriction of IV
-		svy, subpop(if ${PFS_sample}): glm 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}*/	${indvars}	${regionvars}	${timevars}	, family(gamma)	link(log)
+		svy, subpop(if ${PFS_sample}): glm 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}	${indvars}*/	${regionvars}	${timevars}	, family(gamma)	link(log)
 		
 			*glm 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}*/	${indvars}	${regionvars}	${timevars}	[aw=wgt_long_fam_adj], family(gamma)	link(log)
 		
@@ -3897,12 +3897,12 @@
 			
 			
 			*	As a robustness check, run step 1 "with" FS redemption (just like Lee et al. (2021)) and compare the variation captured.
-			svy: glm 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	${foodvars}	${indvars}	${regionvars}	${timevars}	, family(gamma)	link(log)
+			svy: glm 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	${foodvars}	/*${indvars}*/	${regionvars}	${timevars}	, family(gamma)	link(log)
 			ereturn list
 			est	sto	glm_step1_withFS
 			
 			*	Without income and FS redemption
-			svy: glm 	`depvar'	${statevars}	${demovars}	/*${econvars}*/	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}*/	${indvars}	${regionvars}	${timevars}	, family(gamma)	link(log)
+			svy: glm 	`depvar'	${statevars}	${demovars}	/*${econvars}*/	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}	${indvars}*/	${regionvars}	${timevars}	, family(gamma)	link(log)
 			ereturn list
 			est	sto	glm_step1_woFS_woinc
 								
@@ -3919,8 +3919,8 @@
 		local	depvar	e1_foodexp_sq_glm
 		
 		*	For now (2021-11-28) GLM in step 2 does not converge. Will use OLS for now.
-		*svy: glm 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}*/	${indvars}	${regionvars}	${timevars}	, family(gamma)	link(log)
-		svy: reg 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}*/	${indvars}	${regionvars}	${timevars}
+		*svy: glm 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}	${indvars}*/	${regionvars}	${timevars}	, family(gamma)	link(log)
+		svy: reg 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}	${indvars}*/	${regionvars}	${timevars}
 			
 		est store glm_step2
 		gen	glm_step2_sample=1	if	e(sample)==1 & `=e(subpop)'
