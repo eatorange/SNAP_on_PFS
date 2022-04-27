@@ -508,15 +508,15 @@
 		
 		
 		*	Food stamp usage & amount
-		*	Previusoly I planned to use previous year's food stamp redemption amount, but I decided to use previous "MONTH" amount for more accurate match with expenditure
+		*	Previously I planned to use previous year's food stamp redemption amount, but I decided to use previous "MONTH" amount for more accurate match with expenditure
 			*	Expenditure questions differ based on previous "MONTH" redemption, and food expenditure recall period are often "WEEKLY" or "MONTHLY"
 			
-			*	Stamp amount used last MONTH (or Current )
+			*	Stamp amount saved (1975-1979) or received (1980-2019) last MONTH, or recevied current year (1999-2007)
 			*	I combine three series of variables: (1) Amount saved last month (1975-1997) (2) Current year with free recall period (so I can convert it to monthly amount) (1999-2007) (3) Last month (2009-2019)
 				**	Note: For earlier periods (1975-1979), where HH had to pay for food stamps, "amount saved" must be combined with "amount paid" to get the total value of food from stamp. (check page 42 of 1977 file description for detail)
 					**	It should be in cleaning stage
-				**	For "current year" amount (1999-2007), it should be converted into monthly amount NOT simply by dividing it by 12, but based on the number of months FS redeemed (assuming equal amounts are redeemed)
-					**	Number of months redeemed 
+				**	For "current year" amount (1999-2007), it should be used with recall period to impute monthly variable
+					**	91.5% of them gave monthly amount, 2.7% gave weekly amount it 
 			*	This variable is important as households' food expenditure are separately collected based on this response.
 			loc	var	stamp_useamt_month
 			psid use || `var'		[75]V3846 [76]V4359 [77]V5269 [78]V5768 [79]V6374 [80]V6970 [81]V7562 [82]V8254 [83]V8862 [84]V10233 [85]V11373 [86]V12772 [87]V13874 [90]V17805 [91]V19105 [92]V20405 [93]V21703 [94]ER3076 [95]ER6075 [96]ER8172 [97]ER11066	///	/* first series*/
@@ -554,7 +554,7 @@
 			*	Number of people in HH issued food stamp last MONTH
 				*	Note: Although PSID year-by-year index categorized it as "previous year", they are actually asking about "last month" (confirmed by the PSID. Check the email thread I first sent on 2022/3/10)
 				**	Note: These variables are codded differently (ex. different top-coded value) in different years, so should not be "directly" used in analyses across years unless carefully harmonized.
-				**	This variable will only be used to determine whether HH received food stamp (=0) or not (>0), especially in early years (see pg 42 of 1977 file description)
+				**	This variable will only be used to determine whether HH received food stamp (=0) or not (>0), up to 1993 (see pg 42 of 1977 file description)
 			loc	var	stamp_ppl_month
 			psid use || `var'   	[75]V3843 [76]V4356 [77]V5266 [78]V5765 [79]V6371 [80]V6969 [81]V7561 [82]V8253 [83]V8861 [84]V10232 [85]V11372 [86]V12771 [87]V13873 [90]V17804	///
 									[91]V19104 [92]V20404 [93]V21702 [94]ER3075 [95]ER6074 [96]ER8171 [97]ER11065 [99]ER14284 [01]ER18416 [03]ER21681 [05]ER25683 [07]ER36701 [09]ER42708	///
@@ -749,76 +749,89 @@
 		
 		*	Food expenditure
 
-			*	At home expenditure, until 1993 (annual, stamp excluded)
-				*	Note: stamp value is excluded since 1977. For 1975-1976, it depends on whether HH answered "stamp amount included in the expenditure?"
-				*	Food expenditure net of stamp amount in 1975-1976 are adjusted in cleaning phase.
-			*	Note: This variable includes "cost of food delivered to door". Please find the codebook of variable V21707.
-			loc	var	foodexp_home_annual
-			psid use || `var'  [68]V37 [69]V500 [70]V1175 [71]V1876 [72]V2476 [74]V3441 [75]V3841 [76]V4354 [77]V5271 [78]V5770 [79]V6376 [80]V6972 [81]V7564 [82]V8256 [83]V8864 [84]V10235 [85]V11375 [86]V12774 [87]V13876 [90]V17807 [91]V19107 [92]V20407 [93]V21707 using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
+			*	At-home
 			
-			keep	x11101ll	`var'*
-			save	"${SNAP_dtInt}/Fam_vars/`var'", replace
+				*	(1968-1993) Annual home expenditure (stamp excluded)
+					*	Note: stamp value is excluded since 1977. For 1975-1976, it depends on whether HH answered "stamp amount included in the expenditure?"
+					*	Food expenditure net of stamp amount in 1975-1976 are adjusted in cleaning phase.
+				*	Note: This variable includes "cost of food delivered to door". Please find the codebook of variable V21707.
+				*	Note: This variable includes food expenditure of FS and non-FS families (they are collected separately since 1994)
+				loc	var	foodexp_home_annual
+				psid use || `var'  [68]V37 [69]V500 [70]V1175 [71]V1876 [72]V2476 [74]V3441 [75]V3841 [76]V4354 [77]V5271 [78]V5770 [79]V6376 [80]V6972 [81]V7564 [82]V8256 [83]V8864 [84]V10235 [85]V11375 [86]V12774 [87]V13876 [90]V17807 [91]V19107 [92]V20407 [93]V21707 using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
+				
+				keep	x11101ll	`var'*
+				save	"${SNAP_dtInt}/Fam_vars/`var'", replace
 						
-			*	Annual amount saved from grown foods (available from 68-72, 79)
-			**	Might be used later.... (ex. can be added later)
-			loc	var	foodexp_home_grown
-			psid use || `var'  	[68]V39 [69]V508 [70]V1179 [71]V1880 [72]V2485 [79]V6385	using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
+				*	Annual amount saved from grown foods (available from 68-72, 79)
+				**	Might be used later.... (ex. can be added later)
+				loc	var	foodexp_home_grown
+				psid use || `var'  	[68]V39 [69]V508 [70]V1179 [71]V1880 [72]V2485 [79]V6385	using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
+				
+				keep	x11101ll	`var'*
+				save	"${SNAP_dtInt}/Fam_vars/`var'", replace
 			
-			keep	x11101ll	`var'*
-			save	"${SNAP_dtInt}/Fam_vars/`var'", replace
+				*	(1994-2019)	At-home expenditure (with free recall period)
+
+					*	Non-FS
+					
+						*	Amount spent
+						loc	var	foodexp_home_nostamp
+						psid use || `var'  [94]ER3085 [95]ER6084 [96]ER8181 [97]ER11076 [99]ER14295 [01]ER18431 [03]ER21696 [05]ER25698 [07]ER36716 [09]ER42722 [11]ER48038 [13]ER53735 [15]ER60750 [17]ER66797 [19]ER72801 using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
+						
+						keep	x11101ll	`var'*
+						save	"${SNAP_dtInt}/Fam_vars/`var'", replace
+						
+						*	Recall period (should be used with the amount above)
+						loc	var	foodexp_home_nostamp_recall
+						psid use || `var'  [94]ER3086 [95]ER6085 [96]ER8182 [97]ER11077 [99]ER14296 [01]ER18432 [03]ER21697 [05]ER25699 [07]ER36717 [09]ER42723 [11]ER48039 [13]ER53736 [15]ER60751 [17]ER66798 [19]ER72802 using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
+						
+						keep	x11101ll	`var'*
+						save	"${SNAP_dtInt}/Fam_vars/`var'", replace	
 			
-			*	At home expenditure (since 1994, for those who didn't redeem food stamp, thus no stamp value)
-			*	Free recall period, thus should be combined with recall period variable
-			loc	var	foodexp_home_nostamp
-			psid use || `var'  [94]ER3085 [95]ER6084 [96]ER8181 [97]ER11076 [99]ER14295 [01]ER18431 [03]ER21696 [05]ER25698 [07]ER36716 [09]ER42722 [11]ER48038 [13]ER53735 [15]ER60750 [17]ER66797 [19]ER72801 using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
 			
-			keep	x11101ll	`var'*
-			save	"${SNAP_dtInt}/Fam_vars/`var'", replace
+					*	FS
+					
+						*	(1994-2019) Whether spent extra money for at home expenditure (dummy) 
+							*	This variable is collected only from FS families
+							**	If households affirm, then they are asked how much extra money they spent for at-home food
+						loc	var	foodexp_home_spent_extra
+						psid use || `var'  [94]ER3077 [95]ER6076 [96]ER8173 [97]ER11067 [99]ER14287 [01]ER18420 [03]ER21685 [05]ER25687 [07]ER36705 [09]ER42711 [11]ER48027 [13]ER53724 [15]ER60739 [17]ER66786 [19]ER72790 using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
+						
+						keep	x11101ll	`var'*
+						save	"${SNAP_dtInt}/Fam_vars/`var'", replace
+						
+						*	(1994-2019) At home expenditure, additional to food stamp value (free recall period)
+							*	This variable is collected from FS families who spent extra amount of money for at-home exp (those who said "yes" to foodexp_home_spent_extra)
+						**	This question is asked only when household affirmed "did you spend any money in addition to stamp value?"
+						loc	var	foodexp_home_stamp
+						psid use || `var'  [94]ER3078 [95]ER6077 [96]ER8174 [97]ER11068 [99]ER14288 [01]ER18421 [03]ER21686 [05]ER25688 [07]ER36706 [09]ER42712 [11]ER48028 [13]ER53725 [15]ER60740 [17]ER66787 [19]ER72791 using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
+						
+						keep	x11101ll	`var'*
+						save	"${SNAP_dtInt}/Fam_vars/`var'", replace
+						
+						*	Recall period of at home expenditure in addition to stamp (should be matched with "additional expenditure" above)
+						*	It should be used with the acutal amount to make consistent expenditure
+							**	This question is asked only when household affirmed "did you spend any money in addition to stamp value?"
+							**	Note: 1994 recall period is slightly different from the rest of the periods (1995-2019)
+						loc	var	foodexp_home_stamp_recall
+						psid use || `var'  	[94]ER3079 [95]ER6078 [96]ER8175 [97]ER11069 [99]ER14289 [01]ER18422 [03]ER21687 [05]ER25689 [07]ER36707 [09]ER42713 [11]ER48029 [13]ER53726 [15]ER60741 [17]ER66788 [19]ER72792 using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
+						
+						keep	x11101ll	`var'*
+						save	"${SNAP_dtInt}/Fam_vars/`var'", replace
 			
-			*	Recall period of at home expenditure, when no stamp is used (should be matched with the expenditure above)
-			loc	var	foodexp_home_nostamp_recall
-			psid use || `var'  [94]ER3086 [95]ER6085 [96]ER8182 [97]ER11077 [99]ER14296 [01]ER18432 [03]ER21697 [05]ER25699 [07]ER36717 [09]ER42723 [11]ER48039 [13]ER53736 [15]ER60751 [17]ER66798 [19]ER72802 using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
-			
-			keep	x11101ll	`var'*
-			save	"${SNAP_dtInt}/Fam_vars/`var'", replace	
-			
-			*	Whether spent extra money for at home expenditure (dummy)
-			**	If households affirm, then they are asked how much extra money they spent for at-home food
-			loc	var	foodexp_home_spent_extra
-			psid use || `var'  [94]ER3077 [95]ER6076 [96]ER8173 [97]ER11067 [99]ER14287 [01]ER18420 [03]ER21685 [05]ER25687 [07]ER36705 [09]ER42711 [11]ER48027 [13]ER53724 [15]ER60739 [17]ER66786 [19]ER72790 using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
-			
-			keep	x11101ll	`var'*
-			save	"${SNAP_dtInt}/Fam_vars/`var'", replace
-			
-			*	At home expenditure, additional to food stamp value (since 1994, for those who redeemed food stamp, Free recall period)
-			**	This question is asked only when household affirmed "did you spend any money in addition to stamp value?"
-			loc	var	foodexp_home_stamp
-			psid use || `var'  [94]ER3078 [95]ER6077 [96]ER8174 [97]ER11068 [99]ER14288 [01]ER18421 [03]ER21686 [05]ER25688 [07]ER36706 [09]ER42712 [11]ER48028 [13]ER53725 [15]ER60740 [17]ER66787 [19]ER72791 using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
-			
-			keep	x11101ll	`var'*
-			save	"${SNAP_dtInt}/Fam_vars/`var'", replace
-			
-			*	Recall period of at home expenditure in addition to stamp (should be matched with "additional expenditure" above)
-			**	This question is asked only when household affirmed "did you spend any money in addition to stamp value?"
-			loc	var	foodexp_home_stamp_recall
-			psid use || `var'  	[94]ER3079 [95]ER6078 [96]ER8175 [97]ER11069 [99]ER14289 [01]ER18422 [03]ER21687 [05]ER25689 [07]ER36707 [09]ER42713 [11]ER48029 [13]ER53726 [15]ER60741 [17]ER66788 [19]ER72792 using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
-			
-			keep	x11101ll	`var'*
-			save	"${SNAP_dtInt}/Fam_vars/`var'", replace
-			
-			*	At-home, whether food stamp amount was included in weekly food expenditure (1975-1976)
-			**	If respondent answered "yes", food stamp amount should be deducted from the expenditure to get food expenditure without stamp value
-			loc	var	foodexp_home_wth_stamp_incl
-			psid use || `var'  	[72]V2482 [74]V3447 [75]V3848 [76]V4361 using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
-			keep	x11101ll	`var'*
-			save	"${SNAP_dtInt}/Fam_vars/`var'", replace
-			
-			*	At home, imputed annual cost (available since 1999)
-			**	Can be used to check whether my individual calculation is correct.
-			loc	var	foodexp_home_imputed
-			psid use || `var'  	 	[99]ER16515A2 [01]ER20456A2 [03]ER24138A2 [05]ER28037A2 [07]ER41027A2 [09]ER46971A2 [11]ER52395A2 [13]ER58212A2 [15]ER65411 [17]ER71488 [19]ER77514 using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
-			keep	x11101ll	`var'*
-			save	"${SNAP_dtInt}/Fam_vars/`var'", replace
+				*	At-home, whether food stamp amount was included in weekly food expenditure (1975-1976)
+				**	If respondent answered "yes", food stamp amount should be deducted from the expenditure to get food expenditure without stamp value
+				loc	var	foodexp_home_wth_stamp_incl
+				psid use || `var'  	[72]V2482 [74]V3447 [75]V3848 [76]V4361 using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
+				keep	x11101ll	`var'*
+				save	"${SNAP_dtInt}/Fam_vars/`var'", replace
+				
+				*	At home, imputed annual cost (1999-2019)
+					**	Can be used to check whether my individual calculation is correct.
+				loc	var	foodexp_home_imputed
+				psid use || `var'  	 	[99]ER16515A2 [01]ER20456A2 [03]ER24138A2 [05]ER28037A2 [07]ER41027A2 [09]ER46971A2 [11]ER52395A2 [13]ER58212A2 [15]ER65411 [17]ER71488 [19]ER77514 using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
+				keep	x11101ll	`var'*
+				save	"${SNAP_dtInt}/Fam_vars/`var'", replace
 			
 		*	Away from home (eating out)
 		
@@ -837,123 +850,132 @@
 			keep	x11101ll	`var'*
 			save	"${SNAP_dtInt}/Fam_vars/`var'", replace
 			
-			*	Away expenditure (since 1994, for those who used FS)
+			*	Away expenditure (1994-)
 			*	Free recall period, thus should be combined with recall period variable
-			loc	var	foodexp_away_stamp
-			psid use || `var'  	[94]ER3083 [95]ER6082 [96]ER8179 [97]ER11073 [99]ER14293 [01]ER18428 [03]ER21693 [05]ER25695 [07]ER36713 [09]ER42719 [11]ER48035 [13]ER53732 [15]ER60747 [17]ER66794 [19]ER72798 using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
-			
-			keep	x11101ll	`var'*
-			save	"${SNAP_dtInt}/Fam_vars/`var'", replace
-			
-			*	Recall period of at home expenditure, when FS used (should be matched with the expenditure above)
-			loc	var	foodexp_away_stamp_recall
-			psid use || `var'  [94]ER3084 [95]ER6083 [96]ER8180 [97]ER11074 [99]ER14294 [01]ER18429 [03]ER21694 [05]ER25696 [07]ER36714 [09]ER42720 [11]ER48036 [13]ER53733 [15]ER60748 [17]ER66795 [19]ER72799 using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
-			
-			keep	x11101ll	`var'*
-			save	"${SNAP_dtInt}/Fam_vars/`var'", replace
-			
-			*	Away expenditure (since 1994, for those who didn't redeem food stamp, thus no stamp value)
-			*	Free recall period, thus should be combined with recall period variable
-			loc	var	foodexp_away_nostamp
-			psid use || `var'  [94]ER3090 [95]ER6089 [96]ER8186 [97]ER11081 [99]ER14300 [01]ER18438 [03]ER21703 [05]ER25705 [07]ER36723 [09]ER42729 [11]ER48045 [13]ER53742 [15]ER60757 [17]ER66804 [19]ER72808 using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
-			
-			keep	x11101ll	`var'*
-			save	"${SNAP_dtInt}/Fam_vars/`var'", replace
-			
-			*	Recall period of at home expenditure, when no stamp is used (should be matched with the expenditure above)
-			loc	var	foodexp_away_nostamp_recall
-			psid use || `var'  [94]ER3091 [95]ER6090 [96]ER8187 [97]ER11082 [99]ER14301 [01]ER18439 [03]ER21704 [05]ER25706 [07]ER36724 [09]ER42730 [11]ER48046 [13]ER53743 [15]ER60758 [17]ER66805 [19]ER72809 using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
-			
-			keep	x11101ll	`var'*
-			save	"${SNAP_dtInt}/Fam_vars/`var'", replace
+				
+				*	FS
+				
+					*	Amount spent
+					loc	var	foodexp_away_stamp
+					psid use || `var'  	[94]ER3083 [95]ER6082 [96]ER8179 [97]ER11073 [99]ER14293 [01]ER18428 [03]ER21693 [05]ER25695 [07]ER36713 [09]ER42719 [11]ER48035 [13]ER53732 [15]ER60747 [17]ER66794 [19]ER72798 using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
+					
+					keep	x11101ll	`var'*
+					save	"${SNAP_dtInt}/Fam_vars/`var'", replace
+					
+					*	Recall period of away expenditure, when FS used (should be matched with the expenditure above)
+					loc	var	foodexp_away_stamp_recall
+					psid use || `var'  [94]ER3084 [95]ER6083 [96]ER8180 [97]ER11074 [99]ER14294 [01]ER18429 [03]ER21694 [05]ER25696 [07]ER36714 [09]ER42720 [11]ER48036 [13]ER53733 [15]ER60748 [17]ER66795 [19]ER72799 using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
+				
+					keep	x11101ll	`var'*
+					save	"${SNAP_dtInt}/Fam_vars/`var'", replace
+				
+				*	Non-FS
+				
+					*	Free recall period, thus should be combined with recall period variable
+					loc	var	foodexp_away_nostamp
+					psid use || `var'  [94]ER3090 [95]ER6089 [96]ER8186 [97]ER11081 [99]ER14300 [01]ER18438 [03]ER21703 [05]ER25705 [07]ER36723 [09]ER42729 [11]ER48045 [13]ER53742 [15]ER60757 [17]ER66804 [19]ER72808 using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
+					
+					keep	x11101ll	`var'*
+					save	"${SNAP_dtInt}/Fam_vars/`var'", replace
+					
+					*	Recall period of at home expenditure, when no stamp is used (should be matched with the expenditure above)
+					loc	var	foodexp_away_nostamp_recall
+					psid use || `var'  [94]ER3091 [95]ER6090 [96]ER8187 [97]ER11082 [99]ER14301 [01]ER18439 [03]ER21704 [05]ER25706 [07]ER36724 [09]ER42730 [11]ER48046 [13]ER53743 [15]ER60758 [17]ER66805 [19]ER72809 using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
+					
+					keep	x11101ll	`var'*
+					save	"${SNAP_dtInt}/Fam_vars/`var'", replace
 
-			*	Away expenditure, imputed annual cost (available since 1999)
-			**	Can be used to check whether my individual calculation is correct.
-			loc	var	foodexp_away_imputed
-			psid use || `var'  	 	[99]ER16515A3 [01]ER20456A3 [03]ER24138A3 [05]ER28037A3 [07]ER41027A3 [09]ER46971A3 [11]ER52395A3 [13]ER58212A3 [15]ER65412 [17]ER71489 [19]ER77516 using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
-			
-			keep	x11101ll	`var'*
-			save	"${SNAP_dtInt}/Fam_vars/`var'", replace
-			
-			*	Annual cost of meals at work/school for the family (1969-1972)
-			**	Might be used later...
-			loc	var	foodexp_atwork
-			psid use || `var'  	[69]V502 [70]V1177 [71]V1878 [72]V2483 using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
-			
-			keep	x11101ll	`var'*
-			save	"${SNAP_dtInt}/Fam_vars/`var'", replace
-			
-			*	Annual cost of meals at work/school for the family (1969-1972)
-			**	Might be used later...
-			loc	var	foodexp_atwork_saved
-			psid use || `var'  	[69]V504 [70]V1181 [71]V1882 [72]V2487 using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
-			
-			keep	x11101ll	`var'*
-			save	"${SNAP_dtInt}/Fam_vars/`var'", replace
+				*	Imputed annual away expenditure (1999-2019)
+				**	Can be used to check whether my individual calculation is correct.
+				loc	var	foodexp_away_imputed
+				psid use || `var'  	[99]ER16515A3 [01]ER20456A3 [03]ER24138A3 [05]ER28037A3 [07]ER41027A3 [09]ER46971A3 [11]ER52395A3 [13]ER58212A3 [15]ER65412 [17]ER71489 [19]ER77516 using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
+				
+				keep	x11101ll	`var'*
+				save	"${SNAP_dtInt}/Fam_vars/`var'", replace
 			
 		*	Food delivered
+		**	Note: This expenditure was not separately collected until 1993. At that time, at-home expenditure includes delivered amount
 		
-			*	Whether food is deliverd ot not (no stamp, 1994-2019)
-			loc	var	foodexp_deliv_nostamp_wth
-			psid use || `var'  [94]ER3087 [95]ER6086 [96]ER8183 [97]ER11078 [99]ER14297 [01]ER18434 [03]ER21699 [05]ER25701 [07]ER36719 [09]ER42725 [11]ER48041 [13]ER53738 [15]ER60753 [17]ER66800 [19]ER72804	///
-				using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
+			*	FS
+								
+				*	Whether food is deliverd ot not (1994-2019)
+				loc	var	foodexp_deliv_stamp_wth
+				psid use || `var'  [94]ER3080 [95]ER6079 [96]ER8176 [97]ER11070 [99]ER14290 [01]ER18424 [03]ER21689 [05]ER25691 [07]ER36709 [09]ER42715 [11]ER48031 [13]ER53728 [15]ER60743 [17]ER66790 [19]ER72794	///
+					using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
+				
+				keep	x11101ll	`var'*
+				save	"${SNAP_dtInt}/Fam_vars/`var'", replace
+				 
+				*	Cost of food delivered (94-19)
+				*	This variable should be added to impute total food expenditure.
+				loc	var	foodexp_deliv_stamp
+				psid use || `var'   	[94]ER3081 [95]ER6080 [96]ER8177 [97]ER11071 [99]ER14291 [01]ER18425 [03]ER21690 [05]ER25692 [07]ER36710 [09]ER42716 [11]ER48032 [13]ER53729 [15]ER60744 [17]ER66791 [19]ER72795	///
+					using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
+				
+				keep	x11101ll	`var'*
+				save	"${SNAP_dtInt}/Fam_vars/`var'", replace
+				
+				*	Recall period of the cost of food delivered (94-19)
+				loc	var	foodexp_deliv_stamp_recall
+				psid use || `var' 	[94]ER3082 [95]ER6081 [96]ER8178 [97]ER11072 [99]ER14292 [01]ER18426 [03]ER21691 [05]ER25693 [07]ER36711 [09]ER42717 [11]ER48033 [13]ER53730 [15]ER60745 [17]ER66792 [19]ER72796	///
+					using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
+				
+				keep	x11101ll	`var'*
+				save	"${SNAP_dtInt}/Fam_vars/`var'", replace
 			
-			keep	x11101ll	`var'*
-			save	"${SNAP_dtInt}/Fam_vars/`var'", replace	
+			*	Non-FS
 			
-			*	Cost of food delivered (no stamp, 1994-2019)
-			*	This variable should be added to impute total food expenditure.
-			**	Note: there are also dummy variables asking whether money was spent or not, but it might not be needed as their amount are coded as zero.
-			loc	var	foodexp_deliv_nostamp
-			psid use || `var'  [94]ER3088 [95]ER6087 [96]ER8184 [97]ER11079 [99]ER14298 [01]ER18435 [03]ER21700 [05]ER25702 [07]ER36720 [09]ER42726 [11]ER48042 [13]ER53739 [15]ER60754 [17]ER66801 [19]ER72805	///
-				using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
-			
-			keep	x11101ll	`var'*
-			save	"${SNAP_dtInt}/Fam_vars/`var'", replace
-			
-			*	Recall period of the cost of food delivered (no stamp, 1994-2019)
-			loc	var	foodexp_deliv_nostamp_recall
-			psid use || `var' 	[94]ER3089 [95]ER6088 [96]ER8185 [97]ER11080 [99]ER14299 [01]ER18436 [03]ER21701 [05]ER25703 [07]ER36721 [09]ER42727 [11]ER48043 [13]ER53740 [15]ER60755 [17]ER66802 [19]ER72806	///
-				using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
-			
-			keep	x11101ll	`var'*
-			save	"${SNAP_dtInt}/Fam_vars/`var'", replace	
-			
-			*	Whether food is deliverd ot not (stamp, 1994-2019)
-			loc	var	foodexp_deliv_stamp_wth
-			psid use || `var'  [94]ER3080 [95]ER6079 [96]ER8176 [97]ER11070 [99]ER14290 [01]ER18424 [03]ER21689 [05]ER25691 [07]ER36709 [09]ER42715 [11]ER48031 [13]ER53728 [15]ER60743 [17]ER66790 [19]ER72794	///
-				using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
-			
-			keep	x11101ll	`var'*
-			save	"${SNAP_dtInt}/Fam_vars/`var'", replace
-			 
-			*	Cost of food delivered (stamp, 1994-2019)
-			*	This variable should be added to impute total food expenditure.
-			**	Note: there are also dummy variables asking whether money was spent or not, but it might not be needed as their amount are coded as zero.
-			loc	var	foodexp_deliv_stamp
-			psid use || `var'   	[94]ER3081 [95]ER6080 [96]ER8177 [97]ER11071 [99]ER14291 [01]ER18425 [03]ER21690 [05]ER25692 [07]ER36710 [09]ER42716 [11]ER48032 [13]ER53729 [15]ER60744 [17]ER66791 [19]ER72795	///
-				using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
-			
-			keep	x11101ll	`var'*
-			save	"${SNAP_dtInt}/Fam_vars/`var'", replace
-			
-			*	Recall period of the cost of food delivered (stamp, 1994-2019)
-			loc	var	foodexp_deliv_stamp_recall
-			psid use || `var' 	[94]ER3082 [95]ER6081 [96]ER8178 [97]ER11072 [99]ER14292 [01]ER18426 [03]ER21691 [05]ER25693 [07]ER36711 [09]ER42717 [11]ER48033 [13]ER53730 [15]ER60745 [17]ER66792 [19]ER72796	///
-				using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
-			
-			keep	x11101ll	`var'*
-			save	"${SNAP_dtInt}/Fam_vars/`var'", replace
+				*	Whether food is deliverd ot not (1994-2019)
+				loc	var	foodexp_deliv_nostamp_wth
+				psid use || `var'  [94]ER3087 [95]ER6086 [96]ER8183 [97]ER11078 [99]ER14297 [01]ER18434 [03]ER21699 [05]ER25701 [07]ER36719 [09]ER42725 [11]ER48041 [13]ER53738 [15]ER60753 [17]ER66800 [19]ER72804	///
+					using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
+				
+				keep	x11101ll	`var'*
+				save	"${SNAP_dtInt}/Fam_vars/`var'", replace	
+				
+				*	Cost of food delivered (1994-2019)
+				*	This variable should be added to impute total food expenditure.
+				**	Note: there are also dummy variables asking whether money was spent or not, but it might not be needed as their amount are coded as zero.
+				loc	var	foodexp_deliv_nostamp
+				psid use || `var'  [94]ER3088 [95]ER6087 [96]ER8184 [97]ER11079 [99]ER14298 [01]ER18435 [03]ER21700 [05]ER25702 [07]ER36720 [09]ER42726 [11]ER48042 [13]ER53739 [15]ER60754 [17]ER66801 [19]ER72805	///
+					using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
+				
+				keep	x11101ll	`var'*
+				save	"${SNAP_dtInt}/Fam_vars/`var'", replace
+				
+				*	Recall period of the cost of food delivered (no stamp, 1994-2019)
+				loc	var	foodexp_deliv_nostamp_recall
+				psid use || `var' 	[94]ER3089 [95]ER6088 [96]ER8185 [97]ER11080 [99]ER14299 [01]ER18436 [03]ER21701 [05]ER25703 [07]ER36721 [09]ER42727 [11]ER48043 [13]ER53740 [15]ER60755 [17]ER66802 [19]ER72806	///
+					using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
+				
+				keep	x11101ll	`var'*
+				save	"${SNAP_dtInt}/Fam_vars/`var'", replace	
 		
-		*	Total (imputed,1999-2019)
-			loc	var	foodexp_tot_imputed
-			psid use || `var' 	[99]ER16515A1 [01]ER20456A1 [03]ER24138A1 [05]ER28037A1 [07]ER41027A1 [09]ER46971A1 [11]ER52395A1 [13]ER58212A1 [15]ER65410 [17]ER71487 [19]ER77513	///
-				using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
 			
-			keep	x11101ll	`var'*
-			save	"${SNAP_dtInt}/Fam_vars/`var'", replace
+			*	Total (imputed,1999-2019)
+				loc	var	foodexp_tot_imputed
+				psid use || `var' 	[99]ER16515A1 [01]ER20456A1 [03]ER24138A1 [05]ER28037A1 [07]ER41027A1 [09]ER46971A1 [11]ER52395A1 [13]ER58212A1 [15]ER65410 [17]ER71487 [19]ER77513	///
+					using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
+				
+				keep	x11101ll	`var'*
+				save	"${SNAP_dtInt}/Fam_vars/`var'", replace
 		
 		 	
+		*	Annual cost of meals at work/school for the family (1969-1972)
+		**	Might be used later...
+		loc	var	foodexp_atwork
+		psid use || `var'  	[69]V502 [70]V1177 [71]V1878 [72]V2483 using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
+		
+		keep	x11101ll	`var'*
+		save	"${SNAP_dtInt}/Fam_vars/`var'", replace
+		
+		*	Annual cost of meals at work/school for the family (1969-1972)
+		**	Might be used later...
+		loc	var	foodexp_atwork_saved
+		psid use || `var'  	[69]V504 [70]V1181 [71]V1882 [72]V2487 using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
+		
+		keep	x11101ll	`var'*
+		save	"${SNAP_dtInt}/Fam_vars/`var'", replace
 			
 		
 	}
@@ -1827,15 +1849,54 @@
 			
 		
 		*	Unemployment Rate (BLS)
-		import excel "${clouldfolder}/DataWork/BLS/unemp_rate.xlsx", sheet("BLS Data Series") cellrange(A12)  firstrow clear
-		
-		rename	(Year Annual) (year unemp_rate)
-		keep	year	unemp_rate
-		
-		label	var	unemp_rate "Unemployment Rate (%)"
-		
-		save	"${SNAP_dtInt}/Unemployment Rate",	replace
-		
+			
+			*	Nationwide (for program summary)
+			import excel "${clouldfolder}/DataWork/BLS/Unemp_rate_nation_month.xlsx", sheet("BLS Data Series") cellrange(A12)  firstrow clear
+			
+			rename	(Year Annual) (year unemp_rate)
+			keep	year	unemp_rate
+			
+			label	var	unemp_rate "Unemployment Rate (%)"
+			
+			save	"${SNAP_dtInt}/Unemployment Rate_nation",	replace
+			
+			*	Statewide
+			
+				*	Annual
+				import excel "${clouldfolder}/DataWork/BLS/Unemp_rate_state_annual.xlsx", sheet("BLS Data Series")  firstrow clear	cellrange(B4)
+				rename	State state
+				drop	if	mi(state)
+				replace	state="Washington D.C." if state=="District of Columbia"
+								
+				reshape	long	Annual, i(state) j(year)
+				rename	Annual	unemp_rate
+				lab	var	unemp_rate "Unemployment Rate"
+			
+				merge	m:1	state using "${SNAP_dtRaw}/Statecode.dta", assert(3) nogen	//	Merge statecode
+				rename	statecode rp_state
+				
+				save	"${SNAP_dtInt}/Unemployment Rate_state_annual",	replace
+				
+				*	Monthly
+				import excel "${clouldfolder}/DataWork/BLS/Unemp_rate_state_month.xlsx", sheet("BLS Data Series")  firstrow clear	cellrange(B4)
+				rename State state
+				replace	state="Washington D.C." if state=="District of Columbia"
+				
+				reshape	long	Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec, i(state) j(year)
+				
+				rename	(Jan-Dec) unemp_rate#, addnumber
+				reshape	long	unemp_rate, i(state year) j(month)
+				
+				lab	var	unemp_rate	"Unemployment Rate"
+			
+				merge	m:1	state using "${SNAP_dtRaw}/Statecode.dta", assert(3) nogen	//	Merge statecode
+				rename	statecode rp_state
+				
+				*	Create year-month variable to be merged with main data
+				gen	yearmonth	=	year*100+month
+				gen	prev_yrmonth	=	yearmonth	//	This variable will be used to match main data
+				
+				save	"${SNAP_dtInt}/Unemployment Rate_state_month",	replace		
 		
 		*	Thrifty Food Plan data
 		
@@ -2673,6 +2734,9 @@
 			*	Import SNAP policy data
 			merge m:1 rp_state prev_yrmonth using "${SNAP_dtInt}/SNAP_policy_data", nogen keep(1 3)
 			
+			*	Import state-wide monthly unemployment data
+			merge m:1 rp_state prev_yrmonth using "${SNAP_dtInt}/Unemployment Rate_state_month", nogen keep(1 3) keepusing(unemp_rate)
+			
 			*	Import CPI data
 			merge	m:1	prev_yrmonth	using	"${SNAP_dtInt}/CPI_1913_2021",	keep(1 3) keepusing(CPI)
 			
@@ -3002,7 +3066,7 @@
 			label	var	`var'	"Family income per capita (log)"	
 			
 		
-		*	Food stamp recall period
+		*	Food stamp recall period (1999-2008)
 		loc	var	FS_rec_amt_recall
 		cap	drop	`var'
 		gen		`var'=.
@@ -3024,14 +3088,16 @@
 			replace	`var'=`var'*4.35	if	FS_rec_amt_recall==3			&	inrange(year,1999,2007)	//	If weekly value, multiply by 4.35
 			replace	`var'=`var'*2.17	if	FS_rec_amt_recall==4			&	inrange(year,1999,2007)	//	If two-week value, multiply by 2.17
 			replace	`var'=`var'/12		if	FS_rec_amt_recall==6			&	inrange(year,1999,2007)	//	If yearly value, divide by 12
-			replace	`var'=0				if	inlist(FS_rec_amt_recall,2,7)	&	inrange(year,1999,2007)	//	If wild code, replace it with zero
+			*replace	`var'=0				if	inlist(FS_rec_amt_recall,2,7)	&	inrange(year,1999,2007)	//	If "inappropriate", then replace with zero
 						
 			*	For Other/DK/NA/refusal (both in amount and recall period), I impute the monthly average from other categories and assign the mean value
+			*	This code is WRONG for 1999-2007, since they have different recall periods so cannot just take average across different recall periods.
+			*	One way to do is 
 			foreach	year	in	1994	1995	1996	1997	1999	2001	2003	2005	2007	2009	2011	2013	2015	2017	2019	{
 			    
 				if	inrange(`year',1994,1997)	{	//	1994 to 1997
 				
-					summ	`var'			if	year==`year'	&	stamp_useamt_month>0	&	!inlist(stamp_useamt_month,997,998,999)	//	I use raw variable's category 
+					summ	`var'			if	year==`year'	&	!inlist(stamp_useamt_month,0,997,998,999)	//	I use raw variable's category 
 					replace	`var'=r(mean) 	if	year==`year'	&	inlist(stamp_useamt_month,998,999)
 				
 				}	//	if
@@ -4189,7 +4255,7 @@
 		
 			use	"${SNAP_dtInt}/SNAP_summary",	clear
 			
-			merge	1:1	year	using		"${SNAP_dtInt}/Unemployment Rate", nogen assert(3)
+			merge	1:1	year	using		"${SNAP_dtInt}/Unemployment Rate_nation", nogen assert(3)
 			
 			graph	twoway	(line part_num		year, lpattern(dash) xaxis(1 2) yaxis(1))	///
 						(line unemp_rate	year, lpattern(dash_dot) xaxis(1 2) yaxis(2)),  ///
