@@ -3066,169 +3066,189 @@
 			label	var	`var'	"Family income per capita (log)"	
 			
 		
-		*	Food stamp recall period (1999-2008)
-		loc	var	FS_rec_amt_recall
-		cap	drop	`var'
-		gen		`var'=.
-		replace	`var'=stamp_cntyr_recall	if	inrange(year,1999,2007)
+		*	Food stamp
 		
-		lab	define	`var'	0	"Inapp"		2	"Wild code"	3	"Week"	4	"Two-Week"	5	"Month"	6	"Year"	7	"Other"	8	"DK"	9	"NA/refused", replace
-		label	value	`var'	`var'
-		label	var	`var'	"FS/SNAP amount received (recall) (1999-2007)"
-		
+			*	Whether FS received last month (1975-1997, 2009-2019)
+			*	(1999-2007 will be constructed after constructing "month of FS redeemed")
+			loc	var	FS_rec_wth
+			cap	drop	`var'
+			gen		`var'=.	
+			
+				*	1975-1993
+				*	Here we determine FS status by "the number of people FS issued", based on 1977 file description document (page 42)
+				*	Note: in 1985, among 786 HHs where at least one person received FS, 97% of them (762 HHs) redeemed non-zero amount (code: tab V3844 if V3843!=0 from 1975 raw data)
+				replace	`var'=0	if	inrange(year,1975,1993)		&	stamp_ppl_month==0	//	No FS
+				replace	`var'=1	if	inrange(year,1975,1993)		&	inrange(stamp_ppl_month,1,9)	//	FS
+				
+				*	1994-1997, 2009-2019
+				*	Here we have indicator dummy of last month usage so we can directly import it
+				*	Any non-missing value other than "yes" (ex. no, wild code, na/dk, inapp) are categorized as "no"
+				replace	`var'=0	if	(inrange(year,1994,1997)	|	inrange(year,2009,2019))	&	!mi(stamp_usewth_month)	&	stamp_usewth_month!=1
+				replace	`var'=1	if	(inrange(year,1994,1997)	|	inrange(year,2009,2019))	&	!mi(stamp_usewth_month)	&	stamp_usewth_month==1
+				
+				label	value	`var' yes1no0
+				label var	`var'		"FS used last month"
+				
+			
+
+			*	Month of FS redemption 
+			foreach	month	in	Jan	Feb	Mar Apr May Jun Jul Aug Sep Oct Nov Dec	{
+								
+				loc	var	FS_rec_wth_`month'
+				cap	drop	`var'
+				gen		`var'=.	
+				
+				*	1999-2007
+				*	We have direct information, so start from here. This is the only period where we ask FS usage of each month.
+				*	Treat NA as "didn't use'"
+				replace	`var'=0	if	inlist(stamp_usewth_crt`month',0,9)	&	inrange(year,1999,2007)	&	svy_month>=${num`month'}	//	Last condition is needed, because only FS usage of month "prior to survey this year" is asked
+				replace	`var'=1	if	inlist(stamp_usewth_crt`month',1)	&	inrange(year,1999,2007)	&	svy_month>=${num`month'}	//	Last condition is needed, because only FS usage of month "prior to survey this year" is asked
+					
+				*	1975-1997, 2009-2019 
+				*	Important: These years don't have FS status other than the previous month (ex. HH surveyed in March don't give any information of FS redemption outside Feb)
+				*	Therefore, we need to make sure that only the information of the month right before the survey month should be updated.
+				
+							
+				if	"`month'"=="Dec"	{
+				
+					replace	`var'=0	if	(inrange(year,1975,1997)	|	inrange(year,2009,2019))	&	svy_month==1	&	FS_rec_wth==0	//	Second condition restricts only HH surveyed in Jan is used for Dec redemption
+					replace	`var'=1	if	(inrange(year,1975,1997)	|	inrange(year,2009,2019))	&	svy_month==1	&	FS_rec_wth==1	//	Second condition restricts only HH surveyed in Jan is used for Dec redemption
+					
+				}
+				
+				else	{
+					
+					replace	`var'=0	if	(inrange(year,1975,1997)	|	inrange(year,2009,2019))	&	svy_month-1==${num`month'}	&	FS_rec_wth==0	//	Second condition restricts only previous month infomration to be imported
+					replace	`var'=1	if	(inrange(year,1975,1997)	|	inrange(year,2009,2019))	&	svy_month-1==${num`month'}	&	FS_rec_wth==1	//	Second condition restricts only previous month infomration to be imported
+					
+				}
+			
+				label	value	`var' yes1no0
+				label	var	`var'	"FS used in `month'"
+					
+			}
+			
+			*	Whether FS received last month (1999-2007)
+			*	Set it 1 if a month prior to survey month has FS redeemed. Otherwise it is zero.
+			loc	var	FS_rec_wth
+			
+			foreach	month	in	Jan	Feb	Mar Apr May Jun Jul Aug Sep Oct Nov Dec	{
+			
+				if	"`month'"=="Dec"	{
+					
+					replace	`var'=0	if	inrange(year,1999,2007)	&	svy_month==1	&	FS_rec_wth_`month'==0	//	For HH surveyd in Jan, last month is Dec
+					replace	`var'=1	if	inrange(year,1999,2007)	&	svy_month==1	&	FS_rec_wth_`month'==1	//	For HH surveyd in Jan, last month is Dec	
+					
+				}
+				
+				else	{
+					
+					replace	`var'=0	if	inrange(year,1999,2007)		&	svy_month==${num`month'}+1	&	FS_rec_wth_`month'==0		
+					replace	`var'=1	if	inrange(year,1999,2007)		&	svy_month==${num`month'}+1	&	FS_rec_wth_`month'==1		
+					
+				}
+			
+			}
+			
+			*	Whether FS used current year (1999-2007)
+			*	This variable determines how food expenditure are collected during the period above.
+			*	Treat every answers other than "yes" as "no"
+			loc	var	FS_rec_crtyr_wth
+			cap	drop	`var'
+			gen		`var'=.	
+			
+			replace	`var'=0	if	inrange(year,1999,2007)		&	inlist(stamp_usewth_crtyear,0,2,5,8,9)		
+			replace	`var'=1	if	inrange(year,1999,2007)		&	inlist(stamp_usewth_crtyear,1)
+			
+			label	value	`var'	yes1no0
+			label	var	`var'	"FS used this year"
+				
 		*	Food stamp amount received
-		local	var	FS_rec_amt
-		cap	drop	`var'
-		gen		double	`var'=.	
-		replace	`var'=	stamp_useamt_month	if	inrange(year,1975,2019)	&	!mi(stamp_useamt_month)
 		
+			*	FS Recall period (1999-2007) - will be later used to adjust values
+			loc	var	FS_rec_amt_recall
+			cap	drop	`var'
+			gen		`var'=.
+			replace	`var'=stamp_cntyr_recall	if	inrange(year,1999,2007)
+			
+			lab	define	`var'	0	"Inapp"		2	"Wild code"	3	"Week"	4	"Two-Week"	5	"Month"	6	"Year"	7	"Other"	8	"DK"	9	"NA/refused", replace
+			label	value	`var'	`var'
+			label	var	`var'	"FS/SNAP amount received (recall) (1999-2007)"
 		
-			*	Harmonize variables into monthly amount (1999-2007)
+			*	Amount received last month (except 1999-2007 which will be adjusted shortly)
+			local	var	FS_rec_amt
+			cap	drop	`var'
+			gen		double	`var'=.	
+			replace	`var'=	stamp_useamt_month	if	inrange(year,1975,2019)	&	!mi(stamp_useamt_month)
+
+			*	Harmonize 1999-2007 into monthly amount (1999-2007)	using recall period	
 			*	We treat "wild code" and "other" as "zero amount" for now as there are very small number of observations
-			replace	`var'=`var'*4.35	if	FS_rec_amt_recall==3			&	inrange(year,1999,2007)	//	If weekly value, multiply by 4.35
-			replace	`var'=`var'*2.17	if	FS_rec_amt_recall==4			&	inrange(year,1999,2007)	//	If two-week value, multiply by 2.17
-			replace	`var'=`var'/12		if	FS_rec_amt_recall==6			&	inrange(year,1999,2007)	//	If yearly value, divide by 12
+			replace	`var'=`var'*4.35	if	FS_rec_amt_recall==3	&	inrange(year,1999,2007)	//	If weekly value, multiply by 4.35
+			replace	`var'=`var'*2.17	if	FS_rec_amt_recall==4	&	inrange(year,1999,2007)	//	If two-week value, multiply by 2.17
+			replace	`var'=`var'/12		if	FS_rec_amt_recall==6	&	inrange(year,1999,2007)	//	If yearly value, divide by 12
 			*replace	`var'=0				if	inlist(FS_rec_amt_recall,2,7)	&	inrange(year,1999,2007)	//	If "inappropriate", then replace with zero
 						
-			*	For Other/DK/NA/refusal (both in amount and recall period), I impute the monthly average from other categories and assign the mean value
-			*	This code is WRONG for 1999-2007, since they have different recall periods so cannot just take average across different recall periods.
-			*	One way to do is 
+			*	For Other/DK/NA/refusal (both in amount and recall period), I impute the monthly average from other categories and assign the mean value (Usually less than 2% of obs)
 			foreach	year	in	1994	1995	1996	1997	1999	2001	2003	2005	2007	2009	2011	2013	2015	2017	2019	{
 			    
 				if	inrange(`year',1994,1997)	{	//	1994 to 1997
 				
-					summ	`var'			if	year==`year'	&	!inlist(stamp_useamt_month,0,997,998,999)	//	I use raw variable's category 
-					replace	`var'=r(mean) 	if	year==`year'	&	inlist(stamp_useamt_month,998,999)
+					summ	`var'			if	year==`year'	&	FS_rec_wth==1	&	!inlist(stamp_useamt_month,998,999)	//	Exclude outliers in imputing mean
+					replace	`var'=r(mean) 	if	year==`year'	&	FS_rec_wth==1	&	inlist(stamp_useamt_month,998,999)
 				
 				}	//	if
 				
 				else	if	inrange(`year',1999,2007)	{	//	1999 to 2007
 				    
-					summ	`var'			if	year==`year'	&	stamp_useamt_month>0	&	(!inlist(stamp_useamt_month,999998,999999)	&	!inlist(FS_rec_amt_recall,7,8,9))	//	Check both amount and recall period
-					replace	`var'=r(mean)	if	year==`year'	&	(inlist(FS_rec_amt_recall,7,8,9) | inlist(stamp_useamt_month,999998,999999))
+					summ	`var'			if	year==`year'	&	FS_rec_wth==1	&	(!inlist(stamp_useamt_month,999998,999999)	&	!inlist(FS_rec_amt_recall,7,8,9))	//	Check both amount and recall period
+					replace	`var'=r(mean)	if	year==`year'	&	FS_rec_wth==1	&	(inlist(FS_rec_amt_recall,7,8,9) | inlist(stamp_useamt_month,999998,999999))
+					replace	`var'=0			if	year==`year'	&	FS_rec_wth==0	//	Small number of observations (less than 2%) have non-zero redemption value, likely the value other than the previous month. Since the variable we create is the value used "previous month", recode them as zero.
 					
 				}	//	else	if
 				
-				else	{	//	2009 to 2017 /* Although 999 and 99999 is NOT categorized as dk/na in these years, I included it as dk/na in this code as I believe it is very unrealistic (some FU has this value)
-					
-					summ	`var'			if	year==`year'	&	stamp_useamt_month>0	&	!inlist(stamp_useamt_month,999,99999,999998,999999)	//	Check both amount and recall period
-					replace	`var'=r(mean)	if	year==`year'	&	inlist(stamp_useamt_month,999,99999,999998,999999)
+				else	{	//	2009 to 2017 /* Although 99999 is NOT categorized as dk/na in these years, I included it as dk/na in this code as I believe it is very unrealistic (some FU has this value)					
+					summ	`var'			if	year==`year'	&	FS_rec_wth==1	&	!inlist(stamp_useamt_month,99999,999998,999999)	//	Check both amount and recall period
+					replace	`var'=r(mean)	if	year==`year'	&	inlist(stamp_useamt_month,99999,999998,999999)
 					
 				}	//	else
 					
 			}	//	year
 			
-		label	var	`var'	"FS/SNAP amount received last month"
+			label	var	`var'	"FS/SNAP amount received last month"
+			
+			*	Quick summary stat
+			tab FS_rec_wth FS_rec_crtyr_wth if inrange(year,1999,2007)
+			tab FS_rec_wth if inrange(year,1999,2007) & FS_rec_crtyr_wth==1	//	FU that used FS this year, but not last month			
 		
 		*	Food stamp amount paid (1975-1979)
-		*	This amount should be added to "amount saved" to get total food value from food stamp
-			*	There is 1 obs in raw data where HH answered "$999 or more". I will leave it as it is for now.
-		local	var	FS_rec_amt_paid
-		cap	drop	`var'
-		gen		double	`var'=.	
-		replace	`var'=	stamp_payamt_month	if	inrange(year,1975,1979)
-		label	var	`var'	"Amount paid for food stamp last month (1975-1979)"
-		
-		*	Whether FS received last month (1975-1997, 2009-2019)
-		*	(1999-2007 will be constructed after constructing "month of FS redeemed")
-		loc	var	FS_rec_wth
-		cap	drop	`var'
-		gen		`var'=.	
-		
-			*	1975-1993
-			*	Here we determine FS status by "the number of people FS issued", based on 1977 file description document (page 42)
-			*	Note: in 1985, among 786 HHs where at least one person received FS, 97% of them (762 HHs) redeemed non-zero amount (code: tab V3844 if V3843!=0 from 1975 raw data)
-			replace	`var'=0	if	inrange(year,1975,1993)		&	stamp_ppl_month==0	//	No FS
-			replace	`var'=1	if	inrange(year,1975,1993)		&	inrange(stamp_ppl_month,1,9)	//	FS
-			
-			*	1994-1997, 2009-2019
-			*	Here we have indicator dummy of last month usage so we can directly import it
-			*	Any non-missing value other than "yes" (ex. no, wild code, na/dk, inapp) are categorized as "no"
-			replace	`var'=0	if	(inrange(year,1994,1997)	|	inrange(year,2009,2019))	&	!mi(stamp_usewth_month)	&	stamp_usewth_month!=1
-			replace	`var'=1	if	(inrange(year,1994,1997)	|	inrange(year,2009,2019))	&	!mi(stamp_usewth_month)	&	stamp_usewth_month==1
-			
-			label	value	`var' yes1no0
-			label var	`var'		"FS used last month"
-			label var	FS_rec_wth	"FS used last month"
-
-		*	Month of FS redemption 
-		foreach	month	in	Jan	Feb	Mar Apr May Jun Jul Aug Sep Oct Nov Dec	{
-							
-			loc	var	FS_rec_wth_`month'
+		*	On one hand, technically, this amount should be added to "amount saved" to get total food value from food stamp
+		*	On the other hand, when I check trend over time between pre-1980 and post-1980, stamp amount received is smooth when I do NOT include it, but has a huge discontinuity when added
+			*	Also problematic especially in 1979 where most families gave zero value which didn't happen in earlier years, assuming stamps were no longer required to paid since 1980 survey.
+		*	For now, I will NOT include this value into the food stamp amount received for two reasons
+			*	(1) Causes huge jump (discontinuity) in food stamp amount trend
+			*	(2) I am interested in "extra" amount from FS to food expenditure, implying bonus value only (not the total amount received)
+			*	There is 1 obs in raw data where HH answered "$999 or more". I recoded them as zero.
+			local	var	FS_rec_amt_paid
 			cap	drop	`var'
-			gen		`var'=.	
+			gen		double	`var'=.	
+			replace	`var'=	stamp_payamt_month	if	inrange(year,1975,1979)
+			replace	`var'=	0	if	`var'==999	//	Replace a few missing obs with zero value
+			label	var	`var'	"Amount paid for food stamp last month (1975-1979)"
+		
+			*	(2022-04-28) I will disable this variable since we don't need it, but we can include it later
+			/*
+			*	Food stamp amount paid + received (bonus) = which yields total food stamp value received.
+			loc	var	FS_rec_amt_tot
+			cap	drop	`var'
+			egen	`var' = rowtotal(FS_rec_amt FS_rec_amt_paid) if inrange(year,1975,1979)
+			loc	var	`var'	"Amount paid + bonus value (1975-199)"
+			*/
 			
-			*	1999-2007
-			*	We have direct information, so start from here. This is the only period where we ask FS usage of each month.
-			*	Treat NA as "didn't use'"
-			replace	`var'=0	if	inlist(stamp_usewth_crt`month',0,9)	&	inrange(year,1999,2007)	&	svy_month>=${num`month'}	//	Last condition is needed, because only FS usage of month "prior to survey this year" is asked
-			replace	`var'=1	if	inlist(stamp_usewth_crt`month',1)	&	inrange(year,1999,2007)	&	svy_month>=${num`month'}	//	Last condition is needed, because only FS usage of month "prior to survey this year" is asked
-				
-			*	1975-1997, 2009-2019
-			*	Important: These years don't have FS status other than the previous month (ex. HH surveyed in March don't give any information of FS redemption outside Feb)
-			*	Therefore, we need to make sure that only the information of the month right before the survey month should be updated.
-			
-						
-			if	"`month'"=="Dec"	{
-			
-				replace	`var'=0	if	(inrange(year,1975,1997)	|	inrange(year,2009,2019))	&	svy_month==1	&	FS_rec_wth==0	//	Second condition restricts only HH surveyed in Jan is used for Dec redemption
-				replace	`var'=1	if	(inrange(year,1975,1997)	|	inrange(year,2009,2019))	&	svy_month==1	&	FS_rec_wth==1	//	Second condition restricts only HH surveyed in Jan is used for Dec redemption
-				
-			}
-			
-			else	{
-				
-				replace	`var'=0	if	(inrange(year,1975,1997)	|	inrange(year,2009,2019))	&	svy_month-1==${num`month'}	&	FS_rec_wth==0	//	Second condition restricts only previous month infomration to be imported
-				replace	`var'=1	if	(inrange(year,1975,1997)	|	inrange(year,2009,2019))	&	svy_month-1==${num`month'}	&	FS_rec_wth==1	//	Second condition restricts only previous month infomration to be imported
-				
-			}
-		
-			label	value	`var' yes1no0
-			label	var	`var'	"FS used in `month'"
-				
-		}
-		
-		*	Whether FS received last month (1999-2007)
-		*	Set it 1 if a month prior to survey month has FS redeemed. Otherwise it is zero.
-		loc	var	FS_rec_wth
-		
-		foreach	month	in	Jan	Feb	Mar Apr May Jun Jul Aug Sep Oct Nov Dec	{
-		
-			if	"`month'"=="Dec"	{
-				
-				replace	`var'=0	if	inrange(year,1999,2007)	&	svy_month==1	&	FS_rec_wth_`month'==0	//	For HH surveyd in Jan, last month is Dec
-				replace	`var'=1	if	inrange(year,1999,2007)	&	svy_month==1	&	FS_rec_wth_`month'==1	//	For HH surveyd in Jan, last month is Dec	
-				
-			}
-			
-			else	{
-				
-				replace	`var'=0	if	inrange(year,1999,2007)		&	svy_month==${num`month'}+1	&	FS_rec_wth_`month'==0		
-				replace	`var'=1	if	inrange(year,1999,2007)		&	svy_month==${num`month'}+1	&	FS_rec_wth_`month'==1		
-				
-			}
-		
-		}
-		
-		*	Whether FS used current year (1999-2007)
-		*	This variable determines how food expenditure are collected during the period above.
-		*	Treat every answers other than "yes" as "no"
-		loc	var	FS_rec_crtyr_wth
-		cap	drop	`var'
-		gen		`var'=.	
-		
-		replace	`var'=0	if	inrange(year,1999,2007)		&	inlist(stamp_usewth_crtyear,0,2,5,8,9)		
-		replace	`var'=1	if	inrange(year,1999,2007)		&	inlist(stamp_usewth_crtyear,1)
-		
-		label	value	`var'	yes1no0
-		label	var	`var'	"FS used this year"
-		
-		*	Quick summary stat
-			tab FS_rec_wth FS_rec_crtyr_wth if inrange(year,1999,2007)
-			tab FS_rec_wth if inrange(year,1999,2007) & FS_rec_crtyr_wth==1	//	FU that used FS this year, but not last month
+
+			*	Time-series 
 		
 		
-		*	Reason for not participating SNAP (1977, 1980, 1981, 1987)
+		*	Reason for not participating FS (1977, 1980, 1981, 1987)
 		*	Note that this is just for the first mention.
 		loc	var	reason_no_FSP
 		cap	drop	`var'
@@ -3403,8 +3423,6 @@
 		label	var	foodexp_home_nostamp_recall	"Add. food exp recall period (with stamp)"
 		*/
 	
-	
-		
 		*	Food expenditure
 		
 			*	At-home
@@ -3425,26 +3443,30 @@
 				*	1975-1993
 				*	Note: at-home expenditure includes "delivered" during these period.
 				*	Convert annual amount to monthly amount
-				*	Important: Although "annual food expenditure" is included this period, I divide it my to make monthly food expenidture for two reasons
+				*	Important: Although "annual" food expenditure is used during these periods, I divide it my to make monthly food expenidture for two reasons
 				*	(1) Food expenditure is separately collected based on "food stamp used last month", thus it allows more accurate matching with food stamp used "last month"
 				*	(2) In the questionnaires people were asked "weekly" or "monthly" expenditure, so I assume annual food expenditure reported here is somehow imputed from those values
-					
-					*loc	var	foodexp_home_mth_pre1994
-					*cap	drop	`var'
-					*gen	double	`var'=.	
-					
-					*	In 1975-1976, separate questions were asked whether food stamp amount is included in reported foo expenditure
+								
+					*	(1975-1976) Separate questions were asked whether food stamp amount is included in reported foo expenditure
 					*	If included, then the amount should be excluded from annual food expenditure to get annual food expenditure "net of" food stamp value
-					replace	foodexp_home_annual	=	foodexp_home_annual	-	stamp_useamt	if	inrange(year,1975,1976)	&	foodexp_home_wth_stamp_incl==5
+					*	Note: Less than 1% of cases give negative values (0.36% at the time of writing this comment (2022-4-28)). 
+						*	I can't check it since the raw data does not have raw responses, but only imputed data. I can only assume that are inconsistent responses.
+						*	I will recode those values as zero.
+					replace	foodexp_home_annual	=	foodexp_home_annual	-	(FS_rec_amt*12)	///
+						if	inrange(year,1975,1976)	&	foodexp_home_wth_stamp_incl==5	//	If stamp value is included
+					replace	foodexp_home_annual	=	0	if	inrange(year,1975,1976)	&	!mi(foodexp_home_annual)	&	foodexp_home_annual<0
 					
 					*	Make annual expenditure into monthly expenditure
 					replace	`var_exclFS'=foodexp_home_annual/12	if	inrange(year,1968,1993)
 						
 					*	Add up FS amount received (and amount paid in 1975-1979) to get food exp including FS amount
-					replace	`var_inclFS'=`var_exclFS'										if	inrange(year,1975,1993)	&	FS_rec_wth==0	//	Didn't receive FS
+					*	(2022-4-28) Previously I added "amount paid" during 1975-1979. I decided to not to add it since we are interested in bonus value (families actually benefited)
+					replace	`var_inclFS'=`var_exclFS'					if	inrange(year,1975,1993)	&	FS_rec_wth==0	//	Didn't receive FS
+					replace	`var_inclFS'=`var_exclFS'	+	FS_rec_amt	if	inrange(year,1975,1993)	&	FS_rec_wth==1	//	Received FS (1975-1993, add amount benefitted)
+					/*
 					replace	`var_inclFS'=`var_exclFS'	+	FS_rec_amt	+	FS_rec_amt_paid	if	inrange(year,1975,1979)	&	FS_rec_wth==1	//	Received FS (1975-1979, add amount paid and amount received)
 					replace	`var_inclFS'=`var_exclFS'	+	FS_rec_amt						if	inrange(year,1980,1993)	&	FS_rec_wth==1	//	Received FS (1980-1993, add amount received)
-									
+					*/			
 												
 				*	1994-2019
 				*	Food exp are collected separately, between FS user and non-user.
@@ -3465,10 +3487,9 @@
 					replace	`var'	=	`rawvar'	if	FS_rec_wth==1		&	(inrange(year,1994,1997)	|	inrange(year,2009,2019))	// Used food stamp last month
 					replace	`var'	=	`rawvar'	if	FS_rec_crtyr_wth==1	&	inrange(year,1999,2007)		//	RECALL: food exp is separately collected based on "this year" usage in this peirod (so we can't use 'FS_rec_wth' here)
 					
-					replace	`var'	=	0			if	FS_rec_wth==0		&	(inrange(year,1994,1997)	|	inrange(year,2009,2019))	//	If didt' use FS, set it zero
-					replace	`var'	=	0			if	FS_rec_crtyr_wth==0	&	inrange(year,1999,2007)		//	RECALL: food exp is separately collected based on "this year" usage in this peirod! (so we can't use 'FS_rec_wth' here)
-					
-					replace	`var'	=	0			if	inrange(year,1994,2019)		&	inlist(foodexp_home_spent_extra,0,5)	//	If answered "inapp" or "no" to whether extra mount is used, set it as zero
+					replace	`var'	=	0		if	FS_rec_wth==0		&	(inrange(year,1994,1997)	|	inrange(year,2009,2019))	//	If didt' use FS, set it zero
+					replace	`var'	=	0		if	FS_rec_crtyr_wth==0	&	inrange(year,1999,2007)		//	RECALL: food exp is separately collected based on "this year" usage in this peirod! (so we can't use 'FS_rec_wth' here)
+					replace	`var'	=	0			if	inrange(year,1994,2019)		&	inlist(foodexp_home_spent_extra,0,5,8,9)	//	If answered "inapp" or "no" to whether extra mount is used, set it as zero
 					
 					
 						*	Make it monthly expenditure
@@ -3478,12 +3499,13 @@
 						replace	`var'	=	`var'*2.17	if	((inrange(year,1994,1994)	&	`rawvar_recall'==2)	|	(inrange(year,1995,2019)	&	`rawvar_recall'==4))	//	If two-week value, multiply by 2.17
 						replace	`var'	=	`var'/12	if	((inrange(year,1994,1994)	&	`rawvar_recall'==4)	|	(inrange(year,1995,2019)	&	`rawvar_recall'==6))	//	If yearly value, divide by 12
 						replace	`var'	=	0			if	((inrange(year,1994,1994)	&	inlist(`rawvar_recall',0))	|	(inrange(year,1995,2019)	&	inlist(`rawvar_recall',0,7)))	//	If other or no stamp use, set it zero
+						
 					
 						*	For DK/NA/refusal (both in amount and recall period), I impute the monthly average from other categories and assign the mean value
 						foreach	year	in	1994	1995	1996	1997	1999	2001	2003	2005	2007	2009	2011	2013	2015	2017	2019	{
 																	
 							summ	`var'			if	year==`year'	&	`rawvar'>0	&	!mi(`rawvar')	&	!mi(`rawvar_recall')	&	///			//	I use raw variable's category 
-														!inlist(`rawvar',99998,99999)	&	!inlist(`rawvar_recall',8,9)	//	Both recall period AND amount should be valid
+														!inlist(`rawvar',99998,99999)	&	!inlist(`rawvar_recall',7,8,9)	//	Both recall period AND amount should be valid
 							
 							replace	`var'=r(mean) 	if	year==`year'	&	(inlist(`rawvar',99998,99999)	|	inlist(`rawvar_recall',8,9))	//	if amount OR recall period has NA/DK
 						
@@ -3503,11 +3525,13 @@
 					replace	`var'	=	`rawvar'	if	FS_rec_wth==0		&	(inrange(year,1994,1997)	|	inrange(year,2009,2019))	// Didn't food stamp last month
 					replace	`var'	=	`rawvar'	if	FS_rec_crtyr_wth==0	&	inrange(year,1999,2007)		//	RECALL: food exp is separately collected based on "this year" usage in this peirod! (so we can't use 'FS_rec_wth' here)
 					
-					replace	`var'	=	0			if	FS_rec_wth==1		&	(inrange(year,1994,1997)	|	inrange(year,2009,2019))	//	If used FS, set it zero
-					replace	`var'	=	0			if	FS_rec_crtyr_wth==1	&	inrange(year,1999,2007)	//	RECALL: food exp is separately collected based on "this year" usage in this peirod!	 (so we can't use 'FS_rec_wth' here)					
+					*	I should have not included the following two lines, as it makes all the value I imputed above to zero!
+					*replace	`var'	=	0			if	FS_rec_wth==1		&	(inrange(year,1994,1997)	|	inrange(year,2009,2019))	//	If used FS, set it zero
+					*replace	`var'	=	0			if	FS_rec_crtyr_wth==1	&	inrange(year,1999,2007)	//	RECALL: food exp is separately collected based on "this year" usage in this peirod!	 (so we can't use 'FS_rec_wth' here)					
 					
 						*	Make it monthly expenditure
 						*	We treat "wild code" and "other" as "zero amount" for now as there are very small number of observations (except 1994 where we treat other as "yearly")					
+						****	I should NOT use `var'= `var_exclFS', since it will also affect FS families which are already imputed above. Need to restrict condition only to non-FS
 						replace	`var'	=	`var'*30.4	if	inrange(year,1995,2019)		&	`rawvar_recall'==2	//	If daily value, multiply by 30.4
 						replace	`var'	=	`var'*4.35	if	((inrange(year,1994,1994)	&	`rawvar_recall'==1)	|	(inrange(year,1995,2019)	&	`rawvar_recall'==3))	//	If weekly value, multiply by 4.35
 						replace	`var'	=	`var'*2.17	if	((inrange(year,1994,1994)	&	`rawvar_recall'==2)	|	(inrange(year,1995,2019)	&	`rawvar_recall'==4))	//	If two-week value, multiply by 2.17
@@ -3518,7 +3542,7 @@
 						foreach	year	in	1994	1995	1996	1997	1999	2001	2003	2005	2007	2009	2011	2013	2015	2017	2019	{
 																	
 							summ	`var'			if	year==`year'	&	`rawvar'>0	&	!mi(`rawvar')	&	!mi(`rawvar_recall')	&	///			//	I use raw variable's category 
-														!inlist(`rawvar',99998,99999)	&	!inlist(`rawvar_recall',8,9)	//	Both recall period AND amount should be valid
+														!inlist(`rawvar',99998,99999)	&	!inlist(`rawvar_recall',7,8,9)	//	Both recall period AND amount should be valid
 							
 							replace	`var'=r(mean) 	if	year==`year'	&	(inlist(`rawvar',99998,99999)	|	inlist(`rawvar_recall',8,9))	//	if amount OR recall period has NA/DK
 						
@@ -3529,18 +3553,26 @@
 					*	Calculate food exp with FS
 						
 						*	Received FS (FS amount + extra amount spent)
-						replace	`var_inclFS'	=	`var_exclFS'	+	FS_rec_amt	if	FS_rec_wth==1		&	(inrange(year,1994,1997)	|	inrange(year,2009,2019))
-						replace	`var_inclFS'	=	`var_exclFS'	+	FS_rec_amt	if	FS_rec_crtyr_wth==1	&	inrange(year,1999,2007)
+						replace	`var_inclFS'	=	`var_exclFS'	+	FS_rec_amt	if	FS_rec_wth==1	&	(inrange(year,1994,1997)	|	inrange(year,2009,2019))
+						replace	`var_inclFS'	=	`var_exclFS'	+	FS_rec_amt	if	FS_rec_wth==1	&	inrange(year,1999,2007)	//	Expenditure was collected separately based on "this year's usage (FS_rec_crtyr_wth)", but the amount we want to add is "last month's amount (FS_rec_amt) depending depending on whether family used FS last month (FS_rec_wth==1)"
+						*replace	`var_inclFS'	=	`var_exclFS'	+	FS_rec_amt	if	FS_rec_crtyr_wth==1	&	inrange(year,1999,2007)
 						
 						*	Didn't receive FS	(Just food exp)
-						replace	`var_inclFS'	=	`var_exclFS'	if	FS_rec_wth==0		&	(inrange(year,1994,1997)	|	inrange(year,2009,2019))
-						replace	`var_inclFS'	=	`var_exclFS'	if	FS_rec_crtyr_wth==0	&	inrange(year,1999,2007)
+						replace	`var_inclFS'	=	`var_exclFS'	if	FS_rec_wth==0	&	(inrange(year,1994,1997)	|	inrange(year,2009,2019))
+						replace	`var_inclFS'	=	`var_exclFS'	if	FS_rec_wth==0	&	inrange(year,1999,2007)	//	Expenditure was collected separately based on "this year's usage (FS_rec_crtyr_wth)", but the condition for adding the amount we want to add is "last month's amount (FS_rec_amt) is whether family used FS last month (FS_rec_wth==1)"
+						*replace	`var_inclFS'	=	`var_exclFS'	if	FS_rec_crtyr_wth==0	&	inrange(year,1999,2007)	
 					
 					
-					*	Validation of manually imputed data with the imputed data provided in PSID since 1999 
+					*	Validation of imputed data
+						*	Mean at-home food expenditure by year
+						*	Finding some outliers. Expect to get treated once winsorized
+						bys year: summ foodexp_home_exclFS FS_rec_amt foodexp_home_inclFS	//	Spike in the years with outliers (1994, 1997, 2001, 2007 - outlier in max values)
+					
+					*	manually imputed data with the imputed data provided in PSID since 1999 
 					*	Incomplete, need further work
-					/*
-					cap drop diff_home
+					
+					cap drop diff_home_exclFS
+					cap drop diff_home_inclFS
 					cap drop foodexp_home_imp_month
 					gen foodexp_home_imp_month = foodexp_home_imputed/12
 
@@ -3548,8 +3580,8 @@
 
 					br year foodexp_home_stamp_recall foodexp_home_nostamp_recall FS_rec_wth FS_rec_crtyr_wth foodexp_home_inclFS foodexp_home_exclFS foodexp_home_imp_month foodexp_home_imputed diff_home if inrange(year,1999,2019)
 
-					sum diff_home if inrange(year,1999,2019)
-					*/
+					sum diff_home if inrange(year,1999,2019),d
+					
 			
 			*	Eaten out
 			loc	var_eatout	foodexp_out
