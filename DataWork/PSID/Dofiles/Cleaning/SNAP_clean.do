@@ -196,13 +196,13 @@
 	local	ind_agg			0	//	Aggregate individual-level variables across waves
 	local	fam_agg			0	//	Aggregate family-level variables across waves
 	local	ext_data		0	//	Prepare external data (CPI, TFP, etc.)
-	local	cr_panel		1	//	Create panel structure from ID variable
+	local	cr_panel		0	//	Create panel structure from ID variable
 		local	panel_view	0	//	Create an excel file showing the change of certain clan over time (for internal data-check only)
-	local	merge_data		1	//	Merge ind- and family- variables and import it into ID variable
+	local	merge_data		0	//	Merge ind- and family- variables and import it into ID variable
 		local	raw_reshape	1		//	Merge raw variables and reshape into long data (takes time)
 		local	add_clean	1		//	Do additional cleaning and import external data (CPI, TFP)
 		local	import_dta	1		//	Import aggregated variables into ID data. 
-	local	clean_vars		0	//	Clean variables and construct consistent variables
+	local	clean_vars		1	//	Clean variables and construct consistent variables
 	local	PFS_const		0	//	Construct PFS
 	local	summ_stats		0	//	Generate summary statistics (will be moved to another file later)
 	local	IV_reg			0	//	Run IV-2SLS regression
@@ -950,7 +950,14 @@
 				
 				keep	x11101ll	`var'*
 				save	"${SNAP_dtInt}/Fam_vars/`var'", replace	
-		
+			
+			*	Imputed delivered expenditure (1999-2019)
+			**	Can be used to check whether my individual calculation is correct.
+				loc	var	foodexp_deliv_imputed
+				psid use || `var'  	[99]ER16515A4 [01]ER20456A4 [03]ER24138A4 [05]ER28037A4 [07]ER41027A4 [09]ER46971A4 [11]ER52395A4 [13]ER58212A4 [15]ER65413 [17]ER71490 [19]ER77518 using  "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear	
+				
+				keep	x11101ll	`var'*
+				save	"${SNAP_dtInt}/Fam_vars/`var'", replace	 	
 			
 			*	Total (imputed,1999-2019)
 				loc	var	foodexp_tot_imputed
@@ -3522,7 +3529,7 @@
 						*	Extra amount is collected with free recall period, so we need to make them monthly value
 						*	We treat "wild code" and "other" as "zero amount" for now as there are very small number of observations (except 1994 where we treat other as "yearly")					
 						
-						loc	var				foodexp_home_FS_extamt
+						loc	var				`var_exclFS_FS'
 						loc	rawvar			foodexp_home_stamp	//	Raw vaiable with extra amount
 						loc	rawvar_recall	foodexp_home_stamp_recall
 						
@@ -3545,7 +3552,7 @@
 						*	For DK/NA/refusal (both in amount and recall period), I impute the monthly average from other categories and assign the mean value
 						foreach	year	in	1994	1995	1996	1997	1999	2001	2003	2005	2007	2009	2011	2013	2015	2017	2019	{
 																	
-							summ	`var'			if	year==`year'	&	`rawvar'>0	&	!mi(`rawvar')	&	FS_rec_wth==1	&	foodexp_home_extra_wth==1	&	!mi(`rawvar_recall')	&	///			//	I use raw variable's category 
+							summ	`var'			if	year==`year'	&	/*`rawvar'>0	&*/	!mi(`rawvar')	&	FS_rec_wth==1	&	foodexp_home_extra_wth==1	&	!mi(`rawvar_recall')	&	///			//	I use raw variable's category 
 														!inlist(`rawvar',99998,99999)	&	!inlist(`rawvar_recall',8,9)	//	Both recall period AND amount should be valid
 							
 							replace	`var'=r(mean) 	if	year==`year'	&	FS_rec_wth==1	&	foodexp_home_extra_wth==1	&	(inlist(`rawvar',99998,99999)	|	inlist(`rawvar_recall',8,9))	//	if amount OR recall period has NA/DK
@@ -3555,7 +3562,7 @@
 						
 						*	Quick check
 						assert	`var'==0	if FS_rec_wth==1	&	foodexp_home_extra_wth==0
-						br	year FS_rec_wth	foodexp_home_extra_wth	foodexp_home_FS_extamt	if	FS_rec_wth==1	&	foodexp_home_extra_wth==0	&	foodexp_home_FS_extamt!=0
+						*br	year FS_rec_wth	foodexp_home_extra_wth	`var'	if	FS_rec_wth==1	&	foodexp_home_extra_wth==0	&	`var'!=0
 						
 						*	Checking extra amount over year
 							
@@ -3641,7 +3648,7 @@
 						*	Assign values that are (1) original family expenditure is above 70K (outlier) and (2)
 						foreach	year	in	1994	1995	1996	1997	1999	2001	2003	2005	2007	2009	2011	2013	2015	2017	2019	{
 																	
-							summ	`var'			if	year==`year'	&	`rawvar'>0	&	!mi(`rawvar')	&	FS_rec_wth==0	&	!mi(`rawvar_recall')	&	///			//	I use raw variable's category 
+							summ	`var'			if	year==`year'	&	/*`rawvar'>0	&*/	!mi(`rawvar')	&	FS_rec_wth==0	&	!mi(`rawvar_recall')	&	///			//	I use raw variable's category 
 														!inrange(`rawvar',70000,99999)	&	!inlist(`rawvar_recall',8,9)	//	Both recall period AND amount should be valid
 							
 							replace	`var'=r(mean) 	if	year==`year'	&	FS_rec_wth==0	&	(inrange(`rawvar',70000,99999)	|	inlist(`rawvar_recall',8,9))	//	if amount OR recall period has NA/DK
@@ -3666,6 +3673,7 @@
 					
 									
 					*	Outdated code
+					/*
 					{					
 					*	For non FS user
 					local	var	`var_exclFS'
@@ -3711,7 +3719,9 @@
 						replace	`var_inclFS'	=	`var_exclFS'	if	FS_rec_wth==0	&	(inrange(year,1994,1997)	|	inrange(year,2009,2019))
 						replace	`var_inclFS'	=	`var_exclFS'	if	FS_rec_wth==0	&	inrange(year,1999,2007)	//	Expenditure was collected separately based on "this year's usage (FS_rec_crtyr_wth)", but the condition for adding the amount we want to add is "last month's amount (FS_rec_amt) is whether family used FS last month (FS_rec_wth==1)"
 						*replace	`var_inclFS'	=	`var_exclFS'	if	FS_rec_crtyr_wth==0	&	inrange(year,1999,2007)	
+					
 					}
+					*/
 					
 					*	Validation of imputed data
 						*	Mean at-home food expenditure by year
@@ -3719,11 +3729,11 @@
 						*br	year FS_rec_wth FS_rec_amt foodexp_home_exclFS_nFS	foodexp_home_inclFS_nFS	foodexp_home_exclFS_FS	foodexp_home_inclFS_FS	foodexp_home_exclFS	foodexp_home_inclFS
 						bys	year:	summ	foodexp_home_exclFS	FS_rec_amt	foodexp_home_inclFS
 						bys	year:	summ	FS_rec_amt	if	FS_rec_wth==1
-			
-					
-						
+								
 					*	manually imputed data with the imputed data provided in PSID since 1999 
-					*	95% of obs have difference less than $4.2, with mean diff $1.3
+						*	(Excluding zero in imputing average): Mean diff $7.0, median diff $1.3, 95% of obs diff less than $4.2
+						*	(Including zero in imputing average): Mean diff $6.9, median diff $1.3, 95% of obs diff less than $4.2 <= Current way
+						
 					
 					cap drop diff_home_exclFS
 					cap drop diff_home_inclFS
@@ -3776,14 +3786,14 @@
 						replace	`var'	=	`rawvar'/12		if	((inrange(year,1994,1994)	&	`rawvar_recall'==4)	|	(inrange(year,1995,2019)	&	`rawvar_recall'==6))	//	If yearly value, divide by 12
 						replace	`var'	=	0				if	((inrange(year,1994,1994)	&	inlist(`rawvar_recall',0))	|	(inrange(year,1995,2019)	&	inlist(`rawvar_recall',0,7)))	//	If other or no stamp use, set it zero
 						
-												*	Note that for 1999-2007, families that used FS this year might not use FS last month, and vice versa
+						*	Note that for 1999-2007, families that used FS this year might not use FS last month, and vice versa
 						*	The best way to do is to swap the values between _FS and _nFS.
 						*	But for now, let's just assign average value depending on last month usage
 						
 						*	For DK/NA/refusal (both in amount and recall period), I impute the monthly average from other categories and assign the mean value
 						foreach	year	in	1994	1995	1996	1997	1999	2001	2003	2005	2007	2009	2011	2013	2015	2017	2019	{
 																	
-							summ	`var'			if	year==`year'	&	FS_rec_wth==1	&	`rawvar'>0	&	!mi(`rawvar')	&	!mi(`rawvar_recall')	&	///			//	I use raw variable's category 
+							summ	`var'			if	year==`year'	&	FS_rec_wth==1	&	/*`rawvar'>0	&*/	!mi(`rawvar')	&	!mi(`rawvar_recall')	&	///			//	I use raw variable's category 
 														!inrange(`rawvar',99998,100000)	&	!inlist(`rawvar_recall',8,9)	//	Both recall period AND amount should be valid
 							
 							*	One difference between here and "at-home" is that I disabled "FS_rec_wth==1" condition, in order to assign average value to those who didn't use FS last month but used this year (so "_FS" has non-zero value)
@@ -3818,7 +3828,7 @@
 						*	For DK/NA/refusal (both in amount and recall period), I impute the monthly average from other categories and assign the mean value
 						foreach	year	in	1994	1995	1996	1997	1999	2001	2003	2005	2007	2009	2011	2013	2015	2017	2019	{
 																	
-							summ	`var'			if	year==`year'	&	FS_rec_wth==0	&	`rawvar'>0	&	!mi(`rawvar')	&	!mi(`rawvar_recall')	&	///			//	I use raw variable's category 
+							summ	`var'			if	year==`year'	&	FS_rec_wth==0	&	/*`rawvar'>0	&*/	!mi(`rawvar')	&	!mi(`rawvar_recall')	&	///			//	I use raw variable's category 
 														!inrange(`rawvar',80001,100000)	&	!inlist(`rawvar_recall',8,9)	//	Both recall period AND amount should be valid
 							
 							*	One difference between here and "at-home" is that I disabled "FS_rec_wth==0" condition, in order to assign average value to those who did use FS last month but didn't used this year
@@ -3854,7 +3864,9 @@
 								
 				
 				*	Validate imputation by comparing PSID-imputed value
-								
+					*	(Including 0 in imputing average):	Mean diff $4.1, Median diff $0.3, 95% of obs have diff less than $2 <= current way, since many families spend zero amount.
+					*	(Excluding 0 in imputing average):  Mean diff $4.3, 95% of obs have diff less than $2.1
+					
 					cap drop diff_away
 					cap drop foodexp_away_imp_month
 					gen foodexp_away_imp_month = foodexp_away_imputed/12
@@ -3885,43 +3897,72 @@
 				*	It implies that even if FS answered "yes" to that question (so (1) and (2) are collected), that doesn't necessarily mean FU used FS last month
 				******	CAUTION	****
 							
-					*	For FS user (the amounte here is food exp "in addition to" FS redeemed)
-					local	var	foodexp_deliv_FS
-					local	rawvar			foodexp_deliv_stamp
-					local	rawvar_recall	foodexp_deliv_stamp_recall
+					*	For FS user 
 					
-					cap	drop	`var'
-					gen	double	`var'	=	`rawvar'
-					label	var	`var'	"Food exp delivered (Monthly) - FS user"
+					*	Whether spent money on food delivered
+						loc	var	foodexp_deliv_wth_FS
+						cap	drop	`var'
+						gen		`var'=.
+						replace	`var'=0	if	inlist(foodexp_deliv_stamp_wth,0,5,8,9)
+						replace	`var'=1	if	inlist(foodexp_deliv_stamp_wth,1)
+						label	value	`var'	yes1no0
+						label var	`var'	"=1 if spent on food delivery (FS)"
+									
+						local	var	foodexp_deliv_FS
+						local	rawvar			foodexp_deliv_stamp
+						local	rawvar_recall	foodexp_deliv_stamp_recall
+						
+						cap	drop	`var'
+						gen	double	`var'	=	`rawvar'
+						label	var	`var'	"Food exp delivered (Monthly) - FS user"
 									
 						*	Make it monthly expenditure
 						*	We treat "wild code" and "other" as "zero amount" for now as there are very small number of observations (except 1994 where we treat other as "yearly")					
 						replace	`var'	=	`rawvar'*30.4	if	inrange(year,1995,2019)		&	`rawvar_recall'==2	//	If daily value, multiply by 30.4
 						replace	`var'	=	`rawvar'*4.35	if	((inrange(year,1994,1994)	&	`rawvar_recall'==1)	|	(inrange(year,1995,2019)	&	`rawvar_recall'==3))	//	If weekly value, multiply by 4.35
 						replace	`var'	=	`rawvar'*2.17	if	((inrange(year,1994,1994)	&	`rawvar_recall'==2)	|	(inrange(year,1995,2019)	&	`rawvar_recall'==4))	//	If two-week value, multiply by 2.17
-						replace	`var'	=	`rawvar'/12	if	((inrange(year,1994,1994)	&	`rawvar_recall'==4)	|	(inrange(year,1995,2019)	&	`rawvar_recall'==6))	//	If yearly value, divide by 12
-						replace	`var'	=	0			if	((inrange(year,1994,1994)	&	inlist(`rawvar_recall',0))	|	(inrange(year,1995,2019)	&	inlist(`rawvar_recall',0,7)))	//	If other or no stamp use, set it zero
+						replace	`var'	=	`rawvar'/12		if	((inrange(year,1994,1994)	&	`rawvar_recall'==4)	|	(inrange(year,1995,2019)	&	`rawvar_recall'==6))	//	If yearly value, divide by 12
+						replace	`var'	=	0				if	((inrange(year,1994,1994)	&	inlist(`rawvar_recall',0))	|	(inrange(year,1995,2019)	&	inlist(`rawvar_recall',0,7)))	//	If other or no stamp use, set it zero
 					
+						*	Confirm that delivered food exp is zero if family said "no"
+						assert	`var'==0	if	foodexp_deliv_wth_FS==0	
+	
 						*	For DK/NA/refusal (both in amount and recall period), I impute the monthly average from other categories and assign the mean value
 						foreach	year	in	1994	1995	1996	1997	1999	2001	2003	2005	2007	2009	2011	2013	2015	2017	2019	{
 																	
-							summ	`var'			if	year==`year'	&	`rawvar'>0	&	!mi(`rawvar')	&	!mi(`rawvar_recall')	&	///			//	I use raw variable's category 
-														!inlist(`rawvar',99998,99999)	&	!inlist(`rawvar_recall',8,9)	//	Both recall period AND amount should be valid
+							summ	`var'			if	year==`year'	&	/*FS_rec_wth==1	&*/	foodexp_deliv_wth_FS==1	&	!mi(`rawvar')	&	!mi(`rawvar_recall')	&	///			//	I use raw variable's category 
+														!inrange(`rawvar',99998,100000)	&	!inlist(`rawvar_recall',8,9)	//	Both recall period AND amount should be valid
 							
-							replace	`var'=r(mean) 	if	year==`year'	&	(inlist(`rawvar',99998,99999)	|	inlist(`rawvar_recall',8,9))	//	if amount OR recall period has NA/DK
+							replace	`var'=r(mean) 	if	year==`year'	&	/*FS_rec_wth==1	&*/	foodexp_deliv_wth_FS==1	&	(inrange(`rawvar',99998,100000)	|	inlist(`rawvar_recall',8,9))	//	if amount OR recall period has NA/DK
 						
 					
 						}	//	year
 						
-					*	For non FS user
-					local	var	foodexp_deliv_NoFS
-					local	rawvar			foodexp_deliv_nostamp
-					local	rawvar_recall	foodexp_deliv_nostamp_recall
-					
-					cap	drop	`var'
-					gen	double	`var'	=	`rawvar'
-					label	var	`var'	"Food exp delivered (Monthly) - non-FS user"
 								
+						*	Quick check to see if there's any outlier causing mean value to be discontinuous
+						bys year: summ foodexp_deliv_FS
+						
+						
+					*	For non FS user
+					
+						*	Whether spent money on food delivered
+						loc	var	foodexp_deliv_wth_nFS
+
+						cap	drop	`var'
+						gen		`var'=.
+						replace	`var'=0	if	inlist(foodexp_deliv_nostamp_wth,0,5,8,9)
+						replace	`var'=1	if	inlist(foodexp_deliv_nostamp_wth,1)
+						label	value	`var'	yes1no0
+						label var	`var'	"=1 if spent on food delivery (non-FS)"
+						
+						local	var	foodexp_deliv_nFS
+						local	rawvar			foodexp_deliv_nostamp
+						local	rawvar_recall	foodexp_deliv_nostamp_recall
+						
+						cap	drop	`var'
+						gen	double	`var'	=	`rawvar'
+						label	var	`var'	"Food exp delivered (Monthly) - non-FS user"
+									
 											
 						*	Make it monthly expenditure
 						*	We treat "wild code" and "other" as "zero amount" for now as there are very small number of observations (except 1994 where we treat other as "yearly")					
@@ -3929,22 +3970,33 @@
 						replace	`var'	=	`var'*4.35	if	((inrange(year,1994,1994)	&	`rawvar_recall'==1)	|	(inrange(year,1995,2019)	&	`rawvar_recall'==3))	//	If weekly value, multiply by 4.35
 						replace	`var'	=	`var'*2.17	if	((inrange(year,1994,1994)	&	`rawvar_recall'==2)	|	(inrange(year,1995,2019)	&	`rawvar_recall'==4))	//	If two-week value, multiply by 2.17
 						replace	`var'	=	`var'/12	if	((inrange(year,1994,1994)	&	`rawvar_recall'==4)	|	(inrange(year,1995,2019)	&	`rawvar_recall'==6))	//	If yearly value, divide by 12
-						replace	`var'	=	0			if	((inrange(year,1994,1994)	&	inlist(`rawvar_recall',0))	|	(inrange(year,1995,2019)	&	inlist(`rawvar_recall',0,1,7)))	//	If other or no stamp use, set it zero
-				
+						replace	`var'	=	0			if	((inrange(year,1994,1994)	&	inlist(`rawvar_recall',0))	|	(inrange(year,1995,2019)	&	inlist(`rawvar_recall',0,7)))	//	If other or no stamp use, set it zero
+						
+						*	There are very few obs (6 obs as of 2022-04-30) having non-zero food delivered amount even when didn't way "yes" to the amount. Will recode them as zero.
+						replace	`var'=0	if	foodexp_deliv_wth_nFS==0	
+												
 						*	For DK/NA/refusal (both in amount and recall period), I impute the monthly average from other categories and assign the mean value
 						foreach	year	in	1994	1995	1996	1997	1999	2001	2003	2005	2007	2009	2011	2013	2015	2017	2019	{
 																	
-							summ	`var'			if	year==`year'	&	`rawvar'>0	&	!mi(`rawvar')	&	!mi(`rawvar_recall')	&	///			//	I use raw variable's category 
-														!inlist(`rawvar',99998,99999)	&	!inlist(`rawvar_recall',8,9)	//	Both recall period AND amount should be valid
+							summ	`var'			if	year==`year'	&	/*FS_rec_wth==0	&*/	foodexp_deliv_wth_nFS==1	&	!mi(`rawvar')	&	!mi(`rawvar_recall')	&	///			//	I use raw variable's category 
+														!inrange(`rawvar',99998,100000)	&	!inlist(`rawvar_recall',8,9)	//	Both recall period AND amount should be valid
 							
-							replace	`var'=r(mean) 	if	year==`year'	&	(inlist(`rawvar',99998,99999)	|	inlist(`rawvar_recall',8,9))	//	if amount OR recall period has NA/DK
+							replace	`var'=r(mean) 	if	year==`year'	&	/*FS_rec_wth==0	&*/	foodexp_deliv_wth_nFS==1	&	(inrange(`rawvar',99998,100000)	|	inlist(`rawvar_recall',8,9))	//	if amount OR recall period has NA/DK
 						
 					
 						}	//	year	
 						
+						*	Quick check to see if there's any outlier causing mean value to be discontinuous
+						bys year: summ	foodexp_deliv_nFS
+						
 						
 					*	Create a final variable
 						
+						replace	`var_deliv'	=	foodexp_deliv_nFS	if	inrange(year,1994,2019)	&	FS_rec_wth==0
+						replace	`var_deliv'	=	foodexp_deliv_FS	if	inrange(year,1994,2019)	&	FS_rec_wth==1
+						replace	`var_deliv'	=	foodexp_deliv_FS	if	inrange(year,1997,2007)	&	FS_rec_wth==0	&	stamp_usewth_crtyear==1	//	Those who didn't use FS last month, but delivered exp was collected in "_FS" variable
+						
+						/* Outdated
 						*	Received FS (FS amount + extra amount spent)
 						replace	`var_deliv'	=	foodexp_deliv_FS	if	FS_rec_wth==1		&	(inrange(year,1994,1997)	|	inrange(year,2009,2019))
 						replace	`var_deliv'	=	foodexp_deliv_FS	if	FS_rec_crtyr_wth==1	&	inrange(year,1999,2007)
@@ -3952,6 +4004,20 @@
 						*	Didn't receive FS	(Just food exp)
 						replace	`var_deliv'	=	foodexp_deliv_NoFS	if	FS_rec_wth==0		&	(inrange(year,1994,1997)	|	inrange(year,2009,2019))
 						replace	`var_deliv'	=	foodexp_deliv_NoFS	if	FS_rec_crtyr_wth==0	&	inrange(year,1999,2007)
+						*/
+			
+					*	Validate imputation by comparing PSID-imputed value
+									
+					cap drop diff_deliv
+					cap drop foodexp_deliv_imp_month
+					gen foodexp_deliv_imp_month = foodexp_deliv_imputed/12
+
+					gen	diff_deliv=abs(foodexp_deliv_imp_month-foodexp_deliv)
+
+					sum diff_deliv if inrange(year,1999,2019),d // Mean diff around $0.14, 90% perfect match, 95% less than 0.25% 
+
+					cap	drop	diff_deliv
+					cap	drop	foodexp_deliv_imp_month
 			
 			*	Now, aggregate food expenditures - at home, eaten out and delivered - to calculate total monthly food expenditures
 			loc	var	foodexp_tot_exclFS
@@ -3960,6 +4026,19 @@
 			replace	`var'=.	if	seqnum==0	//	Replace it as missing if Ind didn't exist (should be, as raw exp variables are also missing)
 			replace	`var'=.	if	live_in_FU==0	//	Replace it as missing if not living in FU (ex. institution, moved out, etc.)
 			lab	var	`var'	"Total monthly food exp (FS excl)"
+			
+				*	Validation of aggregated cost
+					cap drop diff_foodexp_tot
+					cap drop foodexp_tot_imp_month
+					gen foodexp_tot_imp_month = foodexp_tot_imputed/12
+
+					gen	diff_foodexp_tot=abs(foodexp_tot_imp_month-foodexp_tot_exclFS)
+
+					summ foodexp_tot_exclFS if inrange(year,1999,2019)	//	Average total food exp is $585.7
+					sum diff_foodexp_tot if inrange(year,1999,2019),d // Mean diff $11.2 (2% of mean value above), median $1.83 (0.3% of average value), 95% less than $6 (1% of avg value above)
+					
+					cap	drop	diff_foodexp_tot
+					cap	drop	foodexp_tot_imp_month
 			
 			loc	var	foodexp_tot_inclFS
 			capture	drop	`var'
@@ -4005,6 +4084,7 @@
 			label	value	`var'	yes1no0
 			label var	`var'	"Food exp(w/o FS) exceeds TFP cost"
 			
+			/*
 			*	Summary stat
 				
 				cap drop diff_total
@@ -4019,9 +4099,9 @@
 				
 				cap	drop	diff_total
 				cap	drop	foodexp_tot_imp_month
-				
+			*/	
 						
-		*	Winsorize per capita value for every year (except TFP)
+		*	Winsorize top 1% value of per capita values for every year (except TFP)
 		local	pcvars	fam_income_pc ln_fam_income_pc foodexp_tot_exclFS_pc foodexp_tot_exclFS_pc_th foodexp_tot_inclFS_pc foodexp_tot_inclFS_pc_th	// fam_income_pc_real foodexp_tot_exclFS_pc_real foodexp_tot_inclFS_pc_real
 		local	years	1975	${sample_years}
 		foreach	var	of	local	pcvars	{
@@ -4062,7 +4142,7 @@
 		
 		*	Create constant dollars of monetary variables  (ex. food exp, TFP)
 		*	Unit is 1982-1984=100 (1982-1984 chained)
-		qui	ds	fam_income_pc	FS_rec_amt foodexp_home_inclFS foodexp_home_exclFS foodexp_home_extramt foodexp_out foodexp_deliv foodexp_tot_exclFS foodexp_tot_inclFS TFP_monthly_cost foodexp_W_TFP foodexp_W_TFP_pc_th	///
+		qui	ds	fam_income_pc	FS_rec_amt foodexp_home_inclFS foodexp_home_exclFS  foodexp_out foodexp_deliv foodexp_tot_exclFS foodexp_tot_inclFS TFP_monthly_cost foodexp_W_TFP foodexp_W_TFP_pc_th	///
 				foodexp_tot_exclFS_pc foodexp_tot_inclFS_pc	foodexp_tot_exclFS_pc_? foodexp_tot_inclFS_pc_?
 		global	money_vars_current	`r(varlist)'
 		
@@ -4090,16 +4170,16 @@
 				
 				*	Generate time variable which increases by 1 over wave ("year" ") // can be used to construct panel data (we can't directly use "year" because PSID was collected bieenially since 1997, thus data will treat it as gap period)
 				cap	drop	time
-				gen		time	=	year-1974
-				replace	time	=	year-1974
+				gen		time	=	year-1977
+				replace	time	=	year-1977
 			xtset x11101ll year,	delta(1)
 		
 			*	Create lagged vars
 			foreach	var	of	global	money_vars	{
 				
 				cap	drop	l1_`var'
-				gen		double	l1_`var'	=	l.`var'		if	year<=1997	//	When PSID was collected annually
-				replace		l1_`var'		=	l2.`var'	if	year>=1999	//	When PSID was collected bieenially
+				gen	double	l1_`var'	=	l.`var'		if	year<=1997	//	When PSID was collected annually
+				replace		l1_`var'	=	l2.`var'	if	year>=1999	//	When PSID was collected bieenially
 				
 			}
 		
@@ -4114,7 +4194,44 @@
 		*	Save
 		sort	x11101ll	year
 		save	"${SNAP_dtInt}/SNAP_long_const",	replace	
-	
+		
+
+		*	Check discontinuity of final variables by checking weighted average
+		use	"${SNAP_dtInt}/SNAP_long_const", clear
+		preserve
+		collapse (mean) FS_rec_wth foodexp_tot_exclFS foodexp_tot_inclFS foodexp_tot_exclFS_pc foodexp_tot_inclFS_pc [aw=wgt_long_fam_adj], by(year)
+		tempfile	foodvar_check
+		save		`foodvar_check'
+		restore
+		collapse (mean) FS_rec_amt if FS_rec_wth==1 [aw=wgt_long_fam_adj], by(year)
+		merge	1:1	year	using	`foodvar_check', nogen assert(3)
+		
+		lab	var	foodexp_tot_exclFS		"Food exp (w/o FS)"
+		lab	var	foodexp_tot_exclFS_pc	"Food exp per capita (w/o FS)"
+		lab	var	foodexp_tot_inclFS_pc	"Food exp per capita (with FS)"
+		lab	var	FS_rec_amt	"FS benefit ($)"
+		
+		graph	twoway	(line foodexp_tot_exclFS year, lpattern(dash) xaxis(1 2) yaxis(1))	///
+						/*(line foodexp_tot_inclFS	year, lpattern(dash_dot) xaxis(1 2) yaxis(1))  */	///
+						(line FS_rec_amt	year, lpattern(dot) xaxis(1 2) yaxis(2)),  ///
+						xline(1980 1993 1999 2007, axis(1)) xlabel(/*1980 "No payment" 1993 "xxx" 2009 "ARRA" 2020 "COVID"*/, axis(2))	///
+						xtitle(Year)	xtitle("", axis(2))  title(Monthly Food Expenditure and FS Benefit)	bgcolor(white)	graphregion(color(white)) /*note(Source: USDA & BLS)*/	name(foodexp_FSamt_byyear, replace)
+		
+			
+		graph	export	"${SNAP_outRaw}/foodexp_FSamt_byyear.png", replace
+		graph	close	
+			/*
+			graph	twoway	(line foodexp_tot_exclFS_pc year, lpattern(dash) xaxis(1 2) yaxis(1))	///
+						(line foodexp_tot_inclFS_pc	year, lpattern(dash_dot) xaxis(1 2) yaxis(2)),  ///
+						xline(1974 1996 2009 2020, axis(1)) xlabel(1974 "Nationwide FSP" 1996 "Welfare Reform" 2009 "ARRA" 2020 "COVID", axis(2))	///
+						xtitle(Fiscal Year)	xtitle("", axis(2))  /*title(Program Summary)*/	bgcolor(white)	graphregion(color(white)) note(Source: USDA & BLS)	name(SNAP_summary, replace)
+		
+			/*
+			*/
+			
+			
+			
+		
 	}
 			
 	*	Construct PFS
