@@ -297,6 +297,13 @@
 			save	"${SNAP_dtInt}/Fam_vars/`var'", replace
 			
 			
+			*	Change in family composition
+			local	var	change_famcomp
+			psid use || `var' [69]V542 [70]V1109 [71]V1809 [72]V2410 [73]V3010 [74]V3410 [75]V3810 [76]V4310 [77]V5210 [78]V5710 [79]V6310 [80]V6910 [81]V7510 [82]V8210 [83]V8810 [84]V10010 [85]V11112 [86]V12510 [87]V13710 [88]V14810 [89]V16310 [90]V17710 [91]V19010 [92]V20310 [93]V21608 [94]ER2005A [95]ER5004A [96]ER7004A [97]ER10004A [99]ER13008A [01]ER17007 [03]ER21007 [05]ER25007 [07]ER36007 [09]ER42007 [11]ER47307 [13]ER53007 [15]ER60007 [17]ER66007 [19]ER72007  using  "${SNAP_dtRaw}/Unpacked"  , keepnotes design(any) clear	
+			
+			keep	x11101ll	`var'*
+			save	"${SNAP_dtInt}/Fam_vars/`var'", replace
+			
 			*	Split-off indicator
 			local	var	splitoff
 			psid use || `var' [69]V909 [70]V1106 [71]V1806 [72]V2407 [73]V3007 [74]V3407 [75]V3807 [76]V4307 [77]V5207 [78]V5707 [79]V6307 [80]V6907 [81]V7507 [82]V8207 [83]V8807 [84]V10007 [85]V11107 [86]V12507 [87]V13707 [88]V14807 [89]V16307 [90]V17707 [91]V19007 [92]V20307 [93]V21606 [94]ER2005F [95]ER5005F [96]ER7005F [97]ER10005F [99]ER13005E [01]ER17006 [03]ER21005 [05]ER25005 [07]ER36005 [09]ER42005 [11]ER47305 [13]ER53005 [15]ER60005 [17]ER66005 [19]ER72005  using  "${SNAP_dtRaw}/Unpacked"  , keepnotes design(any) clear	
@@ -1068,7 +1075,7 @@
 			
 		
 		*	Finance information (1977-2019)
-			*	Original U.S. Census data do not have state govt data pre-1997 (except 1972)
+			*	Original U.S. Census data do not have state govt data pre-1977 (except 1972)
 			*	Primary source: the Urban Institute (https://state-local-finance-data.taxpolicycenter.org/)
 			*	Additional source: the Government Finance Database (https://willamette.edu/mba/research-impact/public-datasets/index.html)	//	To fill in missing state & local data of 2001 & 2003
 		*	This data has state and local expenditure information
@@ -1084,8 +1091,8 @@
 			*	(2)	Use "state" as a base, and import "state and local" expenditure for missing DC.
 			*	(2022-4-11) For now I use (2) (state as base) for the folowing reasons
 				*	1. Weak IV test from both ideas are both strong
-				*	2. In "state and local"-level data of DC in the UT's raw data, they only included "Washington DC" finance information, not sub-level organizations (ex. housing authority, public transit).
-				*		Therefore, using DC expenditure as "state"-level information is more consistent than using 2001/2003 "state" expenditures as "state and local" expenditure for all non-DC states in 2001/2003
+				*	2. In "state and local" level data of DC in the UI's raw data, they only included "Washington DC" finance information, not sub-level organizations (ex. housing authority, public transit).
+				*	Therefore, using DC expenditure as "state"-level information is more consistent than using 2001/2003 "state" expenditures as "state and local" expenditure for all non-DC states in 2001/2003
 		
 			*	Total expenditure (thousands), nominal dollars
 			*import	delimited	"${dataWorkFolder}/Census/StateData.csv", clear
@@ -1194,7 +1201,7 @@
 				}
 				
 				*	Generate 2001/2003 and DC indicator, to test whether imported data in state & local level make singificant changes in IV strength in the first stage.
-				**	But I don't think "DC" indicator is necessary, since "state" variation is missing just by definitino, thus using "state and local"-level dc expenditure for "state" expenditure isn't likely to cause an issue.
+				**	But I don't think "DC" indicator is necessary, since "state" variation is missing just by definition, thus using "state and local"-level dc expenditure for "state" expenditure isn't likely to cause an issue.
 				**	Also, as of 2022-4-11, I do not use state&local level data (use state-level only) so these indicators won't be used in the analyses anyway.
 				gen		year_01_03=0
 				replace	year_01_03=1	if	inlist(year,2001,2003)
@@ -2769,6 +2776,18 @@
 			*	Survey year dummies
 			tab	year, gen(year_enum)
 			
+			*	Change in RP
+				*	No change: No change at all (0), change other than RP/SP (1), SP changed (2)
+				*	I include Other (8) as "change in RP", as they include some major changes including recontact adn recombined families where RP is changed very often.
+				*	I also include "Neither RP nor SP are Sample, and neither of them was RP or SP last year" as "change in RP", since it seems those who were NOT RP (or SP) became RP or SP this year (thus change in RP). A very rough assumption.
+			loc	var	change_RP
+			cap	drop	`var'
+			gen		`var'	=.
+			replace	`var'	=	0	if	inlist(change_famcomp,0,1,2)			//	No change at all (0), change other than RP/SP (1), SP changed (2), neither RP nor SP are Sample
+			replace	`var'	=	1	if	inlist(change_famcomp,3,4,5,6,7,8,9)	//	I tag "other" as "change in RP", as they include some major changes including recontact adn recombined families where RP is changed very often.
+			label	value	`var'	yes1no0
+			lab	var	`var'	"=1 if RP changed"
+			
 			*	Split-off indicator
 			*	General rule of treating re-contact family is that, we treat it as "non split-off"
 			loc	var	split_off
@@ -3273,161 +3292,6 @@
 		lab	var	`var'	"Reason for non-participation"
 		
 		
-		
-		/*	The code below is outdated. I use new code above.
-		{
-		*	Whether FS/SNAP received last month
-		loc	var	FS_rec_wth
-		cap	drop	`var'
-		gen		`var'=.
-					
-			*	1975-1993, 1999-2007
-			*	The former period doesn't have indicator value, and the latter value has different recall period (current year) so we determine by whether having non-zero FS redemption amount.
-				*	If 0, then didn't receive. Otherwise, received
-			replace	`var'=0	if	(inrange(year,1975,1993)	|	inrange(year,1999,2007))	&	FS_rec_amt==0
-			replace	`var'=1	if	(inrange(year,1975,1993)	|	inrange(year,1999,2007))	&	!mi(FS_rec_amt)	&	FS_rec_amt!=0
-			
-			*	1994-1997, 2009-2019
-			*	Here we have indicator dummy of last month usage so we can directly import it
-			*	Any non-missing value other than "yes" (ex. no, wild code, na/dk, inapp) are categorized as "no"
-			replace	`var'=0	if	(inrange(year,1994,1997)	|	inrange(year,2009,2019))	&	!mi(stamp_usewth_month)	&	stamp_usewth_month!=1
-			replace	`var'=1	if	(inrange(year,1994,1997)	|	inrange(year,2009,2019))	&	!mi(stamp_usewth_month)	&	stamp_usewth_month==1
-			
-		label	value	`var'	yes1no0
-		label	var	`var'	"Received FS/SNAP last month"
-		*/
-
-		*	The code below is written for "previous year" stamp information. Since we no longer use it, we will disable it for now. We can re-use the code once found it useful.	
-		/*
-		
-		
-		*	Food stamp amount "used", recall period
-		*	I start with recall period for easier annualization of food stamp amount later
-		
-		loc	var	FS_rec_amt_recall
-		cap	drop	`var'
-		gen	`var'=.
-		
-			*	Set recall period to "inapp (0)" for those with zero amount (didn't receive any)
-			replace	`var'=0	if	inrange(year,1968,1979)	&	stamp_useamt==0
-			replace	`var'=0	if	inrange(year,1980,1993)	&	stamp_recamt_annual==0
-			replace	`var'=0	if	inrange(year,1994,2019)	&	stamp_recamt==0
-			
-			*	1968 to 1993
-			*	During this period recall period is fixed to yearly recall.
-			replace	`var'=1	if	inrange(year,1968,1979)	&	!mi(stamp_useamt)	&	stamp_useamt>0
-			replace	`var'=1	if	inrange(year,1980,1993)	&	!mi(stamp_useamt)	&	stamp_useamt>0
-			
-			*	1994 and onward
-			*	For 1994, there's no "year" recall period option. I regard "other" as "year" in 1994 because the proportion of those household anwered "other" in 1994 is similar to those who answered "year" in other periods (b/w 1-2%)
-			replace	`var'=1	if	inrange(year,1994,1994)	&	stamp_recamt_period==4	//	Year, 1994
-			replace	`var'=1	if	inrange(year,1995,2019)	&	stamp_recamt_period==6	//	Year, 1995-2019
-			
-			replace	`var'=2	if	inrange(year,1994,1995)	&	stamp_recamt_period==1	//	Month, 1994-1995
-			replace	`var'=2	if	inrange(year,1996,2019)	&	stamp_recamt_period==5	//	Month, 1996-2019		
-			
-			replace	`var'=3	if	inrange(year,1994,1995)	&	stamp_recamt_period==2	//	Two-week, 1994-1995
-			replace	`var'=3	if	inrange(year,1996,2019)	&	stamp_recamt_period==4	//	Two-week, 1996-2019
-			
-			replace	`var'=4	if	inrange(year,1994,2019)	&	stamp_recamt_period==3	//	Week, 1994-2019
-			
-			replace	`var'=5	if	inrange(year,1995,2019)	&	stamp_recamt_period==7	//	Other, 1995-2019
-			
-			replace	`var'=6	if	inrange(year,1994,2019)	&	stamp_recamt_period==8	//	DK, 1994-2019
-			replace	`var'=7	if	inrange(year,1994,2019)	&	stamp_recamt_period==9	//	NA/refusal, 1994-2019
-			
-			lab	define	`var'	0	"Inapp"		1	"Year"	2	"Month"	3	"Two-week"	4	"Week"	5	"Other"	6	"DK"	7	"NA/refusal", replace
-			label	value	`var'	`var'
-			label	var	`var'	"FS/SNAP amount received (recall)"
-			
-
-		
-		*	Food stamp amount received
-		loc	var	FS_rec_amt
-		cap	drop	`var'
-		gen	double	`var'=.	if	inrange(year,1968,1979)	&	!mi(stamp_useamt)
-		
-			replace	`var'=stamp_useamt			if	inrange(year,1968,1979)	//	From 1968 to 1976, we dont have value "Received", but have value "used(saved)." (we have one in 1970, but use this one instead for consistency) We use this value instead.
-			replace	`var'=stamp_recamt_annual	if	inrange(year,1980,1993)	//	Annual
-			replace	`var'=stamp_recamt			if	inrange(year,1994,2019)	//	Varying time period. Need to harmonize
-			
-			*	Harmonize variables into annual amount
-			*	We treat "other" as "zero amount" for now as they account for very little obserations (less than 10 per each wave). We can impute some other values later
-			***	One important exception is 1994 where there are over a hundred of households answered as "other." I treat them as "yearly" redemption for the following reasons: (1) No "year" period option available (2) Proportion of those household anwered "other" in 1994 is similar to those who answered "year" in other periods (b/w 1-2%)
-			replace	`var'=`var'*12.000	if	FS_rec_amt_recall==2	//	If monthly value, multiply by 12
-			replace	`var'=`var'*26.072	if	FS_rec_amt_recall==3	//	If two-week value, multiply by 26.072
-			replace	`var'=`var'*52.143	if	FS_rec_amt_recall==4	//	If weekly value, multiply by 52
-			
-			
-			*	For Other/DK/NA/refusal (both in amount and recall period), I impute the annualized yearly average from other categories and assign the mean value
-			foreach	year	in	1994	1995	1996	1997	1999	2001	2003	2005	2007	2009	2011	2013	2015	2017	2019	{
-			    
-				if	inrange(`year',1994,1997)	{	//	1994 to 1997 which have different outside category values
-				
-					summ	FS_rec_amt	if	year==`year'	&	stamp_recamt>0	&	!inlist(stamp_recamt,99998,99999)	//	I use raw variable's category
-					replace	FS_rec_amt=r(mean) if year==`year'	&	(inlist(FS_rec_amt_recall,6,7) | inlist(stamp_recamt,99998,99999))
-				
-				}	//	if
-				
-				else	{	//	1998 to 2019
-				    
-					summ	FS_rec_amt	if	year==`year'	&	stamp_recamt>0	&	!inlist(stamp_recamt,999998,999999)	//	I use raw variable's category
-					replace	FS_rec_amt=r(mean) if year==`year'	&	(inlist(FS_rec_amt_recall,6,7) | inlist(stamp_recamt,999998,999999))
-					
-				}	//	else
-					
-				
-			}
-				
-		label	var	`var'	"FS/SNAP amount received"
-		
-		
-		*	Food stamp used or not
-		loc	var	FS_used
-		cap	drop	`var'
-		gen	`var'=.	
-		
-			*	For years when we directly asked food samp redemption (1976,1977,1994-2019), use that variables.
-			**	Note: 1969 also has this value, but I use "amount used" for that year for consistency with nearby years
-			*	I treat (DK/NA/refused) as "didn't use." Very small amount of households account for these values
-			
-			replace	`var'=0	if	inlist(year,1976,1977)	&	!mi(stamp_used)	&	stamp_used!=1
-			replace	`var'=1	if	inlist(year,1976,1977)	&	stamp_used==1
-			
-			replace	`var'=0	if	inrange(year,1994,2019)	&	!mi(stamp_used)	&	stamp_used!=1
-			replace	`var'=1	if	inrange(year,1994,2019)	&	stamp_used==1
-			
-			*	For years when we don't have direct information, use "amount" variable or "number of months"
-				
-				*	For 1968, we categorize household used food stamp if non-zero amount is redeemed.
-				replace	`var'=0	if	year==1968	&	FS_rec_amt==0
-				replace	`var'=1	if	year==1968	&	!mi(FS_rec_amt)	&	FS_rec_amt>0
-				
-				replace	`var'=0	if	year==1968	&	FS_rec_amt==0
-				replace	`var'=1	if	year==1968	&	!mi(FS_rec_amt)	&	FS_rec_amt>0
-			
-				*	For 1968 to 1975, we use "amount used" as proxy
-				replace	`var'=0	if	inrange(year,1968,1975)	&	!mi(FS_rec_amt)	&	FS_rec_amt==0
-				replace	`var'=1	if	inrange(year,1968,1975)	&	!mi(FS_rec_amt)	&	FS_rec_amt!=0
-				
-				*	For 1978 to 1993, we use "the number of months" as proxy
-				replace	`var'=0	if	inrange(year,1978,1993)	&	!mi(stamp_monthsused)	&	!inrange(stamp_monthsused,1,12)
-				replace	`var'=1	if	inrange(year,1978,1993)	&	!mi(stamp_monthsused)	&	inrange(stamp_monthsused,1,12)
-			
-			lab	value	`var'	yes1no0
-			lab	var		`var'	"FS/SNAP used"
-		
-		
-		*	Food expenditure recall periods (1994-2019)
-		*	Some years use different category value for recall period. Need to harmonize it.
-		recode	foodexp_home_nostamp_recall	foodexp_home_stamp_recall	(1=3)	(2=4)	(3=5)	(4=6)	if	year==1994	//	In 1994, we treat "other" as "year" for the same reason I mentioned earlier.
-		recode	foodexp_home_nostamp_recall	foodexp_home_stamp_recall	(2=1)	if	year==2001	//	use different wild code in 2001.
-	
-		label	define	foodexp_recall	0	"Inapp"	1	"Wide code"	2	"Day"	3	"Week"	4	"Two weeks"	5	"Month"	6	"Year"	7	"Other"	8	"DK"	9	"NA/refused", replace
-		label	value	foodexp_home_nostamp_recall	foodexp_home_stamp_recall	foodexp_recall
-		label	var	foodexp_home_nostamp_recall	"Food exp recall period (w/o stamp)"
-		label	var	foodexp_home_nostamp_recall	"Add. food exp recall period (with stamp)"
-		*/
 	
 		*	Food expenditure
 		*	Note that Food expenditures are separated collected b/w FS users and non-FS (nFS) users since 1994, we need make variables which combine them.
@@ -3580,52 +3444,7 @@
 						*	Check time series
 						bys	year:	summ 	foodexp_home_exclFS_FS	FS_rec_amt foodexp_home_inclFS_FS	if	FS_rec_wth==1
 						
-					
-					/*	*	Outdated cade
-					
-					{
-					local	rawvar			foodexp_home_stamp
-					local	rawvar_recall	foodexp_home_stamp_recall
-					
-					
-					
-					
-					replace	`var'	=	`rawvar'	if	FS_rec_wth==1		&	(inrange(year,1994,1997)	|	inrange(year,2009,2019))	// Used food stamp last month
-					replace	`var'	=	`rawvar'	if	FS_rec_crtyr_wth==1	&	inrange(year,1999,2007)		//	RECALL: food exp is separately collected based on "this year" usage in this peirod (so we can't use 'FS_rec_wth' here)
-					
-					replace	`var'	=	0		if	FS_rec_wth==0		&	(inrange(year,1994,1997)	|	inrange(year,2009,2019))	//	If didt' use FS, set it zero
-					replace	`var'	=	0		if	FS_rec_crtyr_wth==0	&	inrange(year,1999,2007)		//	RECALL: food exp is separately collected based on "this year" usage in this peirod! (so we can't use 'FS_rec_wth' here)
-					replace	`var'	=	0		if	inrange(year,1994,2019)		&	inlist(foodexp_home_spent_extra,0,5,8,9)	//	If answered "inapp" or "no" to whether extra mount is used, set it as zero
-					
-					
-						*	Make it monthly expenditure
-						*	We treat "wild code" and "other" as "zero amount" for now as there are very small number of observations (except 1994 where we treat other as "yearly")					
-						replace	`var'	=	`var'*30.4	if	inrange(year,1995,2019)		&	`rawvar_recall'==2	//	If daily value, multiply by 30.4
-						replace	`var'	=	`var'*4.35	if	((inrange(year,1994,1994)	&	`rawvar_recall'==1)	|	(inrange(year,1995,2019)	&	`rawvar_recall'==3))	//	If weekly value, multiply by 4.35
-						replace	`var'	=	`var'*2.17	if	((inrange(year,1994,1994)	&	`rawvar_recall'==2)	|	(inrange(year,1995,2019)	&	`rawvar_recall'==4))	//	If two-week value, multiply by 2.17
-						replace	`var'	=	`var'/12	if	((inrange(year,1994,1994)	&	`rawvar_recall'==4)	|	(inrange(year,1995,2019)	&	`rawvar_recall'==6))	//	If yearly value, divide by 12
-						replace	`var'	=	0			if	((inrange(year,1994,1994)	&	inlist(`rawvar_recall',0))	|	(inrange(year,1995,2019)	&	inlist(`rawvar_recall',0,7)))	//	If other or no stamp use, set it zero
-						
-					
-						*	For DK/NA/refusal (both in amount and recall period), I impute the monthly average from other categories and assign the mean value
-						foreach	year	in	1994	1995	1996	1997	1999	2001	2003	2005	2007	2009	2011	2013	2015	2017	2019	{
-																	
-							summ	`var'			if	year==`year'	&	`rawvar'>0	&	!mi(`rawvar')	&	!mi(`rawvar_recall')	&	///			//	I use raw variable's category 
-														!inlist(`rawvar',99998,99999)	&	!inlist(`rawvar_recall',7,8,9)	//	Both recall period AND amount should be valid
-							
-							replace	`var'=r(mean) 	if	year==`year'	&	(inlist(`rawvar',99998,99999)	|	inlist(`rawvar_recall',8,9))	//	if amount OR recall period has NA/DK
-						
-					
-						}	//	year
-					
-						*	For FS user, food exp without FS is equal to extra amount above
-						replace	`var_exclFS'	=	`var'	if	FS_rec_wth==1		&	(inrange(year,1994,1997)	|	inrange(year,2009,2019))
-						replace	`var_exclFS'	=	`var'	if	FS_rec_crtyr_wth==1	&	inrange(year,1999,2007)
-					}	
-					*/	
-					
-					
-					
+				
 					*	For non-FS user							
 						loc	var				`var_exclFS_nFS'
 						loc	rawvar			foodexp_home_nostamp	//	Raw vaiable with extra amount
@@ -3672,56 +3491,6 @@
 					replace	`var_inclFS'=	`var_inclFS_FS'		if	FS_rec_wth==1
 					
 									
-					*	Outdated code
-					/*
-					{					
-					*	For non FS user
-					local	var	`var_exclFS'
-					local	rawvar			foodexp_home_nostamp
-					local	rawvar_recall	foodexp_home_nostamp_recall
-					
-					replace	`var'	=	`rawvar'	if	FS_rec_wth==0		&	(inrange(year,1994,1997)	|	inrange(year,2009,2019))	// Didn't food stamp last month
-					replace	`var'	=	`rawvar'	if	FS_rec_crtyr_wth==0	&	inrange(year,1999,2007)		//	RECALL: food exp is separately collected based on "this year" usage in this peirod! (so we can't use 'FS_rec_wth' here)
-					
-					*	I should have not included the following two lines, as it makes all the value I imputed above to zero!
-					*replace	`var'	=	0			if	FS_rec_wth==1		&	(inrange(year,1994,1997)	|	inrange(year,2009,2019))	//	If used FS, set it zero
-					*replace	`var'	=	0			if	FS_rec_crtyr_wth==1	&	inrange(year,1999,2007)	//	RECALL: food exp is separately collected based on "this year" usage in this peirod!	 (so we can't use 'FS_rec_wth' here)					
-					
-						*	Make it monthly expenditure
-						*	We treat "wild code" and "other" as "zero amount" for now as there are very small number of observations (except 1994 where we treat other as "yearly")					
-						****	I should NOT use `var'= `var_exclFS', since it will also affect FS families which are already imputed above. Need to restrict condition only to non-FS
-						replace	`var'	=	`var'*30.4	if	inrange(year,1995,2019)		&	`rawvar_recall'==2	//	If daily value, multiply by 30.4
-						replace	`var'	=	`var'*4.35	if	((inrange(year,1994,1994)	&	`rawvar_recall'==1)	|	(inrange(year,1995,2019)	&	`rawvar_recall'==3))	//	If weekly value, multiply by 4.35
-						replace	`var'	=	`var'*2.17	if	((inrange(year,1994,1994)	&	`rawvar_recall'==2)	|	(inrange(year,1995,2019)	&	`rawvar_recall'==4))	//	If two-week value, multiply by 2.17
-						replace	`var'	=	`var'/12	if	((inrange(year,1994,1994)	&	`rawvar_recall'==4)	|	(inrange(year,1995,2019)	&	`rawvar_recall'==6))	//	If yearly value, divide by 12
-						replace	`var'	=	0			if	((inrange(year,1994,1994)	&	inlist(`rawvar_recall',0))	|	(inrange(year,1995,2019)	&	inlist(`rawvar_recall',0,1,7)))	//	If other or no stamp use, set it zero
-				
-						*	For DK/NA/refusal (both in amount and recall period), I impute the monthly average from other categories and assign the mean value
-						foreach	year	in	1994	1995	1996	1997	1999	2001	2003	2005	2007	2009	2011	2013	2015	2017	2019	{
-																	
-							summ	`var'			if	year==`year'	&	`rawvar'>0	&	!mi(`rawvar')	&	!mi(`rawvar_recall')	&	///			//	I use raw variable's category 
-														!inlist(`rawvar',99998,99999)	&	!inlist(`rawvar_recall',7,8,9)	//	Both recall period AND amount should be valid
-							
-							replace	`var'=r(mean) 	if	year==`year'	&	(inlist(`rawvar',99998,99999)	|	inlist(`rawvar_recall',8,9))	//	if amount OR recall period has NA/DK
-						
-					
-						}	//	year	
-						
-						
-					*	Calculate food exp with FS
-						
-						*	Received FS (FS amount + extra amount spent)
-						replace	`var_inclFS'	=	`var_exclFS'	+	FS_rec_amt	if	FS_rec_wth==1	&	(inrange(year,1994,1997)	|	inrange(year,2009,2019))
-						replace	`var_inclFS'	=	`var_exclFS'	+	FS_rec_amt	if	FS_rec_wth==1	&	inrange(year,1999,2007)	//	Expenditure was collected separately based on "this year's usage (FS_rec_crtyr_wth)", but the amount we want to add is "last month's amount (FS_rec_amt) depending depending on whether family used FS last month (FS_rec_wth==1)"
-						*replace	`var_inclFS'	=	`var_exclFS'	+	FS_rec_amt	if	FS_rec_crtyr_wth==1	&	inrange(year,1999,2007)
-						
-						*	Didn't receive FS	(Just food exp)
-						replace	`var_inclFS'	=	`var_exclFS'	if	FS_rec_wth==0	&	(inrange(year,1994,1997)	|	inrange(year,2009,2019))
-						replace	`var_inclFS'	=	`var_exclFS'	if	FS_rec_wth==0	&	inrange(year,1999,2007)	//	Expenditure was collected separately based on "this year's usage (FS_rec_crtyr_wth)", but the condition for adding the amount we want to add is "last month's amount (FS_rec_amt) is whether family used FS last month (FS_rec_wth==1)"
-						*replace	`var_inclFS'	=	`var_exclFS'	if	FS_rec_crtyr_wth==0	&	inrange(year,1999,2007)	
-					
-					}
-					*/
 					
 					*	Validation of imputed data
 						*	Mean at-home food expenditure by year
@@ -3851,16 +3620,6 @@
 						
 						*count if	inrange(year,1997,2007)	&	FS_rec_wth==0	&	stamp_usewth_crtyear==1	
 						*summ	foodexp_away_FS	foodexp_away_nFS	if	inrange(year,1997,2007)	&	FS_rec_wth==0	&	stamp_usewth_crtyear==1	
-						
-						/*	//	Outdated code
-						*	Received FS (FS amount + extra amount spent)
-						replace	`var_eatout'	=	foodexp_away_FS	if	FS_rec_wth==1		&	(inrange(year,1994,1997)	|	inrange(year,2009,2019))
-						replace	`var_eatout'	=	foodexp_away_FS	if	FS_rec_crtyr_wth==1	&	inrange(year,1999,2007)
-						
-						*	Didn't receive FS	(Just food exp)
-						replace	`var_eatout'	=	foodexp_away_nFS	if	FS_rec_wth==0		&	(inrange(year,1994,1997)	|	inrange(year,2009,2019))
-						replace	`var_eatout'	=	foodexp_away_nFS	if	FS_rec_crtyr_wth==0	&	inrange(year,1999,2007)
-						*/
 								
 				
 				*	Validate imputation by comparing PSID-imputed value
@@ -4083,24 +3842,7 @@
 			replace	`var'=.		if mi(foodexp_tot_exclFS_pc)
 			label	value	`var'	yes1no0
 			label var	`var'	"Food exp(w/o FS) exceeds TFP cost"
-			
-			/*
-			*	Summary stat
-				
-				cap drop diff_total
-				cap drop foodexp_tot_imp_month
-				gen foodexp_tot_imp_month = foodexp_tot_imputed/12
-
-				gen	diff_total=abs(foodexp_tot_imp_month-foodexp_tot_exclFS)
-
-				br year seqnum FS_rec_wth FS_rec_crtyr_wth foodexp_tot_exclFS  foodexp_tot_imp_month foodexp_tot_imputed diff_total if inrange(year,1999,2019)
-
-				sum diff_total if inrange(year,1999,2019),d
-				
-				cap	drop	diff_total
-				cap	drop	foodexp_tot_imp_month
-			*/	
-						
+					
 		*	Winsorize top 1% value of per capita values for every year (except TFP)
 		local	pcvars	fam_income_pc ln_fam_income_pc foodexp_tot_exclFS_pc foodexp_tot_exclFS_pc_th foodexp_tot_inclFS_pc foodexp_tot_inclFS_pc_th	// fam_income_pc_real foodexp_tot_exclFS_pc_real foodexp_tot_inclFS_pc_real
 		local	years	1975	${sample_years}
@@ -4226,168 +3968,14 @@
 						xline(1974 1996 2009 2020, axis(1)) xlabel(1974 "Nationwide FSP" 1996 "Welfare Reform" 2009 "ARRA" 2020 "COVID", axis(2))	///
 						xtitle(Fiscal Year)	xtitle("", axis(2))  /*title(Program Summary)*/	bgcolor(white)	graphregion(color(white)) note(Source: USDA & BLS)	name(SNAP_summary, replace)
 		
-			/*
+			
 			*/
 			
 			
 			
 		
 	}
-			
-	*	Construct PFS
-	if	`PFS_const'==1	{
-	 
-		use    "${SNAP_dtInt}/SNAP_long_const",	clear
 		
-		*	Generate a variable (will be moved to clean var section)
-		gen	age_ind_sq	=	(age_ind)^2
-		label var	age_ind_sq	"Age sq."
-		
-		*	Set globals
-		global	statevars		l1_foodexp_tot_inclFS_pc_1 l1_foodexp_tot_inclFS_pc_2 l1_foodexp_tot_inclFS_pc_3
-		global	demovars		rp_age rp_age_sq	rp_nonWhte	rp_married	rp_female	
-		global	econvars		ln_fam_income_pc
-		global	healthvars		rp_disabled
-		global	familyvars		famnum	ratio_child
-		global	empvars			rp_employed
-		global	eduvars			rp_NoHS rp_somecol rp_col
-		global	foodvars		FS_rec_wth	//	Note that this variable is excluded by default in contructing PFS, not to violate exclusion restriction.
-		global	regionvars		rp_state_enum1-rp_state_enum31 rp_state_enum33-rp_state_enum50 	//	Excluding NY (rp_state_enum32) and outside 48 states (1, 52, 53). The latter should be excluded when running regression
-		global	timevars		year_enum4-year_enum13 year_enum15-year_enum32	//	Exclude 1990 (year_enum14 since no lagged food exp available)
-		*global	indvars			ind_female	age_ind	age_ind_sq
-
-		*	Sample where PFS will be constructed upon
-		*	They include (i) in_sample family (2) HH from 1977 to 2019
-		global	PFS_sample		in_sample==1	&	inrange(year,1977,2019)
-		
-		*	Declare variables
-		local	depvar		foodexp_tot_inclFS_pc
-		
-			*	Summary state of dep.var
-			summ	`depvar', d
-			*unique x11101ll if in_sample==1	&	!mi(foodexp_tot_inclFS_pc)
-		
-		*	Step 1
-		*	IMPORTANT: Unlike Lee et al. (2021), I exclude a binary indicator whether HH received SNAP or not (FS_rec_wth), as including it will violate exclusion restriction of IV
-		svy, subpop(if ${PFS_sample}): glm 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}	${indvars}*/	${regionvars}	${timevars}	, family(gamma)	link(log)
-		
-			*glm 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}*/	${indvars}	${regionvars}	${timevars}	[aw=wgt_long_fam_adj], family(gamma)	link(log)
-		
-			*svy: reg 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}*/	${indvars}	${regionvars}	${timevars}	
-		ereturn list
-		est	sto	glm_step1
-			
-		*	Predict fitted value and residual
-		gen	glm_step1_sample=1	if	e(sample)==1  & ${PFS_sample}	// e(sample) includes both subpopulation and non-subpopulation, so we need to include subpop condition here to properly restrict regression sample.
-		predict double mean1_foodexp_glm	if	glm_step1_sample==1
-		predict double e1_foodexp_glm	if	glm_step1_sample==1,r
-		gen e1_foodexp_sq_glm = (e1_foodexp_glm)^2
-		
-			*	Issue: mean in residuals are small, but standard deviation is large, meaning greater dispersion in residual.
-			*	It implies that 1st-stage is not working well in predicting mean.
-			summ	foodexp_tot_inclFS_pc	mean1_foodexp_glm	e1_foodexp_glm	e1_foodexp_sq_glm
-			summ	e1_foodexp_glm,d
-			
-			
-			*	As a robustness check, run step 1 "with" FS redemption (just like Lee et al. (2021)) and compare the variation captured.
-			svy: glm 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	${foodvars}	/*${indvars}*/	${regionvars}	${timevars}	, family(gamma)	link(log)
-			ereturn list
-			est	sto	glm_step1_withFS
-			
-			*	Without income and FS redemption
-			svy: glm 	`depvar'	${statevars}	${demovars}	/*${econvars}*/	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}	${indvars}*/	${regionvars}	${timevars}	, family(gamma)	link(log)
-			ereturn list
-			est	sto	glm_step1_woFS_woinc
-								
-			*	Output robustness check (comparing step 1 w/o FS and with FS)
-			esttab	glm_step1_withFS	glm_step1	glm_step1_woFS_woinc	using "${SNAP_outRaw}/GLM_pooled_FS.csv", ///
-					cells(b(star fmt(%8.2f)) se(fmt(2) par)) stats(N_sub /*r2*/) label legend nobaselevels star(* 0.10 ** 0.05 *** 0.01)	///
-					title(Conditional Mean of Food Expenditure per capita (with and w/o FS)) 	replace
-					
-			esttab	glm_step1_withFS	glm_step1	glm_step1_woFS_woinc	using "${SNAP_outRaw}/GLM_pooled_FS.tex", ///
-					cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N_sub, fmt(%8.0fc)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(_cons)*/	///
-					title(Conditional Mean of Food Expenditure per capita (with and w/o FS))		replace	
-		
-		*	Step 2
-		local	depvar	e1_foodexp_sq_glm
-		
-		*	For now (2021-11-28) GLM in step 2 does not converge. Will use OLS for now.
-		*svy: glm 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}	${indvars}*/	${regionvars}	${timevars}	, family(gamma)	link(log)
-		svy: reg 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}	${indvars}*/	${regionvars}	${timevars}
-			
-		est store glm_step2
-		gen	glm_step2_sample=1	if	e(sample)==1 & `=e(subpop)'
-		*svy:	reg `e(depvar)' `e(selected)'
-		predict	double	var1_foodexp_glm	if	glm_step2_sample==1	
-		
-			*	Shows the list of variables to manually observe issues (ex. too many negative predicted values)
-			br x11101ll year foodexp_tot_inclFS_pc mean1_foodexp_glm e1_foodexp_glm e1_foodexp_sq_glm var1_foodexp_glm
-		
-		
-		*	Output
-		**	For AER manuscript, we omit asterisk(*) to display significance as AER requires not to use.
-		**	If we want to diplay star, renable "star" option inside "cells" and "star(* 0.10 ** 0.05 *** 0.01)"
-		
-			esttab	glm_step1	glm_step2	using "${SNAP_outRaw}/GLM_pooled.csv", ///
-					cells(b(star fmt(%8.2f)) se(fmt(2) par)) stats(N_sub /*r2*/) label legend nobaselevels star(* 0.10 ** 0.05 *** 0.01)	///
-					title(Conditional Mean and Variance of Food Expenditure per capita) 	replace
-					
-			esttab	glm_step1	glm_step2	using "${SNAP_outRaw}/GLM_pooled.tex", ///
-					cells(b(nostar fmt(%8.3f)) & se(fmt(2) par)) stats(N_sub, fmt(%8.0fc)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(_cons)*/	///
-					title(Conditional Mean and Variance of Food Expenditure per capita)		replace		
-		
-		
-		*	Step 3
-		*	Assume the outcome variable follows the Gamma distribution
-		*	(2021-11-28) I temporarily don't use expected residual (var1_foodexp_glm) as it goes crazy. I will temporarily use expected residual from step 1 (e1_foodexp_sq_glm)
-		*	(2021-11-30) It kinda works after additional cleaning (ex. dropping Latino sample), but its distribution is kinda different from what we saw in PFS paper.
-		gen alpha1_foodexp_pc_glm	= (mean1_foodexp_glm)^2 / var1_foodexp_glm	//	shape parameter of Gamma (alpha)
-		gen beta1_foodexp_pc_glm	= var1_foodexp_glm / mean1_foodexp_glm		//	scale parameter of Gamma (beta)
-		
-		*	The  code below is a temporary code to see what is going wrong in the original code. I replaced expected value of residual squared with residual squared
-		*gen alpha1_foodexp_pc_glm	= (mean1_foodexp_glm)^2 / e1_foodexp_sq_glm	//	shape parameter of Gamma (alpha)
-		*gen beta1_foodexp_pc_glm	= e1_foodexp_sq_glm / mean1_foodexp_glm		//	scale parameter of Gamma (beta)
-		
-		*	Generate PFS by constructing CDF
-		gen PFS_glm = gammaptail(alpha1_foodexp_pc_glm, foodexp_W_TFP_pc/beta1_foodexp_pc_glm)	//	gammaptail(a,(x-g)/b)=(1-gammap(a,(x-g)/b)) where g is location parameter (g=0 in this case)
-		label	var	PFS_glm "PFS"
-		
-		save    "${SNAP_dtInt}/SNAP_long_PFS",	replace
-		
-		
-		*	Regress PFS on characteristics
-		use    "${SNAP_dtInt}/SNAP_long_PFS",	clear	
-		
-			*	PFS, without region FE
-			local	depvar	PFS_glm
-			
-			svy, subpop(if !mi(PFS_glm)):	///
-				reg	`depvar'	${indvars} ${demovars}	${econvars}		${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${foodvars}*/	/*${changevars}	${regionvars}	${timevars}	*/						
-			est	store	PFS_noFE	
-			
-			svy, subpop(if !mi(PFS_glm)):	///
-				reg	`depvar'	${indvars} ${demovars}	${econvars}		${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${foodvars}*/	/*${changevars}	${regionvars} */	${timevars}							
-			est	store	PFS_timeFEonly	
-			
-			svy, subpop(if !mi(PFS_glm)):	///
-				reg	`depvar'	${indvars} ${demovars}	${econvars}		${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${foodvars}*/	/*${changevars}*/	${regionvars}	${timevars}							
-			est	store	PFS_allFE
-			
-		*	Food Security Indicators and Their Correlates (Table 4 of 2020/11/16 draft)
-			esttab	PFS_noFE	PFS_timeFEonly	PFS_allFE	using "${SNAP_outRaw}/Tab_3_PFS_association.csv", ///
-					cells(b(star fmt(3)) se(fmt(2) par)) stats(N_sub r2) label legend nobaselevels star(* 0.10 ** 0.05 *** 0.01)	/*drop(_cons)*/	///
-					title(Effect of Correlates on Food Security Status) replace
-					
-					
-			esttab	PFS_noFE	PFS_timeFEonly	PFS_allFE	using "${SNAP_outRaw}/Tab_3_PFS_association.tex", ///
-					cells(b(star fmt(3)) & se(fmt(2) par)) stats(N_sub r2) incelldelimiter() label legend nobaselevels star(* 0.10 ** 0.05 *** 0.01)	/*drop(_cons)*/		///
-					/*cells(b(nostar fmt(%8.3f)) & se(fmt(2) par)) stats(N_sub r2, fmt(%8.0fc %8.3fc)) incelldelimiter() label legend nobaselevels /*nostar star(* 0.10 ** 0.05 *** 0.01)*/	/*drop(_cons)*/	*/	///
-					title(Effect of Correlates on Food Security Status) replace
-		
-		
-		*	
-	}
-	
 	*	Summary stats	
 	if	`summ_stats'==1	{
 	    
@@ -4895,12 +4483,12 @@
 	*	IV regression
 	if	`IV_reg'==1	{
 		
-		
-		
-		*	Weak IV test (preliminary, unweighted)
-		use	 "${SNAP_dtInt}/SNAP_long_PFS",	clear	
+			
+		*	Weak IV test 
+		*	(2022-05-01) For now, we use IV to predict T(FS participation) and use it to predict W (food expenditure per capita) (previously I used it to predict PFS in the second stage)
+		use	"${SNAP_dtInt}/SNAP_long_const", clear
 		local	endovar	FS_rec_wth
-		local	depvar	PFS_glm
+		local	depvar	/*PFS_glm*/	foodexp_tot_inclFS_pc
 		
 		*	Temporary renaming
 		rename	(SNAP_index_unweighted	SNAP_index_weighted)	(SNAP_index_uw	SNAP_index_w)
@@ -4908,8 +4496,8 @@
 		lab	var	SNAP_index_w 	"Weighted SNAP index"
 		
 		*	Temporary generate interaction variable
-		*gen	int_SSI_exp_sl_01_03	=	SSI_exp_sl	*	year_01_03
-		*gen	int_SSI_GDP_sl_01_03	=	SSI_GDP_sl	*	year_01_03
+		gen	int_SSI_exp_sl_01_03	=	SSI_exp_sl	*	year_01_03
+		gen	int_SSI_GDP_sl_01_03	=	SSI_GDP_sl	*	year_01_03
 		*gen	int_SSI_GDP_sl_post96	=	SSI_GDP_sl	*	post_1996
 		*gen	int_SSI_GDP_s_post96	=	SSI_GDP_s	*	post_1996
 
@@ -4917,7 +4505,7 @@
 			
 			/*
 			*	SSI (share of s&l exp on s&l exp), with 2001/2003 interaction
-			loc	IV	SSI_exp_sl
+			loc	IV		SSI_exp_sl
 			loc	IVname	SSI_exp_sl
 			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	int_SSI_exp_sl_01_03		(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
 				if	!mi(PFS_glm),	robust	cluster(x11101ll) first savefirst savefprefix(`IV')
@@ -4934,7 +4522,7 @@
 			loc	IVname	SSI_exp_s
 				
 				*	Manual 1st-stage reg (analytic weight)
-				reg	`endovar'	`IV'	${indvars} ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	///
+				reg	`endovar'	`IV'	${indvars} ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	change_RP	unemp_rate	///
 					[aw=wgt_long_fam_adj]	if	!mi(PFS_glm), robust	cluster(x11101ll)
 					
 				*	Manual 1st-stage reg (survey structure)
@@ -4997,6 +4585,7 @@
 			est	store	`IVname'_1st
 			est	drop	`IVname'`endovar'
 			
+			/*
 			*	SNAP index (unweighted)
 			loc	IV	SNAP_index_uw
 			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/		(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	if	!mi(PFS_glm),	///
@@ -5018,6 +4607,7 @@
 			estadd	scalar	Fstat	=	Fstat_`IV', replace
 			est	store	`IV'_1st
 			est	drop	`IV'`endovar'
+			*/
 			
 			*	SSI (exp_s) and state control (1977-2019)
 			loc	IV	SSI_exp_s	major_control_dem major_control_rep	
@@ -5045,7 +4635,7 @@
 			
 			
 			*	All IVs (including SNAP index)
-			loc	IV	SSI_exp_s	SSI_GDP_s	major_control_dem major_control_rep	SNAP_index_w
+			loc	IV	SSI_exp_s	SSI_GDP_s	major_control_dem major_control_rep	//SNAP_index_w
 			loc	IVname	all
 			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}		${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	if	!mi(PFS_glm),	///
 								robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
@@ -5082,6 +4672,161 @@
 		*/
 		
 	}
+	
+	*	Construct PFS
+	if	`PFS_const'==1	{
+	 
+		use    "${SNAP_dtInt}/SNAP_long_const",	clear
+		
+		*	Generate a variable (will be moved to clean var section)
+		gen	age_ind_sq	=	(age_ind)^2
+		label var	age_ind_sq	"Age sq."
+		
+		*	Set globals
+		global	statevars		l1_foodexp_tot_inclFS_pc_1 l1_foodexp_tot_inclFS_pc_2 l1_foodexp_tot_inclFS_pc_3
+		global	demovars		rp_age rp_age_sq	rp_nonWhte	rp_married	rp_female	
+		global	econvars		ln_fam_income_pc
+		global	healthvars		rp_disabled
+		global	familyvars		famnum	ratio_child
+		global	empvars			rp_employed
+		global	eduvars			rp_NoHS rp_somecol rp_col
+		global	foodvars		FS_rec_wth	//	Note that this variable is excluded by default in contructing PFS, not to violate exclusion restriction.
+		global	regionvars		rp_state_enum1-rp_state_enum31 rp_state_enum33-rp_state_enum50 	//	Excluding NY (rp_state_enum32) and outside 48 states (1, 52, 53). The latter should be excluded when running regression
+		global	timevars		year_enum4-year_enum13 year_enum15-year_enum32	//	Exclude 1990 (year_enum14 since no lagged food exp available)
+		*global	indvars			ind_female	age_ind	age_ind_sq
+
+		*	Sample where PFS will be constructed upon
+		*	They include (i) in_sample family (2) HH from 1977 to 2019
+		global	PFS_sample		in_sample==1	&	inrange(year,1977,2019)
+		
+		*	Declare variables
+		local	depvar		foodexp_tot_inclFS_pc
+		
+			*	Summary state of dep.var
+			summ	`depvar', d
+			*unique x11101ll if in_sample==1	&	!mi(foodexp_tot_inclFS_pc)
+		
+		*	Step 1
+		*	IMPORTANT: Unlike Lee et al. (2021), I exclude a binary indicator whether HH received SNAP or not (FS_rec_wth), as including it will violate exclusion restriction of IV
+		svy, subpop(if ${PFS_sample}): glm 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}	${indvars}*/	${regionvars}	${timevars}	, family(gamma)	link(log)
+		
+			*glm 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}*/	${indvars}	${regionvars}	${timevars}	[aw=wgt_long_fam_adj], family(gamma)	link(log)
+		
+			*svy: reg 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}*/	${indvars}	${regionvars}	${timevars}	
+		ereturn list
+		est	sto	glm_step1
+			
+		*	Predict fitted value and residual
+		gen	glm_step1_sample=1	if	e(sample)==1  & ${PFS_sample}	// e(sample) includes both subpopulation and non-subpopulation, so we need to include subpop condition here to properly restrict regression sample.
+		predict double mean1_foodexp_glm	if	glm_step1_sample==1
+		predict double e1_foodexp_glm	if	glm_step1_sample==1,r
+		gen e1_foodexp_sq_glm = (e1_foodexp_glm)^2
+		
+			*	Issue: mean in residuals are small, but standard deviation is large, meaning greater dispersion in residual.
+			*	It implies that 1st-stage is not working well in predicting mean.
+			summ	foodexp_tot_inclFS_pc	mean1_foodexp_glm	e1_foodexp_glm	e1_foodexp_sq_glm
+			summ	e1_foodexp_glm,d
+			
+			
+			*	As a robustness check, run step 1 "with" FS redemption (just like Lee et al. (2021)) and compare the variation captured.
+			svy: glm 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	${foodvars}	/*${indvars}*/	${regionvars}	${timevars}	, family(gamma)	link(log)
+			ereturn list
+			est	sto	glm_step1_withFS
+			
+			*	Without income and FS redemption
+			svy: glm 	`depvar'	${statevars}	${demovars}	/*${econvars}*/	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}	${indvars}*/	${regionvars}	${timevars}	, family(gamma)	link(log)
+			ereturn list
+			est	sto	glm_step1_woFS_woinc
+								
+			*	Output robustness check (comparing step 1 w/o FS and with FS)
+			esttab	glm_step1_withFS	glm_step1	glm_step1_woFS_woinc	using "${SNAP_outRaw}/GLM_pooled_FS.csv", ///
+					cells(b(star fmt(%8.2f)) se(fmt(2) par)) stats(N_sub /*r2*/) label legend nobaselevels star(* 0.10 ** 0.05 *** 0.01)	///
+					title(Conditional Mean of Food Expenditure per capita (with and w/o FS)) 	replace
+					
+			esttab	glm_step1_withFS	glm_step1	glm_step1_woFS_woinc	using "${SNAP_outRaw}/GLM_pooled_FS.tex", ///
+					cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N_sub, fmt(%8.0fc)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(_cons)*/	///
+					title(Conditional Mean of Food Expenditure per capita (with and w/o FS))		replace	
+		
+		*	Step 2
+		local	depvar	e1_foodexp_sq_glm
+		
+		*	For now (2021-11-28) GLM in step 2 does not converge. Will use OLS for now.
+		*svy: glm 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}	${indvars}*/	${regionvars}	${timevars}	, family(gamma)	link(log)
+		svy: reg 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}	${indvars}*/	${regionvars}	${timevars}
+			
+		est store glm_step2
+		gen	glm_step2_sample=1	if	e(sample)==1 & `=e(subpop)'
+		*svy:	reg `e(depvar)' `e(selected)'
+		predict	double	var1_foodexp_glm	if	glm_step2_sample==1	
+		
+			*	Shows the list of variables to manually observe issues (ex. too many negative predicted values)
+			br x11101ll year foodexp_tot_inclFS_pc mean1_foodexp_glm e1_foodexp_glm e1_foodexp_sq_glm var1_foodexp_glm
+		
+		
+		*	Output
+		**	For AER manuscript, we omit asterisk(*) to display significance as AER requires not to use.
+		**	If we want to diplay star, renable "star" option inside "cells" and "star(* 0.10 ** 0.05 *** 0.01)"
+		
+			esttab	glm_step1	glm_step2	using "${SNAP_outRaw}/GLM_pooled.csv", ///
+					cells(b(star fmt(%8.2f)) se(fmt(2) par)) stats(N_sub /*r2*/) label legend nobaselevels star(* 0.10 ** 0.05 *** 0.01)	///
+					title(Conditional Mean and Variance of Food Expenditure per capita) 	replace
+					
+			esttab	glm_step1	glm_step2	using "${SNAP_outRaw}/GLM_pooled.tex", ///
+					cells(b(nostar fmt(%8.3f)) & se(fmt(2) par)) stats(N_sub, fmt(%8.0fc)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(_cons)*/	///
+					title(Conditional Mean and Variance of Food Expenditure per capita)		replace		
+		
+		
+		*	Step 3
+		*	Assume the outcome variable follows the Gamma distribution
+		*	(2021-11-28) I temporarily don't use expected residual (var1_foodexp_glm) as it goes crazy. I will temporarily use expected residual from step 1 (e1_foodexp_sq_glm)
+		*	(2021-11-30) It kinda works after additional cleaning (ex. dropping Latino sample), but its distribution is kinda different from what we saw in PFS paper.
+		gen alpha1_foodexp_pc_glm	= (mean1_foodexp_glm)^2 / var1_foodexp_glm	//	shape parameter of Gamma (alpha)
+		gen beta1_foodexp_pc_glm	= var1_foodexp_glm / mean1_foodexp_glm		//	scale parameter of Gamma (beta)
+		
+		*	The  code below is a temporary code to see what is going wrong in the original code. I replaced expected value of residual squared with residual squared
+		*gen alpha1_foodexp_pc_glm	= (mean1_foodexp_glm)^2 / e1_foodexp_sq_glm	//	shape parameter of Gamma (alpha)
+		*gen beta1_foodexp_pc_glm	= e1_foodexp_sq_glm / mean1_foodexp_glm		//	scale parameter of Gamma (beta)
+		
+		*	Generate PFS by constructing CDF
+		gen PFS_glm = gammaptail(alpha1_foodexp_pc_glm, foodexp_W_TFP_pc/beta1_foodexp_pc_glm)	//	gammaptail(a,(x-g)/b)=(1-gammap(a,(x-g)/b)) where g is location parameter (g=0 in this case)
+		label	var	PFS_glm "PFS"
+		
+		save    "${SNAP_dtInt}/SNAP_long_PFS",	replace
+		
+		
+		*	Regress PFS on characteristics
+		use    "${SNAP_dtInt}/SNAP_long_PFS",	clear	
+		
+			*	PFS, without region FE
+			local	depvar	PFS_glm
+			
+			svy, subpop(if !mi(PFS_glm)):	///
+				reg	`depvar'	${indvars} ${demovars}	${econvars}		${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${foodvars}*/	/*${changevars}	${regionvars}	${timevars}	*/						
+			est	store	PFS_noFE	
+			
+			svy, subpop(if !mi(PFS_glm)):	///
+				reg	`depvar'	${indvars} ${demovars}	${econvars}		${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${foodvars}*/	/*${changevars}	${regionvars} */	${timevars}							
+			est	store	PFS_timeFEonly	
+			
+			svy, subpop(if !mi(PFS_glm)):	///
+				reg	`depvar'	${indvars} ${demovars}	${econvars}		${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${foodvars}*/	/*${changevars}*/	${regionvars}	${timevars}							
+			est	store	PFS_allFE
+			
+		*	Food Security Indicators and Their Correlates (Table 4 of 2020/11/16 draft)
+			esttab	PFS_noFE	PFS_timeFEonly	PFS_allFE	using "${SNAP_outRaw}/Tab_3_PFS_association.csv", ///
+					cells(b(star fmt(3)) se(fmt(2) par)) stats(N_sub r2) label legend nobaselevels star(* 0.10 ** 0.05 *** 0.01)	/*drop(_cons)*/	///
+					title(Effect of Correlates on Food Security Status) replace
+					
+					
+			esttab	PFS_noFE	PFS_timeFEonly	PFS_allFE	using "${SNAP_outRaw}/Tab_3_PFS_association.tex", ///
+					cells(b(star fmt(3)) & se(fmt(2) par)) stats(N_sub r2) incelldelimiter() label legend nobaselevels star(* 0.10 ** 0.05 *** 0.01)	/*drop(_cons)*/		///
+					/*cells(b(nostar fmt(%8.3f)) & se(fmt(2) par)) stats(N_sub r2, fmt(%8.0fc %8.3fc)) incelldelimiter() label legend nobaselevels /*nostar star(* 0.10 ** 0.05 *** 0.01)*/	/*drop(_cons)*/	*/	///
+					title(Effect of Correlates on Food Security Status) replace
+		
+		
+		*	
+	}
+	
 	
 /*
 	*	Drop years not in the sample
