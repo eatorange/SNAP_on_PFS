@@ -4489,8 +4489,7 @@
 	
 	*	IV regression
 	if	`IV_reg'==1	{
-		
-			
+				
 		*	Weak IV test 
 		*	(2022-05-01) For now, we use IV to predict T(FS participation) and use it to predict W (food expenditure per capita) (previously I used it to predict PFS in the second stage)
 		use	"${SNAP_dtInt}/SNAP_long_const", clear
@@ -4540,16 +4539,29 @@
 			*	SSI (share of state exp on state exp)
 			loc	IV		SSI_GDP_s
 			loc	IVname	SSI_GDP_s
-				
-			/*	Checking difference in results between different regression methods. Disbled by default.
-				*	1. Manual 1st-stage reg (analytic weight)
-				reg	`endovar'	`IV'	${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	///
-					[aw=wgt_long_fam_adj]	if	in_sample==1 & inrange(year,1977,2019), robust	cluster(x11101ll)
+			
+							
+				* Checking difference in results between different regression methods. Disbled by default.
+				*	1. Manual do 2SLS reg (analytic weight)
 					
+					*	1st-stage
+					reg	`endovar'	`IV'	${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	///
+						[aw=wgt_long_fam_adj]	if	in_sample==1 & inrange(year,1977,2019), robust	cluster(x11101ll)
+					
+					*	Predict
+					cap	drop	FS_rec_wth_hat
+					predict FS_rec_wth_hat if e(sample),xb
+					
+					*	2nd stage
+					reg	`depvar'	FS_rec_wth_hat	${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	///
+						[aw=wgt_long_fam_adj]	if	in_sample==1 & inrange(year,1977,2019), robust	cluster(x11101ll)
+					
+					drop	FS_rec_wth_hat
+								
 				*	2. Manual 1st-stage reg (survey structure)
 				svy: reg	`endovar'	`IV'	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	///
 					if	in_sample==1 & inrange(year,1977,2019)
-					
+								
 				*	3. IV-reg (with analytic weight)
 				ivregress	2sls 	`depvar'	 ${demovars} ${econvars}	${healthvars}	${empvars}	${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
 					if	in_sample==1 & inrange(year,1977,2019), first vce(cluster x11101ll)
@@ -4566,7 +4578,9 @@
 				
 							
 			*	The results show that
-				*	Comparing analytic weight and survey structure (1 vs 2, 3 vs 4: they give same coefficients with very similar standard errors
+				*	Comparing analytic weight and survey structure (1 vs 2, 3 vs 4
+					*	(1) and (3) give same coefficients and st.errors in the first stage, but slightly different results in both results in 2nd-stage
+					*	(2) and (4) give they give same coefficients with very similar standard errors in the first stage. Second stage?
 				*	Comparing manual 1st-stage and ivregress 1st-stage (1 vs 3, 2 vs 4): Both coefficients and standard errors differ (but why?). Coefficients differ not by significantly but non-trivially either.
 				*	Comparing vreg2 aw (5) with ivregress (aw) (3), svy: ivregress (4) and i: (5) have same coefficients with (3) and (4)
 					*	With individual-level cluster error, (5) and (3) give the same standard error.
