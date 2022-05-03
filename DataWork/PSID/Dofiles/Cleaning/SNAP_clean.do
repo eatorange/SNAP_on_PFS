@@ -1391,7 +1391,7 @@
 				save	"${SNAP_dtInt}/Governors",	replace
 				
 			*	State legislative bipartisan composition (other than Nebraska and D.C)
-			*	Main source: National Connference of State Legislatures (1978-2008 (even years)), (2009-2021), Balletpedia "Who Runs the States, Partisanship Report" (1993-2007 (odd years))
+			*	Main source: National Conference of State Legislatures (1978-2008 (even years)), (2009-2021), Balletpedia "Who Runs the States, Partisanship Report" (1993-2007 (odd years))
 			*import	excel	"${dataWorkFolder}/Politics/united_states_governors_1775_2020.xlsx", firstrow sheet(state_partisan_comp)	clear
 			import	excel	"${clouldfolder}/DataWork/Politics/united_states_governors_1775_2020.xlsx", firstrow sheet(state_partisan_comp)	clear
 			
