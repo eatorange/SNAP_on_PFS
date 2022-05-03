@@ -1256,42 +1256,44 @@
 					
 				*	Label variables
 				*	(2022-4-11) I only label state-level as I don't use state & local level. Will add label if needed later
-					label	var	share_edu_exp_s	"\% of total Exp on Education"
-					label	var	share_welfare_exp_s	"\% of total Exp on Pub. Welfare"
-					label	var	share_health_exp_s	"\% of total Exp on Health and Hospital"
-					label	var	share_housing_exp_s	"\% of total Exp on Housing and Comm Dev"
-					label	var	SSI_exp_s	"Social Spending Index (Exp)"
+				*	(2022-5-3) I now use state and local data only.
+				
+					label	var	share_edu_exp_sl	"\% of total Exp on Education"
+					label	var	share_welfare_exp_sl	"\% of total Exp on Pub. Welfare"
+					label	var	share_health_exp_sl	"\% of total Exp on Health and Hospital"
+					label	var	share_housing_exp_sl	"\% of total Exp on Housing and Comm Dev"
+					label	var	SSI_exp_sl	"Social Spending Index (Exp)"
 					
-					label	var	share_edu_GDP_s	"\% of GDP on Education"
-					label	var	share_welfare_GDP_s	"\% of GDP on Pub. Welfare"
-					label	var	share_health_GDP_s	"\% of GDP on Health and Hospital"
-					label	var	share_housing_GDP_s	"\% of GDP on Housing and Comm Dev"
-					label	var	SSI_GDP_s	"Social Spending Index (GDP)"
+					label	var	share_edu_GDP_sl	"\% of GDP on Education"
+					label	var	share_welfare_GDP_sl	"\% of GDP on Pub. Welfare"
+					label	var	share_health_GDP_sl	"\% of GDP on Health and Hospital"
+					label	var	share_housing_GDP_sl	"\% of GDP on Housing and Comm Dev"
+					label	var	SSI_GDP_sl	"Social Spending Index (GDP)"
 					
 			*	Robustness check between SSI from old GDP (pre-1997) and from new GDP (post-1997)
 					
 					*	Share using old GDP
 					local	denominator	GDP_old
 					
-					gen	share_edu_oldGDP_s		=	s_`eduvar'		/	(`denominator'*1000)
-					gen	share_welfare_oldGDP_s	=	s_`welfvar'		/	(`denominator'*1000)
-					gen	share_health_oldGDP_s	=	s_`healthvar'	/	(`denominator'*1000)
-					gen	share_housing_oldGDP_s	=	s_`housevar'	/	(`denominator'*1000)
-					egen	SSI_oldGDP_s	=	rowtotal(share_edu_oldGDP_s	share_welfare_oldGDP_s	share_health_oldGDP_s	share_housing_oldGDP_s)
+					gen	share_edu_oldGDP_sl		=	sl_`eduvar'		/	(`denominator'*1000)
+					gen	share_welfare_oldGDP_sl	=	sl_`welfvar'		/	(`denominator'*1000)
+					gen	share_health_oldGDP_sl	=	sl_`healthvar'	/	(`denominator'*1000)
+					gen	share_housing_oldGDP_sl	=	sl_`housevar'	/	(`denominator'*1000)
+					egen	SSI_oldGDP_sl	=	rowtotal(share_edu_oldGDP_sl	share_welfare_oldGDP_sl	share_health_oldGDP_sl	share_housing_oldGDP_sl)
 					
 					*	Share using new GDP
 					local	denominator	GDP_new
 					
-					gen	share_edu_newGDP_s		=	s_`eduvar'		/	(`denominator'*1000)
-					gen	share_welfare_newGDP_s	=	s_`welfvar'		/	(`denominator'*1000)
-					gen	share_health_newGDP_s	=	s_`healthvar'	/	(`denominator'*1000)
-					gen	share_housing_newGDP_s	=	s_`housevar'	/	(`denominator'*1000)
-					egen	SSI_newGDP_s	=	rowtotal(share_edu_newGDP_s	share_welfare_newGDP_s	share_health_newGDP_s	share_housing_newGDP_s)
+					gen	share_edu_newGDP_sl		=	sl_`eduvar'		/	(`denominator'*1000)
+					gen	share_welfare_newGDP_sl	=	sl_`welfvar'		/	(`denominator'*1000)
+					gen	share_health_newGDP_sl	=	sl_`healthvar'	/	(`denominator'*1000)
+					gen	share_housing_newGDP_sl	=	sl_`housevar'	/	(`denominator'*1000)
+					egen	SSI_newGDP_sl	=	rowtotal(share_edu_newGDP_sl	share_welfare_newGDP_sl	share_health_newGDP_sl	share_housing_newGDP_sl)
 					
 					
 					*	Difference in SSI b/w old and new GDP (only available in 1997 which has both old and new GDP)
 					*	We cannot reject the null hypothesis that mean difference is zero, implying that we can combine old and new GDP into one variable for our analyses.
-					ttest	SSI_oldGDP_s==SSI_newGDP_s	if	year==1997
+					ttest	SSI_oldGDP_sl==SSI_newGDP_sl	if	year==1997
 					
 					drop	*oldGDP*	*newGDP*
 					
@@ -1299,9 +1301,25 @@
 					*	Save
 					compress
 					save	"${SNAP_dtInt}/SSI",	replace
-		
-		use	"${SNAP_dtInt}/SSI",	clear
-		
+			
+			*	Summary statistics
+			use	"${SNAP_dtInt}/SSI",	clear
+			preserve
+			collapse	(mean)	share_edu_GDP_sl share_welfare_GDP_sl share_health_GDP_sl share_housing_GDP_sl SSI_GDP_sl, by(year)
+			
+			graph	twoway	(line SSI_GDP_sl year, /*lpattern(dash)*/ xaxis(1 2) yaxis(1))	///
+							/*(line TFP_monthly_cost	year, lpattern(dash_dot) xaxis(1 2) yaxis(2)) */ 	///
+							/*(line FS_rec_amt	year, lpattern(dash_dot) xaxis(1 2) yaxis(2))*/,  ///
+							xline(1980 1993 1999 2007, axis(1) lpattern(dot)) xlabel(/*1980 "No payment" 1993 "xxx" 2009 "ARRA" 2020 "COVID"*/, axis(2))	///
+							xtitle(Year)	xtitle("", axis(2))  title(Monthly Food Expenditure and FS Benefit)	bgcolor(white)	graphregion(color(white)) /*note(Source: USDA & BLS)*/	name(foodexp_FSamt_byyear, replace)
+			
+			
+			*graph	export	"${SNAP_outRaw}/foodexp_FSamt_byyear.png", replace
+			graph	close
+			
+			restore
+			collapse	(mean)	share_edu_GDP_sl share_welfare_GDP_sl share_health_GDP_sl share_housing_GDP_sl SSI_GDP_sl, by(state)
+			sort	SSI_GDP_sl
 		
 		*	State governors data
 		*	This data is based on "United States Governors 1775-2020" https://doi.org/10.3886/E102000V3
