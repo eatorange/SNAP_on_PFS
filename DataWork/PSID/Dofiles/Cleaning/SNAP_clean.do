@@ -1514,9 +1514,13 @@
 					replace	`var_mix'=1	if	!inlist(rp_state,8,26)	&	(!mi(governor_party)	&	!mi(legis_control))	&	`mixed'	//	Mixed (neither party has trifecta status)
 		
 				
-				label	var	`var_dem'	"Democrat control"
-				label	var	`var_rep'	"Republic control"
-				label	var	`var_mix'	"Mixed"
+				*	Double-check that all observations belong to one and only one of the three categories
+				cap	drop	tot
+				egen tot = rowtotal( major_control_dem major_control_rep major_control_mix)
+				assert tot==1
+				drop tot
+				
+				
 				
 				/*
 				*	Trifecta is the status when one political party holds governorship, state control (both houses)
@@ -3827,21 +3831,26 @@
 			
 
 			*	Construct a indicator whether total food exp (per capita) exceeds TFP (per capita)
+			*	Make sure to consider only non-missing TFP observations, which are missing for those who are not living together (seq.num outside 1-20). Otherwise indicators will tag those who do not live together.
+			*	Note: These indicators are exactly the same when using "per capita" value instead
 			loc	var	overTFP_inclFS
 			cap drop `var'
-			gen		`var'=0 	if foodexp_tot_inclFS_pc<foodexp_W_TFP_pc
-			replace	`var'=1 	if foodexp_tot_inclFS_pc>=foodexp_W_TFP_pc
-			replace	`var'=.		if mi(foodexp_tot_inclFS_pc)
+			gen		`var'=.
+			replace	`var'=0	if	!mi(foodexp_W_TFP)	&	!mi(foodexp_tot_inclFS)	&	foodexp_W_TFP>foodexp_tot_inclFS
+			replace	`var'=1	if	!mi(foodexp_W_TFP)	&	!mi(foodexp_tot_inclFS)	&	foodexp_W_TFP<=foodexp_tot_inclFS
 			label	value	`var'	yes1no0
 			label var	`var'	"Food exp(with FS) exceeds TFP cost"
 
 			loc	var	overTFP_exclFS
 			cap drop `var'
-			gen		`var'=0 	if foodexp_tot_exclFS_pc<foodexp_W_TFP_pc
-			replace	`var'=1 	if foodexp_tot_exclFS_pc>=foodexp_W_TFP_pc
-			replace	`var'=.		if mi(foodexp_tot_exclFS_pc)
+			gen		`var'=.
+			replace	`var'=0	if	!mi(foodexp_W_TFP)	&	!mi(foodexp_tot_exclFS)	&	foodexp_W_TFP>foodexp_tot_exclFS
+			replace	`var'=1	if	!mi(foodexp_W_TFP)	&	!mi(foodexp_tot_exclFS)	&	foodexp_W_TFP<=foodexp_tot_exclFS
 			label	value	`var'	yes1no0
 			label var	`var'	"Food exp(w/o FS) exceeds TFP cost"
+			
+			br year foodexp_W_TFP	foodexp_tot_exclFS	foodexp_tot_inclFS	if	inrange(foodexp_W_TFP,foodexp_tot_exclFS,foodexp_tot_inclFS)	
+			
 					
 		*	Winsorize top 1% value of per capita values for every year (except TFP)
 		local	pcvars	fam_income_pc ln_fam_income_pc foodexp_tot_exclFS_pc foodexp_tot_exclFS_pc_th foodexp_tot_inclFS_pc foodexp_tot_inclFS_pc_th	// fam_income_pc_real foodexp_tot_exclFS_pc_real foodexp_tot_inclFS_pc_real
@@ -3941,7 +3950,7 @@
 		*	Check discontinuity of final variables by checking weighted average
 		use	"${SNAP_dtInt}/SNAP_long_const", clear
 		preserve
-		collapse (mean) FS_rec_wth foodexp_tot_exclFS foodexp_tot_inclFS foodexp_tot_exclFS_pc foodexp_tot_inclFS_pc [aw=wgt_long_fam_adj], by(year)
+		collapse (mean) FS_rec_wth foodexp_tot_exclFS foodexp_tot_inclFS foodexp_tot_exclFS_pc foodexp_tot_inclFS_pc foodexp_W_TFP_pc overTFP_exclFS overTFP_inclFS [aw=wgt_long_fam_adj], by(year)
 		tempfile	foodvar_check
 		save		`foodvar_check'
 		restore
@@ -3953,10 +3962,10 @@
 		lab	var	foodexp_tot_inclFS_pc	"Food exp per capita (with FS)"
 		lab	var	FS_rec_amt	"FS benefit ($)"
 		
-		graph	twoway	(line foodexp_tot_exclFS year, lpattern(dash) xaxis(1 2) yaxis(1))	///
-						/*(line foodexp_tot_inclFS	year, lpattern(dash_dot) xaxis(1 2) yaxis(1))  */	///
-						(line FS_rec_amt	year, lpattern(dot) xaxis(1 2) yaxis(2)),  ///
-						xline(1980 1993 1999 2007, axis(1)) xlabel(/*1980 "No payment" 1993 "xxx" 2009 "ARRA" 2020 "COVID"*/, axis(2))	///
+		graph	twoway	(line foodexp_tot_exclFS year, /*lpattern(dash)*/ xaxis(1 2) yaxis(1))	///
+						/*(line TFP_monthly_cost	year, lpattern(dash_dot) xaxis(1 2) yaxis(2)) */ 	///
+						(line FS_rec_amt	year, lpattern(dash_dot) xaxis(1 2) yaxis(2)),  ///
+						xline(1980 1993 1999 2007, axis(1) lpattern(dot)) xlabel(/*1980 "No payment" 1993 "xxx" 2009 "ARRA" 2020 "COVID"*/, axis(2))	///
 						xtitle(Year)	xtitle("", axis(2))  title(Monthly Food Expenditure and FS Benefit)	bgcolor(white)	graphregion(color(white)) /*note(Source: USDA & BLS)*/	name(foodexp_FSamt_byyear, replace)
 		
 			
@@ -3970,9 +3979,7 @@
 		
 			
 			*/
-			
-			
-			
+		
 		
 	}
 		
@@ -4209,8 +4216,8 @@
 							graph	close
 	
 			
-		*	Test parallel trend assumption
-			
+		*	Test parallel trend assumption // Not using it for now.
+		{	
 			*	Never-treated vs Treated-once
 			sort	x11101ll	year
 			cap	drop	relat_time
@@ -4380,7 +4387,7 @@
 											title(Treated twice vs Treated 3-times)	name(PFS_pretrend, replace)
 				graph	export	"${SNAP_outRaw}/PFS_twice_3times.png", replace
 				graph	close
-				
+		}	
 			
 			/*
 			*	Genenerate average PFS per each group
@@ -4482,18 +4489,36 @@
 	
 	*	IV regression
 	if	`IV_reg'==1	{
-		
-			
+				
 		*	Weak IV test 
 		*	(2022-05-01) For now, we use IV to predict T(FS participation) and use it to predict W (food expenditure per capita) (previously I used it to predict PFS in the second stage)
 		use	"${SNAP_dtInt}/SNAP_long_const", clear
 		local	endovar	FS_rec_wth
 		local	depvar	/*PFS_glm*/	foodexp_tot_inclFS_pc
 		
+		*	Set globals
+		global	demovars		rp_age rp_age_sq	rp_nonWhte	rp_married	rp_female	
+		global	econvars		ln_fam_income_pc	unemp_rate
+		global	healthvars		rp_disabled
+		global	familyvars		famnum	ratio_child	change_RP
+		global	empvars			rp_employed
+		global	eduvars			rp_NoHS rp_somecol rp_col
+		global	foodvars		FS_rec_wth
+		global	regionvars		rp_state_enum1-rp_state_enum31 rp_state_enum33-rp_state_enum50 	//	Excluding NY (rp_state_enum32) and outside 48 states (1, 52, 53). The latter should be excluded when running regression
+		global	timevars		year_enum5-year_enum13 year_enum15-year_enum32	//	Exclude 1978 (year_enum4, base year) and 1990 (year_enum14, no lagged food exp available)
+		
+				
 		*	Temporary renaming
 		rename	(SNAP_index_unweighted	SNAP_index_weighted)	(SNAP_index_uw	SNAP_index_w)
 		lab	var	SNAP_index_uw 	"Unweighted SNAP index"
 		lab	var	SNAP_index_w 	"Weighted SNAP index"
+		
+		*	Temporarily rescale SSI variables (0-1 to 1-100)
+		foreach	var	in	SSI_exp_sl SSI_exp_s SSI_GDP_sl SSI_GDP_s	{
+		    
+			replace	`var'=	`var'*100	if	!mi(`var')	&	inrange(`var',0,100) // This condition make sure that we do not double-scale it (ex. later fixed it in the "clean" part but forgot to fix it here.)
+			assert	inrange(`var',1,100)	if	!mi(`var')
+		}
 		
 		*	Temporary generate interaction variable
 		gen	int_SSI_exp_sl_01_03	=	SSI_exp_sl	*	year_01_03
@@ -4502,50 +4527,97 @@
 		*gen	int_SSI_GDP_s_post96	=	SSI_GDP_s	*	post_1996
 
 		*	Regression test
+		*	For now we test 4 models
+			*	(1) Political vars and state-level SSI, without FE
+			*	(2) Political vars and state-level SSI, with FE
+			*	(3) Political vars and state&local level SSI, without FE
+			*	(4) Political vars and state&local level SSI, with FE
 			
-			/*
-			*	SSI (share of s&l exp on s&l exp), with 2001/2003 interaction
-			loc	IV		SSI_exp_sl
-			loc	IVname	SSI_exp_sl
-			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	int_SSI_exp_sl_01_03		(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
-				if	!mi(PFS_glm),	robust	cluster(x11101ll) first savefirst savefprefix(`IV')
-			est	store	`IVname'_2nd
-			scalar	Fstat_`IVname'	=	e(widstat)
-			est	restore	`IVname'`endovar'
-			estadd	scalar	Fstat	=	Fstat_`IVname', replace
-			est	store	`IVname'_1st
-			est	drop	`IVname'`endovar'
-			*/
-						
+			*	(1) P and S-SSI, without FE
+			*	Before we proceed, let's see whether there are big differences between analytical weight without survey structure, and using survey structure
+			
 			*	SSI (share of state exp on state exp)
-			loc	IV	SSI_exp_s
-			loc	IVname	SSI_exp_s
-				
-				*	Manual 1st-stage reg (analytic weight)
-				reg	`endovar'	`IV'	${indvars} ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	change_RP	unemp_rate	///
-					[aw=wgt_long_fam_adj]	if	!mi(PFS_glm), robust	cluster(x11101ll)
+			loc	IV		SSI_GDP_s
+			loc	IVname	SSI_GDP_s
+			
+							
+				* Checking difference in results between different regression methods. Disbled by default.
+				*	1. Manual do 2SLS reg (analytic weight)
 					
-				*	Manual 1st-stage reg (survey structure)
-				svy: reg	`endovar'	`IV'	${indvars} ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	///
-					if	!mi(PFS_glm)
+					*	1st-stage
+					reg	`endovar'	`IV'	${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	///
+						[aw=wgt_long_fam_adj]	if	in_sample==1 & inrange(year,1977,2019), robust	cluster(x11101ll)
+					
+					*	Predict
+					cap	drop	FS_rec_wth_hat
+					predict FS_rec_wth_hat if e(sample),xb
+					
+					*	2nd stage
+					reg	`depvar'	FS_rec_wth_hat	${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	///
+						[aw=wgt_long_fam_adj]	if	in_sample==1 & inrange(year,1977,2019), robust	cluster(x11101ll)
+					
+					drop	FS_rec_wth_hat
+								
+				*	2. Manual 1st-stage reg (survey structure)
+				svy: reg	`endovar'	`IV'	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	///
+					if	in_sample==1 & inrange(year,1977,2019)
+								
+				*	3. IV-reg (with analytic weight)
+				ivregress	2sls 	`depvar'	 ${demovars} ${econvars}	${healthvars}	${empvars}	${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+					if	in_sample==1 & inrange(year,1977,2019), first vce(cluster x11101ll)
+				estat firststage
 				
-				*	IV-reg (with analytic weight)
-				ivregress	2sls 	`depvar'	${indvars} ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	if	!mi(PFS_glm)
+				*	4. IV-reg (with survey structure)
+				svy: ivregress	2sls 	`depvar'	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')	///
+					if	in_sample==1 & inrange(year,1977,2019), first
+				*estat firststage
 				
-				*	IV-reg (with survey structure)
-				svy: ivregress	2sls 	`depvar'	${indvars} ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')	if	!mi(PFS_glm)
+				*	5. IV-reg (with analytic weight, ivreg2 does not allow survey structure)
+				ivreg2 	`depvar'	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+					if	in_sample==1 & inrange(year,1977,2019),	robust	cluster(x11101ll) first savefirst savefprefix(`IV')
 				
-				*	IV-reg (with analytic weight, ivreg2 does not allow survey structure)
-				ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	if	!mi(PFS_glm),	///
-									robust	cluster(x11101ll) first savefirst savefprefix(`IV')
-									
-									
+							
+			*	The results show that
+				*	Comparing analytic weight and survey structure (1 vs 2, 3 vs 4
+					*	(1) and (3) give same coefficients and st.errors in the first stage, but slightly different results in both results in 2nd-stage
+					*	(2) and (4) give they give same coefficients with very similar standard errors in the first stage. Second stage?
+				*	Comparing manual 1st-stage and ivregress 1st-stage (1 vs 3, 2 vs 4): Both coefficients and standard errors differ (but why?). Coefficients differ not by significantly but non-trivially either.
+				*	Comparing vreg2 aw (5) with ivregress (aw) (3), svy: ivregress (4) and i: (5) have same coefficients with (3) and (4)
+					*	With individual-level cluster error, (5) and (3) give the same standard error.
+				*	=>	I will use (5) now, arguing that (5) and (4) have same coefficients with different standard error.
+				*/
+			
+			/*	Comparing results between (1) S&L share with 01/03 interaction and (2) state share only. Disabled by default
+			
+				*	SSI (share of s&l exp as % of GDP), with 2001/2003 interaction
+				loc	IV		SSI_GDP_sl
+				loc	IVname	SSI_GDP_sl
+				ivreg2 	`depvar'	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')	int_SSI_exp_sl_01_03	[aw=wgt_long_fam_adj]	///
+					if	in_sample==1 & inrange(year,1977,2019),	robust	cluster(x11101ll) first savefirst savefprefix(`IV')
 				est	store	`IVname'_2nd
 				scalar	Fstat_`IVname'	=	e(widstat)
 				est	restore	`IVname'`endovar'
 				estadd	scalar	Fstat	=	Fstat_`IVname', replace
 				est	store	`IVname'_1st
 				est	drop	`IVname'`endovar'
+				
+				*	SSI (share of s exp as % of GDP)
+				loc	IV		SSI_GDP_s
+				loc	IVname	SSI_GDP_s
+				ivreg2 	`depvar'	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+					if	in_sample==1 & inrange(year,1977,2019),	robust	cluster(x11101ll) first savefirst savefprefix(`IV')
+				est	store	`IVname'_2nd
+				scalar	Fstat_`IVname'	=	e(widstat)
+				est	restore	`IVname'`endovar'
+				estadd	scalar	Fstat	=	Fstat_`IVname', replace
+				est	store	`IVname'_1st
+				est	drop	`IVname'`endovar'
+					
+				*	Very similar results both in first and second, so we will stick to S&L GDP.
+
+			*/
+			
+			
 			
 			/*
 			*	SSI (share of GDP on s&l exp), with 2001/2003 interaction and post-1996 interactions
@@ -4561,11 +4633,13 @@
 			est	drop	`IVname'`endovar'
 			*/
 			
-			*	SSI (share of GDP on s exp)
-			loc	IV	SSI_GDP_s
-			loc	IVname	SSI_GDP_s
-			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/		(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
-				if	!mi(PFS_glm),	robust	cluster(x11101ll) first savefirst savefprefix(`IV')
+					
+			
+			*	SSI (share of s&l exp as % of GDP), with 2001/2003 interaction, w/o FE
+			loc	IV		SSI_GDP_sl	int_SSI_exp_sl_01_03
+			loc	IVname	SSI_noFE
+			ivreg2 	`depvar'	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+				if	in_sample==1 & inrange(year,1977,2019),	robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
 			est	store	`IVname'_2nd
 			scalar	Fstat_`IVname'	=	e(widstat)
 			est	restore	`IVname'`endovar'
@@ -4573,17 +4647,45 @@
 			est	store	`IVname'_1st
 			est	drop	`IVname'`endovar'
 			
-			*	State control ("mixed" is omitted as base category)
-			loc	IV	major_control_dem major_control_rep
-			loc	IVname	politics
-			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}		${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	if	!mi(PFS_glm),	///
-								robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
+			
+			/*	*	SSI (share of s&l exp as % of GDP), with 2001/2003 interaction, with FE
+			loc	IV		SSI_GDP_sl
+			loc	IVname	SSI_FE
+			ivreg2 	`depvar'	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	${regionvars}	${timevars}	(`endovar'	=	`IV')	int_SSI_exp_sl_01_03	[aw=wgt_long_fam_adj]	///
+				if	in_sample==1 & inrange(year,1977,2019),	robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
 			est	store	`IVname'_2nd
 			scalar	Fstat_`IVname'	=	e(widstat)
 			est	restore	`IVname'`endovar'
 			estadd	scalar	Fstat	=	Fstat_`IVname', replace
 			est	store	`IVname'_1st
 			est	drop	`IVname'`endovar'
+			*/
+					
+			*	State control ("mixed" is omitted as base category), w/o FE
+			loc	IV	major_control_dem major_control_rep
+			loc	IVname	politics_noFE
+			ivreg2 	`depvar'	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+				if	in_sample==1 & inrange(year,1977,2019),	robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
+			est	store	`IVname'_2nd
+			scalar	Fstat_`IVname'	=	e(widstat)
+			est	restore	`IVname'`endovar'
+			estadd	scalar	Fstat	=	Fstat_`IVname', replace
+			est	store	`IVname'_1st
+			est	drop	`IVname'`endovar'
+			
+			
+			/*	*	State control ("mixed" is omitted as base category), with FE
+			loc	IV	major_control_dem major_control_rep
+			loc	IVname	politics_FE
+			ivreg2 	`depvar'	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	${regionvars}	${timevars}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+				if	in_sample==1 & inrange(year,1977,2019),	robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
+			est	store	`IVname'_2nd
+			scalar	Fstat_`IVname'	=	e(widstat)
+			est	restore	`IVname'`endovar'
+			estadd	scalar	Fstat	=	Fstat_`IVname', replace
+			est	store	`IVname'_1st
+			est	drop	`IVname'`endovar'
+			*/
 			
 			/*
 			*	SNAP index (unweighted)
@@ -4609,11 +4711,11 @@
 			est	drop	`IV'`endovar'
 			*/
 			
-			*	SSI (exp_s) and state control (1977-2019)
-			loc	IV	SSI_exp_s	major_control_dem major_control_rep	
-			loc	IVname	SSI_exp_s_pol
-			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	if	!mi(PFS_glm),	///
-								robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
+			*	All IVs, w/o FE
+			loc	IV	SSI_GDP_sl	int_SSI_exp_sl_01_03	major_control_dem major_control_rep	
+			loc	IVname	all_noFE
+			ivreg2 	`depvar'	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')		[aw=wgt_long_fam_adj]	///
+				if	in_sample==1 & inrange(year,1977,2019),	robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
 			est	store	`IVname'_2nd
 			scalar	Fstat_`IVname'	=	e(widstat)
 			est	restore	`IVname'`endovar'
@@ -4621,55 +4723,30 @@
 			est	store	`IVname'_1st
 			est	drop	`IVname'`endovar'
 			
-			*	SSI (GDP_s) and state control (1977-2019)
-			loc	IV	SSI_GDP_s	major_control_dem major_control_rep	
-			loc	IVname	SSI_GDP_s_pol
-			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	if	!mi(PFS_glm),	///
-								robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
+			/*	*	All IVs, with FE
+			loc	IV	SSI_GDP_sl	major_control_dem major_control_rep	
+			loc	IVname	all_FE
+			ivreg2 	`depvar'	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	${regionvars}	${timevars}	(`endovar'	=	`IV')	int_SSI_exp_sl_01_03	[aw=wgt_long_fam_adj]	///
+				if	in_sample==1 & inrange(year,1977,2019),	robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
 			est	store	`IVname'_2nd
 			scalar	Fstat_`IVname'	=	e(widstat)
 			est	restore	`IVname'`endovar'
 			estadd	scalar	Fstat	=	Fstat_`IVname', replace
 			est	store	`IVname'_1st
 			est	drop	`IVname'`endovar'
-			
-			
-			*	All IVs (including SNAP index)
-			loc	IV	SSI_exp_s	SSI_GDP_s	major_control_dem major_control_rep	//SNAP_index_w
-			loc	IVname	all
-			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}		${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	if	!mi(PFS_glm),	///
-								robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
-			est	store	`IVname'_2nd
-			scalar	Fstat_`IVname'	=	e(widstat)
-			est	restore	`IVname'`endovar'
-			estadd	scalar	Fstat	=	Fstat_`IVname', replace
-			est	store	`IVname'_1st
-			est	drop	`IVname'`endovar'
-			
+			*/
 			
 			*	1st-stage
-			esttab	SSI_exp_s_1st	SSI_GDP_s_1st	SSI_exp_s_pol_1st	SSI_GDP_s_pol_1st	all_1st	using "${SNAP_outRaw}/WeakIV_1st.csv", ///
+			esttab	SSI_noFE_1st	politics_noFE_1st	all_noFE_1st using "${SNAP_outRaw}/WeakIV_1st.csv", ///
 					cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(Fstat, fmt(%8.3fc)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(_cons)*/	///
 					title(Weak IV_1st)		replace	
 					
 			*	2nd-stage
-			esttab	SSI_2nd	state_control_2nd	SNAP_index_w_2nd	SSI_state_control_2nd	all_2nd	using "${SNAP_outRaw}/WeakIV_2nd.csv", ///
+			esttab	SSI_noFE_2nd	politics_noFE_2nd	all_noFE_2nd using "${SNAP_outRaw}/WeakIV_2nd.csv", ///
 					cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(Fstat, fmt(%8.3fc)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(_cons)*/	///
 					title(Weak IV_2nd)		replace	
 		
 		
-		
-		
-		*estout bbce_1st, stats(Fstat)
-		
-		*estat firststage
-		*weakivtest
-		/*
-		local	depvar	PFS_glm
-		svy, subpop(if !mi(PFS_glm)):	ivregress	2sls	`depvar'	${indvars} ${demovars}	(FS_rec_wth	=	bbce)	
-		weakivtest
-		estat firststage
-		*/
 		
 	}
 	
