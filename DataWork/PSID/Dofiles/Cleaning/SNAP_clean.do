@@ -79,40 +79,40 @@
 	global	numNov=11
 	global	numDec=12
 	
-	global	sample_years	/*1968	1969	1970	1971	1972	1974	1975*/	1976	1977	1978	1979	1980	1981	1982	1983	1984	///
+	global	sample_years	/*1968	1969	1970	1971	1972	1974	1975	1976	1977*/	1978	1979	1980	1981	1982	1983	1984	///
 								1985	1986	1987	1990	1991	1992	1993	1994	1995	1996	1997	1999	2001	2003	2005	2007	///
 								2009	2011	2013	2015	2017	2019
 		
-	global	sample_years_1975	/*1968	1969	1970	1971	1972	1974*/	1975	1976	1977	1978	1979	1980	1981	1982	1983	1984	///
+	global	sample_years_1977	/*1968	1969	1970	1971	1972	1974	1975	1976*/	1977	1978	1979	1980	1981	1982	1983	1984	///
 								1985	1986	1987	1990	1991	1992	1993	1994	1995	1996	1997	1999	2001	2003	2005	2007	///
 								2009	2011	2013	2015	2017	2019
 	
-	global	sample_years_comma	/*1968,	1969,	1970,	1971,	1972,	1974,	1975,*/	1976,	1977,	1978,	1979,	1980,	1981,	1982,	1983,	1984,	///
+	global	sample_years_comma	/*1968,	1969,	1970,	1971,	1972,	1974,	1975,	1976,	1977,*/	1978,	1979,	1980,	1981,	1982,	1983,	1984,	///
 									1985,	1986,	1987,	1990,	1991,	1992,	1993,	1994,	1995,	1996,	1997,	1999,	2001,	2003,	2005,	2007,	///
 									2009,	2011,	2013,	2015,	2017,	2019
 									
-	global	sample_years_1975_comma	/*1968,	1969,	1970,	1971,	1972,	1974,*/	1975,	1976,	1977,	1978,	1979,	1980,	1981,	1982,	1983,	1984,	///
+	global	sample_years_1977_comma	/*1968,	1969,	1970,	1971,	1972,	1974,	1975,	1976,*/	1977,	1978,	1979,	1980,	1981,	1982,	1983,	1984,	///
 									1985,	1986,	1987,	1990,	1991,	1992,	1993,	1994,	1995,	1996,	1997,	1999,	2001,	2003,	2005,	2007,	///
 									2009,	2011,	2013,	2015,	2017,	2019
 	
-	global	sample_years_no1968		/*1969	1970	1971	1972	1974	1975*/	1976	1977	1978	1979	1980	1981	1982	1983	1984	///
+	global	sample_years_no1968		/*1969	1970	1971	1972	1974	1975	1976	1977*/	1978	1979	1980	1981	1982	1983	1984	///
 										1985	1986	1987	1990	1991	1992	1993	1994	1995	1996	1997	1999	2001	2003	2005	2007	///
 										2009	2011	2013	2015	2017	2019
 		
-	global	sample_years_no1968_comma	/*1969,	1970,	1971,	1972,	1974,	1975,*/	1976,	1977,	1978,	1979,	1980,	1981,	1982,	1983,	1984,	///
+	global	sample_years_no1968_comma	/*1969,	1970,	1971,	1972,	1974,	1975,	1976,	1977,*/	1978,	1979,	1980,	1981,	1982,	1983,	1984,	///
 											1985,	1986,	1987,	1990,	1991,	1992,	1993,	1994,	1995,	1996,	1997,	1999,	2001,	2003,	2005,	2007,	///
 											2009,	2011,	2013,	2015,	2017,	2019
 	
 	
-	global	seqnum_years	xsqnr_1976 xsqnr_1977 xsqnr_1978 xsqnr_1979 xsqnr_1980 xsqnr_1981 xsqnr_1982 xsqnr_1983 xsqnr_1984 xsqnr_1985 xsqnr_1986 xsqnr_1987 xsqnr_1990 ///
+	global	seqnum_years	/*xsqnr_1976 xsqnr_1977*/ xsqnr_1978 xsqnr_1979 xsqnr_1980 xsqnr_1981 xsqnr_1982 xsqnr_1983 xsqnr_1984 xsqnr_1985 xsqnr_1986 xsqnr_1987 xsqnr_1990 ///
 							xsqnr_1991 xsqnr_1992 xsqnr_1993 xsqnr_1994 xsqnr_1995 xsqnr_1996 xsqnr_1997 xsqnr_1999 xsqnr_2001 xsqnr_2003 xsqnr_2005 xsqnr_2007 xsqnr_2009	///
 							xsqnr_2011 xsqnr_2013 xsqnr_2015 xsqnr_2017 xsqnr_2019
 							
-	global	seqnum_years_1975	xsqnr_1975 xsqnr_1976 xsqnr_1977 xsqnr_1978 xsqnr_1979 xsqnr_1980 xsqnr_1981 xsqnr_1982 xsqnr_1983 xsqnr_1984 xsqnr_1985 xsqnr_1986 xsqnr_1987 xsqnr_1990 ///
+	global	seqnum_years_1977	/*xsqnr_1975 xsqnr_1976*/ xsqnr_1977 xsqnr_1978 xsqnr_1979 xsqnr_1980 xsqnr_1981 xsqnr_1982 xsqnr_1983 xsqnr_1984 xsqnr_1985 xsqnr_1986 xsqnr_1987 xsqnr_1990 ///
 								xsqnr_1991 xsqnr_1992 xsqnr_1993 xsqnr_1994 xsqnr_1995 xsqnr_1996 xsqnr_1997 xsqnr_1999 xsqnr_2001 xsqnr_2003 xsqnr_2005 xsqnr_2007 xsqnr_2009	///
 								xsqnr_2011 xsqnr_2013 xsqnr_2015 xsqnr_2017 xsqnr_2019
 	
-	global	seqnum_years_1975_comma	xsqnr_1975, xsqnr_1976, xsqnr_1977, xsqnr_1978, xsqnr_1979, xsqnr_1980, xsqnr_1981, xsqnr_1982, xsqnr_1983, xsqnr_1984, xsqnr_1985, xsqnr_1986, xsqnr_1987, xsqnr_1990, ///
+	global	seqnum_years_1977_comma	/*xsqnr_1975, xsqnr_1976,*/ xsqnr_1977, xsqnr_1978, xsqnr_1979, xsqnr_1980, xsqnr_1981, xsqnr_1982, xsqnr_1983, xsqnr_1984, xsqnr_1985, xsqnr_1986, xsqnr_1987, xsqnr_1990, ///
 									xsqnr_1991, xsqnr_1992, xsqnr_1993, xsqnr_1994, xsqnr_1995, xsqnr_1996, xsqnr_1997, xsqnr_1999, xsqnr_2001, xsqnr_2003, xsqnr_2005, xsqnr_2007, xsqnr_2009,	///
 									xsqnr_2011, xsqnr_2013, xsqnr_2015, xsqnr_2017, xsqnr_2019
 	
@@ -203,9 +203,10 @@
 		local	add_clean	1		//	Do additional cleaning and import external data (CPI, TFP)
 		local	import_dta	1		//	Import aggregated variables into ID data. 
 	local	clean_vars		1	//	Clean variables and construct consistent variables
-	local	PFS_const		0	//	Construct PFS
 	local	summ_stats		0	//	Generate summary statistics (will be moved to another file later)
 	local	IV_reg			0	//	Run IV-2SLS regression
+	local	PFS_const		0	//	Construct PFS
+	
 	
 	*	Aggregate individual-level variables
 	if	`ind_agg'==1	{
@@ -1330,7 +1331,7 @@
 			*	Clean data
 			
 				*	Keep relevant observations 
-				keep	if	inrange(year,1975,2021)	//	Year 1975-
+				keep	if	inrange(year,1977,2021)	//	Year 1977-
 				keep	if	!mi(statecode)	//	Keep 48 continental states + AK, HA
 				
 				*	Clean variables
@@ -1415,7 +1416,7 @@
 			
 			
 				*	For missing early years, copy the data of the last year available (ex. Use 1974 data for 1975)
-				forval	year=1975(2)1991	{
+				forval	year=1977(2)1991	{
 					
 					local	prevyear=`year'-1
 					gen	LegisComp`year'=LegisComp`prevyear'
@@ -1426,7 +1427,7 @@
 				rename	State state
 				drop	if	mi(state)
 				reshape	long	LegisComp, i(state) j(year)
-				drop	if	year==1974
+				drop	if	inrange(year,1974,1976)
 				
 				*	Generate legislator control (holding both house and senate) variable with 4 categores; Democrat, Republican, Divided, N/A
 				loc	var	legis_control
@@ -1448,6 +1449,7 @@
 			
 				*	Clean variable
 				rename	(Year State) (year state)
+				drop	if	year<1977
 				
 				*	Veriable that shows whether Democrat has the majority control
 				ds	*_party
@@ -1477,6 +1479,7 @@
 		
 				*	Clean variable
 				rename	(Year State) (year state)
+				drop	if	year<1977
 				
 				*	Variable that shows which party has control over (1) attorney general and (2) secretary of state
 				cap	drop	atgen_sos_party
@@ -1495,7 +1498,7 @@
 				merge	m:1	state	year	using	"${SNAP_dtInt}/atgen_soc_Nebraska", nogen assert(1 3) keepusing(atgen_sos_party)	//	Att.gen and SoS (Nebraska)
 				
 				*	Keep relevant years of data only
-				keep	if	inrange(year,1975,2019)
+				keep	if	inrange(year,1977,2019)
 								
 				*	Majority of state politics
 				loc	var_dem	major_control_dem
@@ -1821,19 +1824,18 @@
 			
 		
 		*	CPI data (to convert current to real dollars)
-		import excel	"${clouldfolder}/DataWork/CPI/CPI_1913_2021.xlsx", firstrow 	clear
-		keep	Year-Dec
+		import excel	"${clouldfolder}/DataWork/BLS/CPI_seasonally_adj.xls", cellrange(A12) 	clear
 
-		rename	(Year	Jan   Feb   Mar   Apr   May   June  July  Aug   Sep   Oct   Nov   Dec)	///
-				(year	CPI1	CPI2	CPI3	CPI4	CPI5	CPI6	CPI7	CPI8	CPI9	CPI10	CPI11	CPI12)
-
-		reshape	long	CPI,	i(year)	j(month)
+		rename	B CPI
+		gen		month=month(A)
+		gen 	year=year(A)
+		drop	A
 		label	var	CPI	"Consumer Price Index (CPI)"
 
 		gen	yearmonth	=	year*100+month
 		gen	prev_yrmonth	=	yearmonth	//	This variable will be used to match main data
 
-		save	"${SNAP_dtInt}/CPI_1913_2021",	replace
+		save	"${SNAP_dtInt}/CPI_1947_2021",	replace
 		
 		
 		*	SNAP summary (participants, costs, benefits, etc.)
@@ -1973,7 +1975,7 @@
 			}
 			
 			isid year gender age_ind svy_month
-			
+			drop	if	year<1977
 			save	"${SNAP_dtInt}/TFP cost/TFP_costs_all", replace
 			
 	}
@@ -1984,7 +1986,7 @@
 			*	Create a panel structre
 		*	This study covers 50-year period with different family composition changes, thus we need to carefully consider that.
 		*	Basically we will track the two different types of families
-			*	(1) Families that initially existed in 1975 (first year of the study)
+			*	(1) Families that initially existed in 1977 (first year of the study)
 			*	(2) Families that split-off from the original families (1st category)
 		*	Also, we define family over time as the same family as long as the same individual remain either RP or spouse.
 		
@@ -2014,15 +2016,16 @@
 			drop	*1973	*1988	*1989	//	Years without food expenditures (1973, 1988, 1989)
 			drop	*1968	*1969	*1970	*1971	//	Years which I cannot separate FS amount from food expenditure
 			drop	*1972	*1974	//	Years without previous FS status
+			drop	*1975	*1976	//	Years without exogenous IV data and discontinuous food exp
 		
 				
 		*	Set globals
-		*	Here we include 1975 variables, as we want to consider the conditions of 1975 as well.
-		qui	ds	x11102_1975-x11102_2019
-		global	hhid_all_1975	`r(varlist)'
+		*	Here we include 1977 variables, as we want to consider the conditions of 1977 as well.
+		qui	ds	x11102_1977-x11102_2019
+		global	hhid_all_1977	`r(varlist)'
 		
-		qui	ds	xsqnr_1975-xsqnr_2019
-		global	seqnum_all_1975	`r(varlist)'
+		qui	ds	xsqnr_1977-xsqnr_2019
+		global	seqnum_all_1977	`r(varlist)'
 		
 		
 		*	Construct additional variables
@@ -2056,7 +2059,7 @@
 			*	As a panel data construction process, I make the code consistent across years
 			loc	var	relrp_recode
 			
-			foreach	year	of	global	sample_years_1975	{
+			foreach	year	of	global	sample_years_1977	{
 				
 				
 				cap	drop	`var'`year'
@@ -2064,7 +2067,7 @@
 				
 				*	1976-1982
 				*	Mostly the same, but need to change a little bit
-				if	inrange(`year',1975,1982) {
+				if	inrange(`year',1976,1982) {
 					
 					replace	`var'`year'=relrp`year'	//	Copy original "relation to head" variable, as they are mostly the same
 					replace	`var'`year'=2	if	relrp`year'==9	//	Recode "husband of head" as spouse
@@ -2095,7 +2098,7 @@
 			label	value	relrp_recode????	relrp_recode
 			
 			*	Generate string version of variables for comparison
-			foreach	year	of	global	sample_years_1975	{
+			foreach	year	of	global	sample_years_1977	{
 				
 				cap	drop	x11102_`year'_str	relrp_recode`year'_str
 				tostring	x11102_`year',	gen(x11102_`year'_str)
@@ -2107,7 +2110,7 @@
 			*	Generate residential status variable
 			loc	var	resid_status
 			lab	define	resid_status	0	"Inapp"	1	"Resides"	2	"Institution"	3	"Moved Out"	4	"Died", replace
-			foreach	year	of	global	sample_years_1975	{
+			foreach	year	of	global	sample_years_1977	{
 			
 				cap	drop	`var'`year'	`var'`year'_str
 				gen		`var'`year'=0
@@ -2125,147 +2128,147 @@
 			
 			*	Combine Variables - ID, relation and status
 			*	This variable is not directly used for analysis, but to check individual status more clearly.
-			foreach	year	of	global	sample_years_1975	{
+			foreach	year	of	global	sample_years_1977	{
 			
 				cap	drop	status_combined`year'
 				gen		status_combined`year'	=	x11102_`year'_str + "_" + relrp_recode`year'_str	+	"_"	+	resid_status`year'_str
 				label	var	status_combined`year'	"Combined status in `year'"
 			}
 			
-			*	Keep only the individuals that appear at least once during the study period (1975-2019)
+			*	Keep only the individuals that appear at least once during the study period (1977-2019)
 			*	I do this by counting the number of sequence variables with non-zero values (zero value in sequence number means inappropriate (not surveyed)
 			*	This code is updated as of 2022-3-21. Previously I used the number of missing household IDs, as below.
-			loc	var	zero_seq_7519
+			loc	var	zero_seq_7719
 			cap	drop	`var'
-			cap	drop	count_seq_7519
-			egen	count_seq_7519	=	anycount(xsqnr_1975-xsqnr_2019), values(0)	//	 Counts the number of sequence variables with zero values
+			cap	drop	count_seq_7719
+			egen	count_seq_7719	=	anycount(xsqnr_1977-xsqnr_2019), values(0)	//	 Counts the number of sequence variables with zero values
 			gen		`var'=0
-			replace	`var'=1	if	count_seq_7519==32
+			replace	`var'=1	if	count_seq_7719==30
 			*drop	if	`var'==1	//	Drop individuals who have zero values across all sequence variables
-			drop	count_seq_7519
+			drop	count_seq_7719
 			
 			
-			*	Individuals who were RP in 1975
-			*	These individuals form families that existed in 1975, which I define as "baseline family"
+			*	Individuals who were RP in 1977
+			*	These individuals form families that existed in 1977, which I define as "baseline family"
 			*	RP should satisfy two conditions; (1) sequence number is 1 (2) relation to head is him/herself
-			loc	var	rp1975
+			loc	var	rp1977
 			cap	drop	`var'
 			gen		`var'=0
-			replace	`var'=1	if	xsqnr_1975==1	&	relrp1975==1
-			lab	var	`var'	"=1 if RP in 1975"
+			replace	`var'=1	if	xsqnr_1977==1	&	relrp1977==1
+			lab	var	`var'	"=1 if RP in 1977"
 			tab	`var'
 			
-			*	Individuals who were spouse/partner in 1975
-			loc	var	sp1975
+			*	Individuals who were spouse/partner in 1977
+			loc	var	sp1977
 			cap	drop	`var'
 			gen		`var'=0
-			replace	`var'=1	if	inrange(xsqnr_1975,1,20)	&	relrp_recode1975==2
-			lab	var	`var'	"=1 if SP in 1975"
+			replace	`var'=1	if	inrange(xsqnr_1977,1,20)	&	relrp_recode1977==2
+			lab	var	`var'	"=1 if SP in 1977"
 			
-			*	Combine the two indicators above to find individuals who were RP or spouse in 1975
+			*	Combine the two indicators above to find individuals who were RP or spouse in 1977
 			*	They are the people who represent their family units.
 			*	For families that have both RP and SP (ex. married), we treat both individuals representing their own families, but adjust their weight such that the summ of (family) weights they represent being equal to the (family) weight they actually belong to.
-			loc	var	rpsp1975
+			loc	var	rpsp1977
 			cap	drop	`var'
 			gen	`var'=0
-			replace	`var'=1	if	inlist(1,rp1975,sp1975)
-			label	var	`var'	"=1 if RP/SP in 1975"
+			replace	`var'=1	if	inlist(1,rp1977,sp1977)
+			label	var	`var'	"=1 if RP/SP in 1977"
 			
-			tab	rp1975	sp1975	//	5,725 individuals who were RP in 1975
-			distinct	x11102_1975	if	rpsp1975==1	//	5,725 families, which verifies the result above.
+			tab	rp1977	sp1977	//	6,007 individuals who were RP in 1977
+			distinct	x11102_1977	if	rpsp1977==1	//	6,007 families, which verifies the result above.
 		
-			*	Individuals that were child/grandchild in 1975
+			*	Individuals that were child/grandchild in 1977
 			*	Note that this variable does NOT capture children who were born after 1975 is NOT captured here (they are coded as inapp)
-			loc	var	ch1975
+			loc	var	ch1977
 			cap	drop	`var'
 			gen		`var'=0
-			replace	`var'=1	if	inrange(xsqnr_1975,1,20)	&	inlist(relrp_recode1975,3,6)
-			lab	var	`var'	"=1 if child/grandchild in 1975"
+			replace	`var'=1	if	inrange(xsqnr_1977,1,20)	&	inlist(relrp_recode1977,3,6)
+			lab	var	`var'	"=1 if child/grandchild in 1977"
 			
-			*	Inappropriate in 1975
-			loc	var	inapp1975
+			*	Inappropriate in 1977
+			loc	var	inapp1977
 			cap	drop	`var'
 			gen		`var'=0
-			replace	`var'=1	if	xsqnr_1975==0 // Seq number is 0 (inapp) if and only if relation to RP is inapp. So we can use only one condition
-			lab	var	`var'	"=1 if inapp in 1975"
+			replace	`var'=1	if	xsqnr_1977==0 // Seq number is 0 (inapp) if and only if relation to RP is inapp. So we can use only one condition
+			lab	var	`var'	"=1 if inapp in 1977"
 			
-			*	Combine two indicators above to create "child or inapp in 1975"
+			*	Combine two indicators above to create "child or inapp in 1977"
 			*	We will use this indicator to determine split-off families.
-			loc	var	chinapp1975
+			loc	var	chinapp1977
 			cap	drop	`var'
 			gen	`var'=0
-			replace	`var'=1	if	inlist(1,ch1975,inapp1975)
-			label	var	`var'	"=1 if Ch/inapp in 1975"
+			replace	`var'=1	if	inlist(1,ch1977,inapp1977)
+			label	var	`var'	"=1 if Ch/inapp in 1977"
 			
 			
 			*	Individuals that were either RP or spouse only during the entire study period when residing
-			*	These information can be combined with "RP/SP in 1975" variable to detect "same baseline family over time"
+			*	These information can be combined with "RP/SP in 1977" variable to detect "same baseline family over time"
 			*	IMPORANT: Unlike checking whether an individual is RP or not, this information does NOT need to satisfy sequence number condition, but relation to RP only.
 			*	It is because our sample is inevitably unbalanced since it spans over 40 years, thus it is OK for individuals to have sequence number OTHER THAN 1.
-			*	Here's an example. Suppose an individual who was RP in 1976 no longer resides in 1977. This individual has "relation to RP" as "him/herself" as his last status was RP, but sequence number is not equal to 1. (81 if died, 0 if moved out/refused, etc.)
+			*	Here's an example. Suppose an individual who was RP in 1978 no longer resides in 1979. This individual has "relation to RP" as "him/herself" as his last status was RP, but sequence number is not equal to 1. (81 if died, 0 if moved out/refused, etc.)
 			*	As long as this individual is neither RP nor spouse, this person remained as RP or spouse of RP (so it is still the same household)
 			*	If a spouse takes over RP position, this family should still treated as the same family.
 			*	If someone else (ex. child) takes over RP position, this family is no longer treated as the same family.
-			loc	var		rpsp7519
+			loc	var		rpsp7719
 			cap	drop	`var'
-			cap	drop	count_relrp7519
-			egen	count_relrp7519	=	anycount(relrp_recode1975-relrp_recode2019), values(0 1 2)
+			cap	drop	count_relrp7719
+			egen	count_relrp7719	=	anycount(relrp_recode1977-relrp_recode2019), values(0 1 2)
 			gen		`var'=0
-			replace	`var'=1	if	count_relrp7519==32	//	Those who satisfy relation condition; RP or SP (residing) or inapp (not residing) across all 32 waves
+			replace	`var'=1	if	count_relrp7719==30	//	Those who satisfy relation condition; RP or SP (residing) or inapp (not residing) across all 32 waves
 			lab	var	`var'	"=1 if RP/SP over study period"
-			drop	count_relrp7519	
+			drop	count_relrp7719	
 			
 			*	RP/SP at least in one wave
 			*	This indicator is based on Chris' suggestion where he suggested to include ALL individuals who were RP/SP at least once.
 			*	It allows to capture many individuals we drop from earlier criteria, including "those who later become a parent" and "those who first split-off as sibling and later become RP/SP
-			loc	var		rpsponce7519
+			loc	var		rpsponce7719
 			cap	drop	`var'
-			cap	drop	count_relrp7519
-			egen	count_relrp7519	=	anycount(relrp_recode1975-relrp_recode2019), values(1 2)
+			cap	drop	count_relrp7719
+			egen	count_relrp7719	=	anycount(relrp_recode1977-relrp_recode2019), values(1 2)
 			gen		`var'=0
-			replace	`var'=1	if	count_relrp7519>=1	//	At least having child/grandchild status in one wave
+			replace	`var'=1	if	count_relrp7719>=1	//	At least having child/grandchild status in one wave
 			lab	var	`var'	"=1 if RP/SP at least in one year"
-			drop	count_relrp7519	
+			drop	count_relrp7719	
 						
 			*	Now we can determine baseline individuals who represent same baseline family over time.
-			*	Baseline individuals; (1) RP/SP in 1975, and (2) RP or SP at least once.
+			*	Baseline individuals; (1) RP/SP in 1977, and (2) RP or SP at least once.
 			loc	var	baseline_indiv
 			cap	drop	`var'
 			gen		`var'=0
-			replace	`var'=1	if	rpsp1975==1	&	rpsponce7519==1
+			replace	`var'=1	if	rpsp1977==1	&	rpsponce7719==1
 			label	var	`var'	"=1 if baseline individual"
 			
 			tab	baseline_indiv	//	8,756 individuals
-			distinct	x11102_1975	if	baseline_indiv==1	
+			distinct	x11102_1977	if	baseline_indiv==1	
 			
-			*	We currently have 9,175 baseline individuals living in 5,725 families in 1975 which remained same over time under our definition
+			*	We currently have 9,558 baseline individuals living in 6,007 families in 1977 which remained same over time under our definition
 			*	(Final size will be smaller once we exclude non-Sample individuals)
 			*	We treat each individuals as each family. Say, we have 9,175 families. To fill in this gap, we adjust the weight.
 			
-			*	Now we move to the second type of family; split-off family formed by children after 1975
-				*	Both children who were living in 1975 as well as born after 1975
+			*	Now we move to the second type of family; split-off family formed by children after 1977
+				*	Both children who were living in 1977 as well as born after 1977
 			*	Like baseline family, individuals who represent split-off family should satisfy the followings
-				*	(1)	Children/grandchild or inapp in 1975 (to exclude baseline individuals; avoid duplicate counting)
+				*	(1)	Children/grandchild or inapp in 1977 (to exclude baseline individuals; avoid duplicate counting)
 				*	(2) Children/grandchild at least in one wave
 				*	(3) RP/SP at least in one wave (to exclude those who never had a family they represent)
 					*---	(4) Status no other than Ch/RP/SP while residing (to exclude those who do not represent SAME family over time)	--- // Removed this condition as of 2022/3/30
 					
 			*	Children at least in one wave
-			loc	var		chonce7519
+			loc	var		chonce7719
 			cap	drop	`var'
 			cap	drop	count_relrp7519
-			egen	count_relrp7519	=	anycount(relrp_recode1975-relrp_recode2019), values(3 6)
+			egen	count_relrp7719	=	anycount(relrp_recode1977-relrp_recode2019), values(3 6)
 			gen		`var'=0
-			replace	`var'=1	if	count_relrp7519>=1	//	At least having child/grandchild status in one wave
+			replace	`var'=1	if	count_relrp7719>=1	//	At least having child/grandchild status in one wave
 			lab	var	`var'	"=1 if child at least in one year"
-			drop	count_relrp7519	
+			drop	count_relrp7719	
 	
 			*	With the indicators constructed above, now we can determine individuals that represent split-off families.
-			*	As of 2022/4/2, we have 11,768 split-off individuals
+			*	As of 2022/4/2, we have 11,126 split-off individuals
 			loc	var	splitoff_indiv
 			cap	drop	`var'
 			gen		`var'=0
-			replace	`var'=1	if	chinapp1975==1	&	chonce7519==1	&	rpsponce7519==1	
+			replace	`var'=1	if	chinapp1977==1	&	chonce7719==1	&	rpsponce7719==1	
 			label	var	`var'	"=1 if split-off individual"
 			
 			tab	splitoff_indiv	//	10,281 individuals
@@ -2296,12 +2299,12 @@
 			drop	if	sample_source==4	//	2017 refresher
 			
 		*	Drop those who never appeared during the study period
-			drop	if	zero_seq_7519==1
+			drop	if	zero_seq_7719==1
 		
 			*	Generate a household id which uniquely identifies a combination of household wave IDs.
 			**	Note: This is a tepmorary variable where it would have duplicate household ids after applying family panel structure (this is why I named this variabe as "1st")
 			cap drop hhid_agg_1st	
-			egen hhid_agg_1st = group(x11102_1975-x11102_2019), missing	
+			egen hhid_agg_1st = group(x11102_1977-x11102_2019), missing	
 
 		*	Drop non-Sample individuals
 		*	Note: Previous analysis were done without dropping them. Make sure to drop it carefully.
@@ -2323,9 +2326,9 @@
 			
 			*	This code is to see what individuals have changed the status 
 			*	Browsing relevant variables
-			sort	x11102_1975	xsqnr_1975
+			sort	x11102_1977	xsqnr_1977
 			
-			loc	startyear	1975
+			loc	startyear	1977
 			loc	endyear		2019
 			
 			loc	browsevars
@@ -2363,7 +2366,7 @@
 			cap	drop	wgt_long_fam_adj*
 			
 		
-			foreach	year	of	global	sample_years_1975	{
+			foreach	year	of	global	sample_years_1977	{
 				
 				cap	drop	living_Sample`year'				
 					
@@ -2394,7 +2397,7 @@
 		*	Save
 			
 			*	Wide-format
-			order	pn sampstr sampcls gender sampstat Sample	zero_seq_7519 rp1975 sp1975 rpsp1975 ch1975 inapp1975 chinapp1975 rpsp7519 rpsponce7519 baseline_indiv chonce7519 splitoff_indiv bs_splitoff_indiv in_sample ,	after(x11101ll)
+			order	pn sampstr sampcls gender sampstat Sample	zero_seq_7719 rp1977 sp1977 rpsp1977 ch1977 inapp1977 chinapp1977 rpsp7719 rpsponce7719 baseline_indiv chonce7719 splitoff_indiv bs_splitoff_indiv in_sample ,	after(x11101ll)
 			save	"${SNAP_dtInt}/Ind_vars/ID_sample_wide.dta", replace
 		
 			*	Re-shape it into long format and save it
@@ -2774,7 +2777,7 @@
 			merge m:1 rp_state prev_yrmonth using "${SNAP_dtInt}/Unemployment Rate_state_month", nogen keep(1 3) keepusing(unemp_rate)
 			
 			*	Import CPI data
-			merge	m:1	prev_yrmonth	using	"${SNAP_dtInt}/CPI_1913_2021",	keep(1 3) keepusing(CPI)
+			merge	m:1	prev_yrmonth	using	"${SNAP_dtInt}/CPI_1947_2021",	keep(1 3) keepusing(CPI)
 			
 				*	Validate merge
 				local	zero_seqnum	seqnum==0
@@ -4553,17 +4556,18 @@
 			
 			*	(1) P and S-SSI, without FE
 			*	Before we proceed, let's see whether there are big differences between analytical weight without survey structure, and using survey structure
+		
 			
-			*	SSI (share of state exp on state exp)
-			loc	IV		SSI_GDP_s
-			loc	IVname	SSI_GDP_s
-			
-							
+			/*				
 				* Checking difference in results between different regression methods. Disbled by default.
+				
+				loc	IV		SSI_GDP_sl
+				loc	IVname	SSI_GDP_sl
+			
 				*	1. Manual do 2SLS reg (analytic weight)
 					
 					*	1st-stage
-					reg	`endovar'	`IV'	${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	///
+					reg	`endovar'	`IV'	${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	time	///
 						[aw=wgt_long_fam_adj]	if	in_sample==1 & inrange(year,1977,2019), robust	cluster(x11101ll)
 					
 					*	Predict
@@ -4571,28 +4575,29 @@
 					predict FS_rec_wth_hat if e(sample),xb
 					
 					*	2nd stage
-					reg	`depvar'	FS_rec_wth_hat	${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	///
+					reg	`depvar'	FS_rec_wth_hat	${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	time	///
 						[aw=wgt_long_fam_adj]	if	in_sample==1 & inrange(year,1977,2019), robust	cluster(x11101ll)
 					
 					drop	FS_rec_wth_hat
-								
-				*	2. Manual 1st-stage reg (survey structure)
-				svy: reg	`endovar'	`IV'	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	///
-					if	in_sample==1 & inrange(year,1977,2019)
-								
-				*	3. IV-reg (with analytic weight)
-				ivregress	2sls 	`depvar'	 ${demovars} ${econvars}	${healthvars}	${empvars}	${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
-					if	in_sample==1 & inrange(year,1977,2019), first vce(cluster x11101ll)
-				estat firststage
 				
-				*	4. IV-reg (with survey structure)
-				svy: ivregress	2sls 	`depvar'	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')	///
-					if	in_sample==1 & inrange(year,1977,2019), first
-				*estat firststage
-				
-				*	5. IV-reg (with analytic weight, ivreg2 does not allow survey structure)
-				ivreg2 	`depvar'	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
-					if	in_sample==1 & inrange(year,1977,2019),	robust	cluster(x11101ll) first savefirst savefprefix(`IV')
+							
+					*	2. Manual 1st-stage reg (survey structure)
+					svy: reg	`endovar'	`IV'	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	///
+						if	in_sample==1 & inrange(year,1977,2019)
+									
+					*	3. IV-reg (with analytic weight)
+					ivregress	2sls 	`depvar'	 ${demovars} ${econvars}	${healthvars}	${empvars}	${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+						if	in_sample==1 & inrange(year,1977,2019), first vce(cluster x11101ll)
+					estat firststage
+					
+					*	4. IV-reg (with survey structure)
+					svy: ivregress	2sls 	`depvar'	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')	///
+						if	in_sample==1 & inrange(year,1977,2019), first
+					*estat firststage
+					
+					*	5. IV-reg (with analytic weight, ivreg2 does not allow survey structure)
+					ivreg2 	`depvar'	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+						if	in_sample==1 & inrange(year,1977,2019),	robust	cluster(x11101ll) first savefirst savefprefix(`IV')
 				
 							
 			*	The results show that
@@ -4603,7 +4608,7 @@
 				*	Comparing vreg2 aw (5) with ivregress (aw) (3), svy: ivregress (4) and i: (5) have same coefficients with (3) and (4)
 					*	With individual-level cluster error, (5) and (3) give the same standard error.
 				*	=>	I will use (5) now, arguing that (5) and (4) have same coefficients with different standard error.
-				*/
+			*/
 			
 			/*	Comparing results between (1) S&L share with 01/03 interaction and (2) state share only. Disabled by default
 			
@@ -4664,6 +4669,8 @@
 			estadd	scalar	Fstat	=	Fstat_`IVname', replace
 			est	store	`IVname'_1st
 			est	drop	`IVname'`endovar'
+			
+
 			
 			
 			/*	*	SSI (share of s&l exp as % of GDP), with 2001/2003 interaction, with FE
@@ -4729,6 +4736,7 @@
 			est	drop	`IV'`endovar'
 			*/
 			
+			
 			*	All IVs, w/o FE
 			loc	IV	SSI_GDP_sl	int_SSI_exp_sl_01_03	major_control_dem major_control_rep	
 			loc	IVname	all_noFE
@@ -4740,6 +4748,62 @@
 			estadd	scalar	Fstat	=	Fstat_`IVname', replace
 			est	store	`IVname'_1st
 			est	drop	`IVname'`endovar'
+			
+								
+				*	SSI without time trend
+				loc	IVname	SSI_noT
+				ivreg2 	`depvar'	${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+					if	in_sample==1 & inrange(year,1977,2019),	robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
+				est	store	`IVname'_2nd
+				scalar	Fstat_`IVname'	=	e(widstat)
+				est	restore	`IVname'`endovar'
+				estadd	scalar	Fstat	=	Fstat_`IVname', replace
+				est	store	`IVname'_1st
+				est	drop	`IVname'`endovar'
+				
+				*	SSI with time trend
+				loc	IVname	SSI_T
+				ivreg2 	`depvar'	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	time	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+					if	in_sample==1 & inrange(year,1977,2019),	robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
+				est	store	`IVname'_2nd
+				scalar	Fstat_`IVname'	=	e(widstat)
+				est	restore	`IVname'`endovar'
+				estadd	scalar	Fstat	=	Fstat_`IVname', replace
+				est	store	`IVname'_1st
+				est	drop	`IVname'`endovar'
+				
+				*	SSI with time trend and lagged food expenditure (up to 2nd order)
+				loc	IVname	SSI_T_lag2
+				ivreg2 	`depvar'	l1_foodexp_tot_inclFS_pc_1 l1_foodexp_tot_inclFS_pc_2 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	time	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+					if	in_sample==1 & inrange(year,1977,2019),	robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
+				est	store	`IVname'_2nd
+				scalar	Fstat_`IVname'	=	e(widstat)
+				est	restore	`IVname'`endovar'
+				estadd	scalar	Fstat	=	Fstat_`IVname', replace
+				est	store	`IVname'_1st
+				est	drop	`IVname'`endovar'
+				
+				*	SSI with time trend and lagged food expenditure (up to 3rd order)
+				loc	IVname	SSI_T_lag3
+				ivreg2 	`depvar'	l1_foodexp_tot_inclFS_pc_1 l1_foodexp_tot_inclFS_pc_2	l1_foodexp_tot_inclFS_pc_3 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	time	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+					if	in_sample==1 & inrange(year,1977,2019),	robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
+				est	store	`IVname'_2nd
+				scalar	Fstat_`IVname'	=	e(widstat)
+				est	restore	`IVname'`endovar'
+				estadd	scalar	Fstat	=	Fstat_`IVname', replace
+				est	store	`IVname'_1st
+				est	drop	`IVname'`endovar'
+				
+					
+				*	1st-stage
+				esttab	all_noFE_1st	SSI_noT_1st	SSI_T_1st	SSI_T_lag2_1st SSI_T_lag3_1st	using "${SNAP_outRaw}/WeakIV_1st.csv", ///
+						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(Fstat, fmt(%8.3fc)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(_cons)*/	///
+						title(Weak IV_1st)		replace	
+						
+				*	2nd-stage
+				esttab	all_noFE_1st	SSI_noT_2nd	SSI_T_2nd	SSI_T_lag2_2nd SSI_T_lag3_2nd	using "${SNAP_outRaw}/WeakIV_2nd.csv", ///
+						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(Fstat, fmt(%8.3fc)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(_cons)*/	///
+						title(Weak IV_2nd)		replace	
 			
 			/*	*	All IVs, with FE
 			loc	IV	SSI_GDP_sl	major_control_dem major_control_rep	
