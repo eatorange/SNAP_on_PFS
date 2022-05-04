@@ -4526,7 +4526,7 @@
 		global	eduvars			rp_NoHS rp_somecol rp_col
 		global	foodvars		FS_rec_wth
 		global	regionvars		rp_state_enum1-rp_state_enum31 rp_state_enum33-rp_state_enum50 	//	Excluding NY (rp_state_enum32) and outside 48 states (1, 52, 53). The latter should be excluded when running regression
-		global	timevars		year_enum5-year_enum13 year_enum15-year_enum32	//	Exclude 1978 (year_enum4, base year) and 1990 (year_enum14, no lagged food exp available)
+		global	timevars		year_enum2-year_enum30	//	Exclude 1978 (base year)
 		
 				
 		*	Temporary renaming
@@ -4640,24 +4640,71 @@
 
 			*/
 			
-			
-			
 			/*
-			*	SSI (share of GDP on s&l exp), with 2001/2003 interaction and post-1996 interactions
-			loc	IV	SSI_GDP_sl
-			loc	IVname	SSI_GDP_sl
-			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	int_SSI_exp_sl_01_03	int_SSI_GDP_sl_post96		(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
-				if	!mi(PFS_glm),	robust	cluster(x11101ll) first savefirst savefprefix(`IV')
+			*	Benchmark
+			*	All IVs, w/o state FE, w/o time trend
+			loc	IV	SSI_GDP_sl	int_SSI_exp_sl_01_03	major_control_dem major_control_rep	
+			loc	IVname	all_bench
+			ivreg2 	`depvar'	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')		[aw=wgt_long_fam_adj]	///
+				if	in_sample==1 & inrange(year,1977,2019),	robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
 			est	store	`IVname'_2nd
 			scalar	Fstat_`IVname'	=	e(widstat)
 			est	restore	`IVname'`endovar'
 			estadd	scalar	Fstat	=	Fstat_`IVname', replace
 			est	store	`IVname'_1st
 			est	drop	`IVname'`endovar'
+			
+										
+				*	All IVs, w/o state FE, time trend
+				loc	IV	SSI_GDP_sl	int_SSI_exp_sl_01_03	major_control_dem major_control_rep	
+				loc	IVname	all_trend
+				ivreg2 	`depvar'	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	time	(`endovar'	=	`IV')		[aw=wgt_long_fam_adj]	///
+					if	in_sample==1 & inrange(year,1977,2019),	robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
+				est	store	`IVname'_2nd
+				scalar	Fstat_`IVname'	=	e(widstat)
+				est	restore	`IVname'`endovar'
+				estadd	scalar	Fstat	=	Fstat_`IVname', replace
+				est	store	`IVname'_1st
+				est	drop	`IVname'`endovar'
+				
+				*	All IVs, with state FE, no time trend
+				loc	IV	SSI_GDP_sl	int_SSI_exp_sl_01_03	major_control_dem major_control_rep	
+				loc	IVname	all_FE
+				ivreg2 	`depvar'	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	${regionvars}	/*${timevars}*/	(`endovar'	=	`IV')		[aw=wgt_long_fam_adj]	///
+					if	in_sample==1 & inrange(year,1977,2019),	robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
+				est	store	`IVname'_2nd
+				scalar	Fstat_`IVname'	=	e(widstat)
+				est	restore	`IVname'`endovar'
+				estadd	scalar	Fstat	=	Fstat_`IVname', replace
+				est	store	`IVname'_1st
+				est	drop	`IVname'`endovar'
+				
+				*	All IVs, with state FE, with time trend
+				loc	IV	SSI_GDP_sl	int_SSI_exp_sl_01_03	major_control_dem major_control_rep	
+				loc	IVname	all_FE_trend
+				ivreg2 	`depvar'	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	${regionvars}	/*${timevars}*/	time	(`endovar'	=	`IV')	///
+					[aw=wgt_long_fam_adj]		if	in_sample==1 & inrange(year,1977,2019),	robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
+				est	store	`IVname'_2nd
+				scalar	Fstat_`IVname'	=	e(widstat)
+				est	restore	`IVname'`endovar'
+				estadd	scalar	Fstat	=	Fstat_`IVname', replace
+				est	store	`IVname'_1st
+				est	drop	`IVname'`endovar'
+			
+				*	1st-stage
+				esttab	all_bench_1st	all_trend_1st	all_FE_1st	all_FE_trend_1st 	using "${SNAP_outRaw}/WeakIV_1st.csv", ///
+						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(Fstat, fmt(%8.3fc)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(_cons)*/	///
+						title(Weak IV_1st)		replace	
+						
+				*	2nd-stage
+				esttab	all_bench_2nd	all_trend_2nd	all_FE_2nd	all_FE_trend_2nd 	using "${SNAP_outRaw}/WeakIV_2nd.csv", ///
+						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(Fstat, fmt(%8.3fc)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(_cons)*/	///
+						title(Weak IV_2nd)		replace	
 			*/
 			
-					
 			
+			/*
+			*	Individual IV test
 			*	SSI (share of s&l exp as % of GDP), with 2001/2003 interaction, w/o FE
 			loc	IV		SSI_GDP_sl	int_SSI_exp_sl_01_03
 			loc	IVname	SSI_noFE
@@ -4670,22 +4717,6 @@
 			est	store	`IVname'_1st
 			est	drop	`IVname'`endovar'
 			
-
-			
-			
-			/*	*	SSI (share of s&l exp as % of GDP), with 2001/2003 interaction, with FE
-			loc	IV		SSI_GDP_sl
-			loc	IVname	SSI_FE
-			ivreg2 	`depvar'	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	${regionvars}	${timevars}	(`endovar'	=	`IV')	int_SSI_exp_sl_01_03	[aw=wgt_long_fam_adj]	///
-				if	in_sample==1 & inrange(year,1977,2019),	robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
-			est	store	`IVname'_2nd
-			scalar	Fstat_`IVname'	=	e(widstat)
-			est	restore	`IVname'`endovar'
-			estadd	scalar	Fstat	=	Fstat_`IVname', replace
-			est	store	`IVname'_1st
-			est	drop	`IVname'`endovar'
-			*/
-					
 			*	State control ("mixed" is omitted as base category), w/o FE
 			loc	IV	major_control_dem major_control_rep
 			loc	IVname	politics_noFE
@@ -4699,7 +4730,20 @@
 			est	drop	`IVname'`endovar'
 			
 			
-			/*	*	State control ("mixed" is omitted as base category), with FE
+			*	SSI (share of s&l exp as % of GDP), with 2001/2003 interaction, with FE
+			loc	IV		SSI_GDP_sl
+			loc	IVname	SSI_FE
+			ivreg2 	`depvar'	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	${regionvars}	${timevars}	(`endovar'	=	`IV')	int_SSI_exp_sl_01_03	[aw=wgt_long_fam_adj]	///
+				if	in_sample==1 & inrange(year,1977,2019),	robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
+			est	store	`IVname'_2nd
+			scalar	Fstat_`IVname'	=	e(widstat)
+			est	restore	`IVname'`endovar'
+			estadd	scalar	Fstat	=	Fstat_`IVname', replace
+			est	store	`IVname'_1st
+			est	drop	`IVname'`endovar'
+			
+	
+				*	State control ("mixed" is omitted as base category), with FE
 			loc	IV	major_control_dem major_control_rep
 			loc	IVname	politics_FE
 			ivreg2 	`depvar'	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	${regionvars}	${timevars}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
@@ -4710,9 +4754,9 @@
 			estadd	scalar	Fstat	=	Fstat_`IVname', replace
 			est	store	`IVname'_1st
 			est	drop	`IVname'`endovar'
-			*/
 			
-			/*
+			
+			
 			*	SNAP index (unweighted)
 			loc	IV	SNAP_index_uw
 			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/		(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	if	!mi(PFS_glm),	///
@@ -4736,10 +4780,53 @@
 			est	drop	`IV'`endovar'
 			*/
 			
-			
-			*	All IVs, w/o FE
+			local	endovar	FS_rec_wth
+			local	depvar	/*PFS_glm*/	foodexp_tot_inclFS_pc
+			*	Adding Time trend only in the 2nd stage
 			loc	IV	SSI_GDP_sl	int_SSI_exp_sl_01_03	major_control_dem major_control_rep	
-			loc	IVname	all_noFE
+			loc	IVname	all_trend_2only
+			
+			*	1st-stage
+					reg	`endovar'	`IV'	 ${demovars} ${econvars}	${healthvars}	${empvars}	${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	///
+						[aw=wgt_long_fam_adj]	if	in_sample==1 & inrange(year,1977,2019), robust	cluster(x11101ll)
+										
+					*	Predict
+					cap	drop	FS_rec_wth_hat
+					predict FS_rec_wth_hat if e(sample),xb
+					
+					*	2nd stage
+					reg	`depvar'	FS_rec_wth_hat	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	time	///
+						[aw=wgt_long_fam_adj]	if	in_sample==1 & inrange(year,1977,2019), robust	cluster(x11101ll)
+					
+					est	store	XXX
+					
+					drop	FS_rec_wth_hat
+					
+					esttab	XXX using "${SNAP_outRaw}/WeakIV_2nd_temp.csv", ///
+						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(Fstat, fmt(%8.3fc)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(_cons)*/	///
+						title(Weak IV_2nd)		replace
+					
+					
+			
+			*	Benchmark (All IVs, w/o FE)
+			loc	IV	SSI_GDP_sl	int_SSI_exp_sl_01_03	major_control_dem major_control_rep	
+			loc	IVname	all_bench
+			ivreg2 	`depvar'	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')		[aw=wgt_long_fam_adj]	///
+				if	in_sample==1 & inrange(year,1977,2019),	robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
+			est	store	`IVname'_2nd
+			scalar	Fstat_`IVname'	=	e(widstat)
+			est	restore	`IVname'`endovar'
+			estadd	scalar	Fstat	=	Fstat_`IVname', replace
+			est	store	`IVname'_1st
+			est	drop	`IVname'`endovar'
+			
+			
+			
+			local	endovar	FS_rec_wth
+			local	depvar	/*PFS_glm*/	foodexp_tot_inclFS_pc
+			*	Benchmark (All IVs, w/o FE)
+			loc	IV	SSI_GDP_sl	int_SSI_exp_sl_01_03	major_control_dem major_control_rep	
+			loc	IVname	all_bench
 			ivreg2 	`depvar'	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')		[aw=wgt_long_fam_adj]	///
 				if	in_sample==1 & inrange(year,1977,2019),	robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
 			est	store	`IVname'_2nd
@@ -4750,9 +4837,9 @@
 			est	drop	`IVname'`endovar'
 			
 								
-				*	SSI without time trend
-				loc	IVname	SSI_noT
-				ivreg2 	`depvar'	${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+				*	IVs without time trend, lagged food expenditure (up to 2nd order)
+				loc	IVname	all_lagW2
+				ivreg2 	`depvar'	l1_foodexp_tot_inclFS_pc_1 l1_foodexp_tot_inclFS_pc_2 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
 					if	in_sample==1 & inrange(year,1977,2019),	robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
 				est	store	`IVname'_2nd
 				scalar	Fstat_`IVname'	=	e(widstat)
@@ -4761,8 +4848,19 @@
 				est	store	`IVname'_1st
 				est	drop	`IVname'`endovar'
 				
-				*	SSI with time trend
-				loc	IVname	SSI_T
+				*	IVs without time trend, lagged food expenditure (up to 3nd order)
+				loc	IVname	all_lagW3
+				ivreg2 	`depvar'	l1_foodexp_tot_inclFS_pc_1 l1_foodexp_tot_inclFS_pc_2	l1_foodexp_tot_inclFS_pc_3 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+					if	in_sample==1 & inrange(year,1977,2019),	robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
+				est	store	`IVname'_2nd
+				scalar	Fstat_`IVname'	=	e(widstat)
+				est	restore	`IVname'`endovar'
+				estadd	scalar	Fstat	=	Fstat_`IVname', replace
+				est	store	`IVname'_1st
+				est	drop	`IVname'`endovar'
+				
+				*	IVs with time trend
+				loc	IVname	all_trend
 				ivreg2 	`depvar'	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	time	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
 					if	in_sample==1 & inrange(year,1977,2019),	robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
 				est	store	`IVname'_2nd
@@ -4772,8 +4870,8 @@
 				est	store	`IVname'_1st
 				est	drop	`IVname'`endovar'
 				
-				*	SSI with time trend and lagged food expenditure (up to 2nd order)
-				loc	IVname	SSI_T_lag2
+				*	IVs with time trend and lagged food expenditure (up to 2nd order)
+				loc	IVname	all_trend_lagW2
 				ivreg2 	`depvar'	l1_foodexp_tot_inclFS_pc_1 l1_foodexp_tot_inclFS_pc_2 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	time	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
 					if	in_sample==1 & inrange(year,1977,2019),	robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
 				est	store	`IVname'_2nd
@@ -4783,8 +4881,8 @@
 				est	store	`IVname'_1st
 				est	drop	`IVname'`endovar'
 				
-				*	SSI with time trend and lagged food expenditure (up to 3rd order)
-				loc	IVname	SSI_T_lag3
+				*	IVs with time trend and lagged food expenditure (up to 3rd order)
+				loc	IVname	all_trend_lagW3
 				ivreg2 	`depvar'	l1_foodexp_tot_inclFS_pc_1 l1_foodexp_tot_inclFS_pc_2	l1_foodexp_tot_inclFS_pc_3 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	time	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
 					if	in_sample==1 & inrange(year,1977,2019),	robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
 				est	store	`IVname'_2nd
@@ -4793,15 +4891,24 @@
 				estadd	scalar	Fstat	=	Fstat_`IVname', replace
 				est	store	`IVname'_1st
 				est	drop	`IVname'`endovar'
+						
+				local	store_1st
+				local	store_2nd
+				
+				foreach	var	in	all_bench all_lagW2	all_lagW3	all_trend	all_trend_lagW2	all_trend_lagW3	{
+					
+					local	store_1st	`store_1st'	`var'_1st
+					local	store_2nd	`store_2nd'	`var'_2nd
+				}
 				
 					
 				*	1st-stage
-				esttab	all_noFE_1st	SSI_noT_1st	SSI_T_1st	SSI_T_lag2_1st SSI_T_lag3_1st	using "${SNAP_outRaw}/WeakIV_1st.csv", ///
+				esttab	`store_1st'	using "${SNAP_outRaw}/WeakIV_1st.csv", ///
 						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(Fstat, fmt(%8.3fc)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(_cons)*/	///
 						title(Weak IV_1st)		replace	
 						
 				*	2nd-stage
-				esttab	all_noFE_1st	SSI_noT_2nd	SSI_T_2nd	SSI_T_lag2_2nd SSI_T_lag3_2nd	using "${SNAP_outRaw}/WeakIV_2nd.csv", ///
+				esttab	`store_2nd'	using "${SNAP_outRaw}/WeakIV_2nd.csv", ///
 						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(Fstat, fmt(%8.3fc)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(_cons)*/	///
 						title(Weak IV_2nd)		replace	
 			
