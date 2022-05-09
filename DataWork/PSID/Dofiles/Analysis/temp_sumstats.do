@@ -1,14 +1,39 @@
 use "${SNAP_dtInt}/TFP cost/TFP_costs_all", clear
 
-keep	if	age_ind==20	&	svy_month==1
+rename	svy_month month
+
+merge m:1	year  month	using "${SNAP_dtInt}/CPI_1947_2021", nogen assert(2 3) keep(3)
+
+gen	TFP_monthly_cost_real	=	TFP_monthly_cost	*	(100/CPI)
+lab	var	TFP_monthly_cost_real	"Monthly TFP cost ($ real)"
+
+keep	if	age_ind==20	&	month==1
 *collapse	(mean) TFP_monthly_cost, by(year gender)
+
+
 
 graph	twoway	(line TFP_monthly_cost year if gender==1, lpattern(dash) xaxis(1 2) yaxis(1))	///
 				(line TFP_monthly_cost year if gender==2, lpattern(dash_dot) xaxis(1 2) yaxis(1)),  ///
 				xline(1983 1999 2006, axis(1) lpattern(dot)) xlabel(/*1980 "No payment" 1993 "xxx" 2009 "ARRA" 2020 "COVID"*/, axis(2))	///
 				xtitle(Year)	xtitle("", axis(2)) /* title(Monthly Food Expenditure and FS Benefit)*/	bgcolor(white)	graphregion(color(white)) /*note(Source: USDA & BLS)*/	name(foodexp_FSamt_byyear, replace)
-
 				
+*	Monthly TFP cost (constant $), 20-year-old.
+graph	twoway	(line TFP_monthly_cost_real year if gender==1, lpattern(dash) xaxis(1 2) yaxis(1))	///
+				(line TFP_monthly_cost_real year if gender==2, lpattern(dash_dot) xaxis(1 2) yaxis(1)),  ///
+				xline(1983 1999 2006, axis(1) lpattern(dot)) xlabel(/*1980 "No payment" 1993 "xxx" 2009 "ARRA" 2020 "COVID"*/, axis(2))	///
+				xtitle(Year)	xtitle("", axis(2)) legend(lab (1 "20-year-old male") lab(2 "20-year-old female")) 	bgcolor(white)	graphregion(color(white)) /*note(Source: USDA & BLS)*/	name(TFP_month_real, replace)	
+				
+graph	export	"${SNAP_outRaw}/TFP_month_real_20yr.png", replace as(png)
+graph	close		
+		
+	
+				
+graph	twoway	(line TFP_monthly_cost year if gender==1, lpattern(solid) xaxis(1 2) yaxis(1))	///
+				(line TFP_monthly_cost year if gender==2, lpattern(dash) xaxis(1 2) yaxis(1))  ///
+				(line TFP_monthly_cost_real year if gender==1, lpattern(dot) xaxis(1 2) yaxis(2))	///
+				(line TFP_monthly_cost_real year if gender==2, lpattern(dash_dot) xaxis(1 2) yaxis(2)),  ///
+				xline(1983 1999 2006, axis(1) lpattern(dot)) xlabel(/*1980 "No payment" 1993 "xxx" 2009 "ARRA" 2020 "COVID"*/, axis(2))	///
+				xtitle(Year)	xtitle("", axis(2)) legend(lab (1 "Male") lab(2 "Female") lab(3 "Male real") lab(4 "Female real") ) 	bgcolor(white)	graphregion(color(white)) /*note(Source: USDA & BLS)*/	name(foodexp_FSamt_byyear, replace)		
 				
 				
 *	Generosity of SNAP policy
