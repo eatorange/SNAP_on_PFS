@@ -195,17 +195,17 @@
 	
 	local	ind_agg			0	//	Aggregate individual-level variables across waves
 	local	fam_agg			0	//	Aggregate family-level variables across waves
-	local	ext_data		1	//	Prepare external data (CPI, TFP, etc.)
-	local	cr_panel		1	//	Create panel structure from ID variable
+	local	ext_data		0	//	Prepare external data (CPI, TFP, etc.)
+	local	cr_panel		0	//	Create panel structure from ID variable
 		local	panel_view	0	//	Create an excel file showing the change of certain clan over time (for internal data-check only)
-	local	merge_data		1	//	Merge ind- and family- variables and import it into ID variable
+	local	merge_data		0	//	Merge ind- and family- variables and import it into ID variable
 		local	raw_reshape	1		//	Merge raw variables and reshape into long data (takes time)
 		local	add_clean	1		//	Do additional cleaning and import external data (CPI, TFP)
 		local	import_dta	1		//	Import aggregated variables into ID data. 
 	local	clean_vars		1	//	Clean variables and construct consistent variables
-	local	summ_stats		0	//	Generate summary statistics (will be moved to another file later)
+	local	PFS_const		1	//	Construct PFS
 	local	IV_reg			0	//	Run IV-2SLS regression
-	local	PFS_const		0	//	Construct PFS
+	local	summ_stats		0	//	Generate summary statistics (will be moved to another file later)
 	
 	
 	*	Aggregate individual-level variables
@@ -1985,6 +1985,94 @@
 			drop	if	year<1977
 			save	"${SNAP_dtInt}/TFP cost/TFP_costs_all", replace
 			
+		*	Error rate (some years are missing)
+		foreach	year	in	1980	1981	1982	1983	1993	1994	1995	1996	1997	1999	2001	2003	2005	2007	2009	2011	2013	2017	2019	{
+			
+			import excel "${clouldfolder}/DataWork/USDA/Error Rates/Error_Rates.xlsx", sheet("FY`year'") firstrow clear
+			
+			if	inlist(`year',1980,1981,1982)	{
+				
+				rename	* (state errorrate_over_h1	errorrate_over_h2	errorrate_over errorate_under_h1	errorate_under_h2 errorate_under	errorrate_total_h1	rrorrate_total_h2	errorrate_total)
+				drop	errorrate_over_h1	errorrate_over_h2	errorate_under_h1	errorate_under_h2	errorrate_total_h1	rrorrate_total_h2
+				gen	year=`year'
+				
+			}
+			
+			else	if	inlist(`year',1983,1997,1999,2001,2003,2005,2007,2009,2011,2013,2017,2019)	{
+				
+				rename	* (state errorrate_over errorate_under errorrate_total)
+				gen	year=`year'
+			}
+			
+			else	{
+				
+				rename	* (state errorrate_total)
+				gen	year=`year'
+			}
+			
+			drop	if	mi(state)
+			replace	state	=	strproper(state)
+			replace	state = "Washington D.C." if inlist(state,"Dist. Of Col.","District Of Columbia","Dist. Of Columbia","Dist.Of Columbia")
+			
+			tempfile	error_rate_`year'
+			save		`error_rate_`year''
+			
+			
+			if	`year'==1980	{
+				
+				tempfile	error_rate_appended
+				save		`error_rate_appended', replace
+				
+			}
+			
+			else	{
+				
+				use	`error_rate_appended', clear
+				append	using	`error_rate_`year''
+				save	`error_rate_appended', replace
+				
+			}
+			
+			
+		}	//	year
+		
+		use	`error_rate_appended', clear
+		drop	if	inlist(state,"Guam","Virgin Islands")
+		replace	state="National Average"	if	inlist(state,"Total","U.S. Average")
+		drop	if	state=="National Average" // drop national average for now.
+		
+		merge	m:1	state using "${SNAP_dtRaw}/Statecode.dta", nogen assert(3) //	Merge statecode
+		
+		rename	statecode	rp_state
+		
+		save	"${SNAP_dtInt}/FSP_payment_error_rates", replace
+		
+		*	Income Poverty from Poverty Guideline (which determines income eligibility)
+		*	(Source: HHS Poverty Guideline, https://aspe.hhs.gov/topics/poverty-economic-mobility/poverty-guidelines/prior-hhs-poverty-guidelines-federal-register-references)
+		*	Note: I only import poverty line of 48 continental states. I do not import Alaska/Hawaii as they will be excluded from my paper.
+		
+		import	excel	"${clouldfolder}/DataWork/ASPE/historical-poverty-guidelines.xlsx", sheet("48_Contiguous States--Nonfarm") cellrange(A4) firstrow clear
+		drop	Date* L Federal* HTML*
+
+		rename	(Person-J)	incomePL(#), addnumber
+
+		forval	i=9/16	{
+			
+			local	j=`i'-8
+			gen	incomePL`i'	=	incomePL8	+	(Additional	*	`j')
+			
+		}
+
+		drop	Additional
+
+		rename	Year year
+		keep	if	inrange(year,1978,2019)
+
+		reshape	long	incomePL, i(year) j(famnum)
+		lab	var	famnum		"Family size"
+		lab	var	incomePL	"Income Poverty Line"
+
+		save	"${SNAP_dtInt}/incomePL", replace				
 	}
 	
 	*	Create panel structure
@@ -2784,7 +2872,7 @@
 			merge m:1 rp_state prev_yrmonth using "${SNAP_dtInt}/Unemployment Rate_state_month", nogen keep(1 3) keepusing(unemp_rate)
 			
 			*	Import CPI data
-			merge	m:1	prev_yrmonth	using	"${SNAP_dtInt}/CPI_1947_2021",	keep(1 3) keepusing(CPI)
+			merge	m:1	prev_yrmonth	using	"${SNAP_dtInt}/CPI_1947_2021", 	keep(1 3) keepusing(CPI)
 			
 				*	Validate merge
 				local	zero_seqnum	seqnum==0
@@ -2793,6 +2881,13 @@
 				assert	`zero_seqnum'	|	`invalid_mth'	if	_merge==1
 				drop	_merge
 				
+			
+			*	Import FSP error data
+			merge	m:1	rp_state year using "${SNAP_dtInt}/FSP_payment_error_rates",	nogen	keep(1 3)	 keepusing(errorrate*)
+			
+			*	Import income poverty line
+			merge	m:1	year famnum	using	"${SNAP_dtInt}/incomePL", nogen keep(1 3)
+			
 			compress
 			save	"${SNAP_dtInt}/SNAP_Merged_long",	replace
 			use "${SNAP_dtInt}/SNAP_Merged_long", clear
@@ -3123,6 +3218,35 @@
 			gen		double	`var'	=	log(fam_income_pc)
 			label	var	`var'	"Family income per capita (log)"	
 			
+		*	Poverty status indicator, based on poverty guideline
+			
+			*	100%
+			loc	var	income_below_100
+			cap	drop	`var'
+			gen		`var'=0	if	!mi(fam_income)	&	fam_income>incomePL*1
+			replace	`var'=1	if	!mi(fam_income)	&	fam_income<=incomePL*1
+			lab	var	`var'	"Income below PL"
+			
+			*	130%
+			loc	var	income_below_130
+			cap	drop	`var'
+			gen		`var'=0	if	!mi(fam_income)	&	fam_income>incomePL*1.3
+			replace	`var'=1	if	!mi(fam_income)	&	fam_income<=incomePL*1.3
+			lab	var	`var'	"Income below 130\% PL"
+			
+			*	185%
+			loc	var	income_below_185
+			cap	drop	`var'
+			gen		`var'=0	if	!mi(fam_income)	&	fam_income>incomePL*1.85
+			replace	`var'=1	if	!mi(fam_income)	&	fam_income<=incomePL*1.85
+			lab	var	`var'	"Income below 185\% PL"
+			
+			*	200%
+			loc	var	income_below_200
+			cap	drop	`var'
+			gen		`var'=0	if	!mi(fam_income)	&	fam_income>incomePL*2
+			replace	`var'=1	if	!mi(fam_income)	&	fam_income<=incomePL*2
+			lab	var	`var'	"Income below 200\% PL"
 		
 		*	Food stamp
 		
