@@ -274,7 +274,15 @@
 	if	`fam_agg'==1	{
 	
 		*	Survey information
-		
+
+			*	Household ID (note: it is NOT the same as "family". Multiple families can reside in a same HH)
+			*	Note: 1982-1984 are missing.
+			local	var	hhid
+			psid use || `var' [69]V1015 [70]V1766 [71]V2345 [72]V2979 [73]V3310 [74]V3730 [75]V4231 [76]V5113 [77]V5681 [78]V6220 [79]V6814 [80]V7456 [81]V8110 [85]V12443 [86]V13682 [87]V14732 [88]V16207 [89]V17584 [90]V18936 [91]V20236 [92]V21542 [93]V23356 [94]ER4159R [95]ER6999R [96]ER9250R [97]ER12223R [99]ER16447 [01]ER20393 [03]ER24170 [05]ER28069 [07]ER41059 [09]ER47003 [11]ER52427 [13]ER58245 [15]ER65481 [17]ER71560 [19]ER77621  using  "${SNAP_dtRaw}/Unpacked"  , keepnotes design(any) clear	
+			
+			keep	x11101ll	`var'*
+			save	"${SNAP_dtInt}/Fam_vars/`var'", replace
+				
 			*	Date of the interview (1968-1996)
 			local	var	svydate
 			psid use || `var' [68]V99 [69]V553 [70]V1236 [71]V1939 [72]V2539 [73]V3092 [74]V3505 [75]V3918 [76]V4433 [77]V5347 [78]V5847 [79]V6459 [80]V7064 [81]V7655 [82]V8349 [83]V8958 [84]V10416 [85]V11600 [86]V13008 [87]V14111 [88]V15127 [89]V16628 [90]V18046 [91]V19346 [92]V20648 [93]V22403 [94]ER2005 [95]ER5004 [96]ER7004  using  "${SNAP_dtRaw}/Unpacked"  , keepnotes design(any) clear	
