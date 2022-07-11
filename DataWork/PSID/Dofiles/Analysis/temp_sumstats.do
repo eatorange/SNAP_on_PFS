@@ -89,9 +89,9 @@ keep	if	inrange(year,1978,2019)
 	lab	var	major_control_rep	"Republic Trifecta"
 	lab	var	major_control_mix	"Mixed"
 	
-		graph	twoway	(line major_control_dem year, /*lpattern(dash)*/ xaxis(1) yaxis(1))	///
-						(line major_control_rep	year, lpattern(dot) xaxis(1) yaxis(1))  	///
-						(line major_control_mix	year, lpattern(dash_dot) xaxis(1) yaxis(1)),  ///
+		graph	twoway	(line major_control_dem year, lpattern(solid) xaxis(1) yaxis(1))	///
+						(line major_control_rep	year, lpattern(dash) xaxis(1) yaxis(1))  	///
+						(line major_control_mix	year, lpattern(dot) xaxis(1) yaxis(1)),  ///
 						/*xline(1980 1993 1999 2007, axis(1) lpattern(dot))*/  ytitle(Number of States)	///
 						xtitle(Year)	/* title(Monthly Food Expenditure and FS Benefit)*/	bgcolor(white)	graphregion(color(white)) /*note(Source: USDA & BLS)*/	name(foodexp_FSamt_byyear, replace)
 		
