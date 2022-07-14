@@ -2014,6 +2014,8 @@
 		merge	1:1	x11101ll	using	"${SNAP_dtInt}/Ind_vars/unique_vars.dta",	nogen	assert(3)
 		merge	1:1	x11101ll	using	"${SNAP_dtInt}/Ind_vars/wgt_long_ind.dta",	nogen	assert(3)	//	Individual weight
 		merge	1:1	x11101ll	using	"${SNAP_dtInt}/Fam_vars/wgt_long_fam.dta",	nogen	assert(3)	//	Family weight
+		merge	1:1	x11101ll	using	"${SNAP_dtInt}/Fam_vars/change_famcomp.dta",	nogen	assert(3)	//	Family composition
+		merge	1:1	x11101ll	using	"${SNAP_dtInt}/Fam_vars/splitoff.dta",	nogen	assert(3)	//	Splitoff indicator
 		
 		*	Merge individual variables
 		cd "${SNAP_dtInt}/Ind_vars"
@@ -2025,6 +2027,16 @@
 			merge 1:1 x11101ll using "`var'", keepusing(`var'*) nogen assert(2 3)	keep(3)	//	Longitudinal weight
 				
 		}
+		
+		/* Temporary code observing the number of individuals with different family composition status
+		*drop *_1968	*_1969	*_1970	*_1971	*_1972	*_1973	*_1974	*_1975	*_1976
+
+		egen	count_seq_7719			=	anycount(xsqnr_1977-xsqnr_2019), values(1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20)
+		egen	count_nochange_7719		=	anycount(change_famcomp1978-change_famcomp2019), values(0)
+		egen	count_sameRP_7719		=	anycount(change_famcomp1978-change_famcomp2019), values(0,1,2)
+
+		count if count_seq_7719==count_sameRP_7719
+		*/
 		
 				
 		*	Drop years outside study sample	
@@ -2121,6 +2133,9 @@
 				
 			}
 			
+			*	Change in family composition
+			
+			
 			
 			*	Generate residential status variable
 			loc	var	resid_status
@@ -2193,7 +2208,7 @@
 			distinct	x11102_1977	if	rpsp1977==1	//	6,007 families, which verifies the result above.
 		
 			*	Individuals that were child/grandchild in 1977
-			*	Note that this variable does NOT capture children who were born after 1975 is NOT captured here (they are coded as inapp)
+			*	Note that this variable does NOT capture children who were born after 1977 (they are coded as inapp)
 			loc	var	ch1977
 			cap	drop	`var'
 			gen		`var'=0
