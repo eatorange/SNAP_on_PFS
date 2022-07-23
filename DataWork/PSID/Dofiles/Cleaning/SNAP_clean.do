@@ -195,17 +195,18 @@
 	
 	local	ind_agg			0	//	Aggregate individual-level variables across waves
 	local	fam_agg			0	//	Aggregate family-level variables across waves
-	local	ext_data		1	//	Prepare external data (CPI, TFP, etc.)
-	local	cr_panel		1	//	Create panel structure from ID variable
+	local	ext_data		0	//	Prepare external data (CPI, TFP, etc.)
+	local	cr_panel		0	//	Create panel structure from ID variable
 		local	panel_view	0	//	Create an excel file showing the change of certain clan over time (for internal data-check only)
-	local	merge_data		1	//	Merge ind- and family- variables and import it into ID variable
+	local	merge_data		0	//	Merge ind- and family- variables and import it into ID variable
 		local	raw_reshape	1		//	Merge raw variables and reshape into long data (takes time)
 		local	add_clean	1		//	Do additional cleaning and import external data (CPI, TFP)
 		local	import_dta	1		//	Import aggregated variables into ID data. 
 	local	clean_vars		1	//	Clean variables and construct consistent variables
+	local	PFS_const		1	//	Construct PFS
 	local	summ_stats		0	//	Generate summary statistics (will be moved to another file later)
 	local	IV_reg			0	//	Run IV-2SLS regression
-	local	PFS_const		0	//	Construct PFS
+	
 	
 	
 	*	Aggregate individual-level variables
@@ -1354,6 +1355,12 @@
 				replace	`var'	=	2	if	party	==	"Republican"
 				replace	`var'	=	0	if	!inlist(party,"Democrat","Republican")
 				
+					/* (2022-7-22) I no longer attempt to do it, since some independent governors pursue mixed policies. For example, Bill Walker in Alaska supported gun control (rep) and Medicaid expansion (dem) at the same time.
+					*	(Incomplete) For independent governors, I determine party association manually based on different circumstances
+					replace	`var'=	2	if	governor=="Walter J. Hickel" &	inrange(year,1991,1994)	//	Walter was Republican before- and after- these periods, so I assume he is Republican
+					replace	`var'=	2	if	governor=="Bill Walker" &	inrange(year,2015,2018)		//	He is pretty mixed...
+					*/
+					
 				label	define	`var'	0	"Others"	1	"Democrat"	2	"Republican"
 				label	value	`var'	`var'
 				
@@ -1541,7 +1548,15 @@
 									(governor_party==0)	|	///	/* governor party is independent*/
 									(legis_control==3))			/* legis control is divided*/
 					replace	`var_mix'=1	if	!inlist(rp_state,8,26)	&	(!mi(governor_party)	&	!mi(legis_control))	&	`mixed'	//	Mixed (neither party has trifecta status)
-		
+					
+					/*		(2022-7-22)	I do not use it, as it is not easy to 
+					*	(Incomplete code) Decompose mixed status into (1) Demo governor + Rep chamber (2) Rep governor + Demo chamber
+					loc	var	mixed_repgovt
+					cap	drop	`var'
+					gen		`var'=0	if	inlist(1,`var_dem',`var_rep')	|	legis_control==3
+					replace	`var'=1	if	`var_mix'==1	&	governor_party==1	&	legis_control==2	//	Demo governor + Rep chamber
+					replace	`var'=2	if	`var_mix'==1	&	governor_party==2	&	legis_control==1	//	Rep governor + Rep chamber
+					*/
 				
 				*	Double-check that all observations belong to one and only one of the three categories
 				cap	drop	tot
@@ -1951,6 +1966,29 @@
 				
 				save	"${SNAP_dtInt}/Unemployment Rate_state_month",	replace		
 		
+		*	Poverty Guildeline (which determines SNAP income eligibility)
+			import excel "${clouldfolder}/DataWork/ASPE/historical-poverty-guidelines.xlsx", sheet("48_Contiguous States--Nonfarm") cellrange(A4:N61) firstrow clear
+
+			rename	Year year
+			drop	if	!inrange(year,1977,2019)
+
+			rename	(Person-J)	pov_threshold#, addnumber
+
+			forval	famnum=9/16	{
+				
+				gen	pov_threshold`famnum'	=	pov_threshold8	+	(`famnum'-8)*Additional
+					
+			}
+
+			order	pov_threshold*, after(year)
+			keep	year	pov_threshold*
+
+			reshape	long	pov_threshold, i(year) j(famnum)
+
+			lab	var	pov_threshold	"Poverty Threshold (annual family income)"
+			
+			save	"${SNAP_dtInt}/Poverty_guideline", replace
+		
 		*	Thrifty Food Plan data
 		
 			*	Create year data from raw data
@@ -1980,11 +2018,11 @@
 			}
 			
 			*	Combine yearly data
-			use	"${SNAP_dtInt}/TFP cost/TFP_1976", clear
+			use	"${SNAP_dtInt}/TFP cost/TFP_1978", clear
 			
 			foreach year	of	global	sample_years	{
 				
-				if	`year'==1976 continue
+				if	`year'==1978 continue
 				append	using	"${SNAP_dtInt}/TFP cost/TFP_`year'"
 			
 			}
@@ -2815,8 +2853,13 @@
 			*	Import state-wide monthly unemployment data
 			merge m:1 rp_state prev_yrmonth using "${SNAP_dtInt}/Unemployment Rate_state_month", nogen keep(1 3) keepusing(unemp_rate)
 			
+			*	Import Poverty guideline data
+			merge	m:1	year	famnum	using	"${SNAP_dtInt}/Poverty_guideline",	nogen	keep(1 3)
+			
 			*	Import CPI data
 			merge	m:1	prev_yrmonth	using	"${SNAP_dtInt}/CPI_1947_2021",	keep(1 3) keepusing(CPI)
+			
+			
 			
 				*	Validate merge
 				local	zero_seqnum	seqnum==0
@@ -4228,8 +4271,6 @@
 		*	Weak IV test 
 		*	(2022-05-01) For now, we use IV to predict T(FS participation) and use it to predict W (food expenditure per capita) (previously I used it to predict PFS in the second stage)
 		use	"${SNAP_dtInt}/SNAP_long_const", clear
-		local	endovar	FS_rec_wth
-		local	depvar	/*PFS_glm*/	foodexp_tot_inclFS_pc
 		
 		*	Set globals
 		global	statevars		l2_foodexp_tot_inclFS_pc_1	l2_foodexp_tot_inclFS_pc_2 
@@ -4258,7 +4299,7 @@
 		label	var	major_control_rep	"Rep state control"
 		label	var	SSI_GDP_sl	"SSI"
 				
-		*	Temporary renaming
+		*	Temporary renaming	
 		rename	(SNAP_index_unweighted	SNAP_index_weighted)	(SNAP_index_uw	SNAP_index_w)
 		lab	var	SNAP_index_uw 	"Unweighted SNAP index"
 		lab	var	SNAP_index_w 	"Weighted SNAP index"
@@ -4279,6 +4320,18 @@
 		lab	var	int_SSI_exp_sl_01_03	"SSI X {2001_2003}"
 		lab	var	int_SSI_GDP_sl_01_03	"SSI X {2001_2003}"
 
+		*	The following variables are temporarily generated here. Should be moved to "clean variable" section later.
+		cap	drop	income_below_130
+		gen			income_below_130=0
+		replace		income_below_130=1	if	fam_income*1.3	<	pov_threshold
+		lab	var		income_below_130	"Income below 130% of PL"
+		
+		cap	drop	income_below_200
+		gen			income_below_200=0
+		replace		income_below_200=1	if	fam_income*2	<	pov_threshold
+		lab	var		income_below_200	"Income below 200% of PL"
+		
+		
 		*	Regression test
 		*	For now we test 4 models
 			*	(1) Political vars and state-level SSI, without FE
@@ -4439,11 +4492,44 @@
 			
 			
 			*	Individual IV test
+			*	The following specification/sample will be tested
+				*	Different endogenous variables
+					*	Participation only
+					*	Amount only
+					*	Participation and amount
+				*	Different IVs
+					*	Single IV
+						*	SSI
+						*	State control
+						*	Share of social expenditure only
+						*	Don't forget to interact SSI/expenditure with state control!
+					*	Double IV
+						*	SSI and state control
+						*	Share of social expenditure and state control
+				*	Different fixed effects
+					*	State FE only
+					*	Year FE only
+					*	State and year
+				*	Different samples
+					*	All Households
+					*	Households with monthly income less than 130%/200% of poverty line (SNAP income eligibility)
+				
+			
+			
+			
+			
+			*	Dep var participation only
+			local	endovar	FS_rec_wth
+			local	depvar	/*PFS_glm*/	foodexp_tot_inclFS_pc
+			
+						
 			global	est_1st
 			global	est_2nd
 			
+			
+			
 			*	SSI (share of s&l exp as % of GDP), with 2001/2003 interaction, w/o FE
-			loc	IV		SSI_GDP_sl	int_SSI_exp_sl_01_03
+			loc	IV		SSI_GDP_sl	/*int_SSI_exp_sl_01_03*/
 			loc	IVname	SSI_nomacro
 			ivreg2 	`depvar'	${statevars}	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${macrovars}*/	${regionvars}	/*${timevars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
 				if	in_sample==1 & inrange(year,1977,2019),	robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
