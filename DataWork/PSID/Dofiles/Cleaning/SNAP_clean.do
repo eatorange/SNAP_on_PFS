@@ -3197,7 +3197,19 @@
 			cap	drop	`var'
 			gen		double	`var'	=	log(fam_income_pc)
 			label	var	`var'	"Family income per capita (log)"	
+		
+		
+		*	Poverty guideline
+			cap	drop	income_below_130
+			gen			income_below_130=0
+			replace		income_below_130=1	if	fam_income*1.3	<	pov_threshold
+			lab	var		income_below_130	"Income below 130% of PL"
 			
+			cap	drop	income_below_200
+			gen			income_below_200=0
+			replace		income_below_200=1	if	fam_income*2	<	pov_threshold
+			lab	var		income_below_200	"Income below 200% of PL"
+		
 		
 		*	Food stamp
 		
@@ -4311,6 +4323,17 @@
 			assert	inrange(`var',1,100)	if	!mi(`var')
 		}
 		
+		*	Temporary generate state control categorical variable
+		cap	drop	major_control_cat
+		gen			major_control_cat=.
+		replace		major_control_cat=0	if	major_control_mix==1
+		replace		major_control_cat=1	if	major_control_dem==1
+		replace		major_control_cat=2	if	major_control_rep==1
+		lab	define	major_control_cat	0	"Mixed"	1	"Demo control"	2	"Repub control"
+		lab	val		major_control_cat	major_control_cat
+		lab	var		major_control_cat	"State control"
+		
+		
 		*	Temporary generate interaction variable
 		gen	int_SSI_exp_sl_01_03	=	SSI_exp_sl	*	year_01_03
 		gen	int_SSI_GDP_sl_01_03	=	SSI_GDP_sl	*	year_01_03
@@ -4320,17 +4343,6 @@
 		lab	var	int_SSI_exp_sl_01_03	"SSI X {2001_2003}"
 		lab	var	int_SSI_GDP_sl_01_03	"SSI X {2001_2003}"
 
-		*	The following variables are temporarily generated here. Should be moved to "clean variable" section later.
-		cap	drop	income_below_130
-		gen			income_below_130=0
-		replace		income_below_130=1	if	fam_income*1.3	<	pov_threshold
-		lab	var		income_below_130	"Income below 130% of PL"
-		
-		cap	drop	income_below_200
-		gen			income_below_200=0
-		replace		income_below_200=1	if	fam_income*2	<	pov_threshold
-		lab	var		income_below_200	"Income below 200% of PL"
-		
 		
 		*	Regression test
 		*	For now we test 4 models
@@ -4519,7 +4531,7 @@
 			
 			
 			*	Dep var participation only
-			local	endovar	FS_rec_wth
+			local	endovar	FS_rec_wth	/*FS_rec_amt_real*/
 			local	depvar	/*PFS_glm*/	foodexp_tot_inclFS_pc
 			
 						
@@ -4528,10 +4540,30 @@
 			
 			
 			
-			*	SSI (share of s&l exp as % of GDP), with 2001/2003 interaction, w/o FE
+			*	Test specification
+			loc	IV		i.major_control_cat	/*int_SSI_exp_sl_01_03*/
+			loc	IVname	SSI_nomacro
+			ivreg2 	`depvar'	${statevars}	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	${regionvars}	/*${timevars}	${macrovars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+				if	in_sample==1 & inrange(year,1977,2019),	robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
+			est	store	`IVname'_2nd
+			scalar	Fstat_`IVname'	=	e(widstat)
+			est	restore	`IVname'`endovar'
+			estadd	scalar	Fstat	=	Fstat_`IVname', replace
+			est	store	`IVname'_1st
+			est	drop	`IVname'`endovar'
+								
+			global	est_1st	${est_1st}	`IVname'_1st
+			global	est_2nd	${est_2nd}	`IVname'_2nd
+			
+			
+			
+			
+			
+			
+			*	SSI (share of s&l exp as % of GDP), with 2001/2003 interaction, no macro/no time FE
 			loc	IV		SSI_GDP_sl	/*int_SSI_exp_sl_01_03*/
 			loc	IVname	SSI_nomacro
-			ivreg2 	`depvar'	${statevars}	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${macrovars}*/	${regionvars}	/*${timevars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+			ivreg2 	`depvar'	${statevars}	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	${regionvars}	/*${timevars}	${macrovars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
 				if	in_sample==1 & inrange(year,1977,2019),	robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
 			est	store	`IVname'_2nd
 			scalar	Fstat_`IVname'	=	e(widstat)
