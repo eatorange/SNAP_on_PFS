@@ -204,6 +204,7 @@
 		local	import_dta	1		//	Import aggregated variables into ID data. 
 	local	clean_vars		1	//	Clean variables and construct consistent variables
 	local	PFS_const		1	//	Construct PFS
+	local	FSD_construct	1	//	Construct FSD
 	local	summ_stats		0	//	Generate summary statistics (will be moved to another file later)
 	local	IV_reg			0	//	Run IV-2SLS regression
 	
@@ -3202,12 +3203,12 @@
 		*	Poverty guideline
 			cap	drop	income_below_130
 			gen			income_below_130=0
-			replace		income_below_130=1	if	fam_income*1.3	<	pov_threshold
+			replace		income_below_130=1	if	fam_income	<	pov_threshold*1.3
 			lab	var		income_below_130	"Income below 130% of PL"
 			
 			cap	drop	income_below_200
 			gen			income_below_200=0
-			replace		income_below_200=1	if	fam_income*2	<	pov_threshold
+			replace		income_below_200=1	if	fam_income	<	pov_threshold*2
 			lab	var		income_below_200	"Income below 200% of PL"
 		
 		
@@ -4019,12 +4020,16 @@
 			
 		}
 		
+		*	Generate log of family income per capita (real)
+		*	NOTE: I can later use inverse hyperbolic transformation instead.
+		cap	drop	ln_fam_income_pc_real
+		gen			ln_fam_income_pc_real	=	ln(fam_income_pc_real)
+			
 		ds	*_real
 		global	money_vars_real	`r(varlist)'
 		global	money_vars	${money_vars_current}	${money_vars_real}
 		
 
-			
 		
 		di "${money_vars_real}"
 		*	Create lagged variables needed
@@ -4113,14 +4118,14 @@
 		label var	age_ind_sq	"Age sq."
 		
 		*	Set globals
-		global	statevars		l2_foodexp_tot_inclFS_pc_1 l2_foodexp_tot_inclFS_pc_2
+		global	statevars		l2_foodexp_tot_exclFS_pc_1_real l2_foodexp_tot_exclFS_pc_2_real	//	l2_foodexp_tot_exclFS_pc_1_real l2_foodexp_tot_exclFS_pc_2_real  * Need to use real value later
 		global	demovars		rp_age rp_age_sq	rp_nonWhte	rp_married	rp_female	
-		global	econvars		ln_fam_income_pc
+		global	econvars		ln_fam_income_pc		//	ln_fam_income_pc_real   * Need to use real value later
 		global	healthvars		rp_disabled
 		global	familyvars		famnum	ratio_child
 		global	empvars			rp_employed
 		global	eduvars			rp_NoHS rp_somecol rp_col
-		global	foodvars		FS_rec_wth	
+		global	foodvars		FS_rec_wth	//	Should I use prected FS redemption from 1st-stage IV?
 		global	macrovars		unemp_rate	CPI
 		global	regionvars		rp_state_enum1-rp_state_enum31 rp_state_enum33-rp_state_enum50 	//	Excluding NY (rp_state_enum32) and outside 48 states (1, 52, 53). The latter should be excluded when running regression
 		global	timevars		year_enum3-year_enum30 //	Exclude year_enum2 as base category
@@ -4153,7 +4158,7 @@
 		
 		*	Step 1
 		*	IMPORTANT: Unlike Lee et al. (2021), I exclude a binary indicator whether HH received SNAP or not (FS_rec_wth), as including it will violate exclusion restriction of IV
-		svy, subpop(if ${PFS_sample}): glm 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	${foodvars}	${macrovars}	/*${regionvars}	${timevars}*/, family(gamma)	link(log)
+		svy, subpop(if ${PFS_sample}): glm 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}*/	${macrovars}	/*${regionvars}	${timevars}*/, family(gamma)	link(log)
 		
 			*glm 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}*/	${indvars}	${regionvars}	${timevars}	[aw=wgt_long_fam_adj], family(gamma)	link(log)
 			*svy: reg 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}*/	${indvars}	${regionvars}	${timevars}	
@@ -4288,153 +4293,196 @@
 		*	
 	}
 	
-	
 	*	Construct dynamics variables
-	use	"${SNAP_dtInt}/SNAP_long_PFS", clear
-	
-	*tsspell, f(L.year == .)
-	*br year _spell _seq _end
-	
-	*gen f_year_mi=1	if	mi(f.year)
-	
-	*	Generate spell-related variables
-	cap drop	_seq	_spell	_end
-	tsspell, cond(year>=2 & PFS_FI_glm==1)
-	
-	br	x11101ll	year	PFS_glm	PFS_FI_glm	_seq	_spell	_end
-	
-	*	Before genering FSDs, generate the number of non-missing PFS values over the 5-year
-	*	It will vary from 0 to the full length of reference period (currently 5)
-	loc	var	num_nonmissing_PFS
-	cap	drop	`var'
-	gen	`var'=0
-	forval	time=0/4	{
+	if	`FSD_construct'==1	{
 		
-		replace	`var'	=	`var'+1	if	!mi(f`time'.PFS_glm)
-
-	}
-	lab	var	`var'	"# of non-missing PFS over 5 years"
-	
-	
-	*	Spell length variable - the number of consecutive years experiencing food insecurity.
-	*	Start with 5-year period.
-	***	Note: I impose a very strong (and likely to be invalid) assumption, that HH experience FI in unobserved periosd if HH experience HH both before- and after- observed year.
-	***	SPL is right-censored in 1984-1987, 2017-2019 where the next 5 years of FI are not fully available.
-		*	For instance, 1984 cannot have SPL greater than 4 since PFS in 1988 is not available.
-	loc	var	SPL
-	cap	drop	`var'
-	gen		`var'=.
-	replace	`var'=0	if	!mi(PFS_FI_glm)
-	replace	`var'=1	if	PFS_FI_glm==1
-	
-	*	SPL=2	if	HH experience FI in two consecutive years
-		*	For post-1997, SPL=2 if HH experience FI for two consecutive waves (assume HH is FI in between)
-	replace	`var'=2	if	PFS_FI_glm==1	&	f1.PFS_FI_glm==1	&	inrange(year,1977,1996)
-	replace	`var'=2	if	PFS_FI_glm==1	&	f2.PFS_FI_glm==1	&	inrange(year,1997,1999)
-	
-	*	SPL=3	if HH experience FI in three consecutive years
-	*	I code it differently based on the existence of gap years
-		*	For 1996, SPL=3 if HH experience FI in 96, 97 and 99 (assuming it is also FI in 98)
-	replace	`var'=3	if	PFS_FI_glm==1	&	f1.PFS_FI_glm==1	&	f2.PFS_FI_glm==1	&	(inrange(year,1977,1985)	|	inrange(year,1990,1995))	//	For years with 3 consecutive years of observations available
-	replace	`var'=3	if	PFS_FI_glm==1	&	f1.PFS_FI_glm==1	&	f3.PFS_FI_glm==1	year==1996	//	For years with 3 consecutive years of observations available
-	replace	`var'=3	if	PFS_FI_glm==1	&	f2.PFS_FI_glm==1	&	inrange(year,1997,2017)	//	For years with gap years, **assuming HH experienced FI in the years between 
-	
-	*	SPL=4	if HH experience FI in four consecutive years
-	replace	`var'=4	if	PFS_FI_glm==1	&	f1.PFS_FI_glm==1	&	f2.PFS_FI_glm==1	&	f3.PFS_FI_glm==1	&	(inrange(year,1977,1984)	|	inrange(year,1990,1994))	//	For years with 4 consecutive years of observations available
-	*replace	`var'=4	if	PFS_FI_glm==1	&	f3.PFS_FI_glm==1	&	year==1987	//	If HH experienced FI in 1987 and 1990
-	
-	*	SPL=5	if	HH experience FI in 5 consecutive years
-	*	Note: It cannot be constructed in 1987, as all of the 4 consecutive years (1988-1991) are missing.
-	*	Issue: 1994/1996 cannot have value 5 as it does not observe 1998/2000 status when the PSID was not conducted.  Thus, I impose the assumption mentioned here
-		*	For 1994, SPL=5 if HH experience FI in 94, 95, 96, 97 and 99 (assuming it is also FI in 1998)
-		*	For 1996, SPL=5 if HH experience FI in 96, 97, 99, and 01 (assuming it is also FI in 98 and 00)
-	replace	`var'=5	if	PFS_FI_glm==1	&	f1.PFS_FI_glm==1	&	f2.PFS_FI_glm==1	&	f3.PFS_FI_glm==1	&	f4.PFS_FI_glm==1	&	(inrange(year,1977,1983)	|	inrange(year,1992,1993))	//	For years with 5 consecutive years of observations available
-	replace	`var'=5	if	PFS_FI_glm==1	&	f1.PFS_FI_glm==1	&	f2.PFS_FI_glm==1	&	f4.PFS_FI_glm==1	&	year==1995	//	For years with 5 consecutive years of observations available	
-	replace	`var'=5	if	PFS_FI_glm==1	&	f2.PFS_FI_glm==1	&	f4.PFS_FI_glm==1	&	inrange(year,1997,2015)
-	
-	
-	br	x11101ll	year	PFS_glm	PFS_FI_glm	_seq	_spell	_end SPL
-	
-	
-	*	Permanent approach (TFI and CFI)
-	
-		*	To construct CFI (Chronic Food Insecurity), we need average PFS over time at household-level.
-		*	Since households have different number of non-missing PFS, we cannot simply use "mean" function.
-		*	We add-up all non-missing PFS over time at household-level, and divide it by cut-off PFS of those non-missing years.
+		use	"${SNAP_dtInt}/SNAP_long_PFS", clear
 		
-		*	Aggregate PFS over time (numerator)
-		loc	var	PFS_glm_total
+		*tsspell, f(L.year == .)
+		*br year _spell _seq _end
+		
+		*gen f_year_mi=1	if	mi(f.year)
+		
+		*	Generate spell-related variables
+		cap drop	_seq	_spell	_end
+		tsspell, cond(year>=2 & PFS_FI_glm==1)
+		
+		br	x11101ll	year	PFS_glm	PFS_FI_glm	_seq	_spell	_end
+		
+		*	Before genering FSDs, generate the number of non-missing PFS values over the 5-year
+		*	It will vary from 0 to the full length of reference period (currently 5)
+		loc	var	num_nonmissing_PFS
 		cap	drop	`var'
 		gen	`var'=0
-		
-		*	Add non-missing PFS of later periods, and add 0.5 to denominator 
 		forval	time=0/4	{
 			
-			replace	`var'	=	`var'	+	f`time'.PFS_glm	if	!mi(f`time'.PFS_glm)
-			
+			replace	`var'	=	`var'+1	if	!mi(f`time'.PFS_glm)
+
 		}
-		replace	`var'=.	if	num_nonmissing_PFS==0
-		
-		*	Generate denominator by aggregating cut-off probability over time
-		*	Since I currently use 0.5 as a baseline threshold probability, it should be (0.5 * the number of non-missing PFS)
-		cap	drop	PFS_threshold_glm_total
-		gen			PFS_threshold_glm_total	=	0.5	*	num_nonmissing_PFS
-		lab	var		PFS_threshold_glm_total	"Sum of PFS over time"
-		
-		*	Generate (normalized) mean-PFS by dividing the numerator into the denominator (Check Calvo & Dercon (2007), page 19)
-		cap	drop	PFS_glm_mean_normal
-		gen			PFS_glm_mean_normal	=	PFS_glm_total	/	PFS_threshold_glm_total
-		lab	var		PFS_glm_mean_normal	"Normalized mean PFS"
+		lab	var	`var'	"# of non-missing PFS over 5 years"
 		
 		
-		*	Construct FIG and SFIG
-		cap	drop	FIG_indiv
-		cap	drop	SFIG_indiv
-		cap	drop	pfs_glm_normal
-		gen	FIG_indiv=.
-		gen	SFIG_indiv	=.
-		gen PFS_glm_normal	=.				
+		*	Spell length variable - the number of consecutive years experiencing food insecurity.
+		*	Start with 5-year period.
+		***	Note: I impose a very strong (and likely to be invalid) assumption, that HH experience FI in unobserved periosd if HH experience HH both before- and after- observed year.
+		***	SPL is right-censored in 1984-1987, 2017-2019 where the next 5 years of FI are not fully available.
+			*	For instance, 1984 cannot have SPL greater than 4 since PFS in 1988 is not available.
+		loc	var	SPL
+		cap	drop	`var'
+		gen		`var'=.
+		replace	`var'=0	if	!mi(PFS_FI_glm)
+		replace	`var'=1	if	PFS_FI_glm==1
+		
+		*	SPL=2	if	HH experience FI in two consecutive years
+			*	For post-1997, SPL=2 if HH experience FI for two consecutive waves (assume HH is FI in between)
+		replace	`var'=2	if	PFS_FI_glm==1	&	f1.PFS_FI_glm==1	&	inrange(year,1977,1996)
+		replace	`var'=2	if	PFS_FI_glm==1	&	f2.PFS_FI_glm==1	&	inrange(year,1997,1999)
+		
+		*	SPL=3	if HH experience FI in three consecutive years
+		*	I code it differently based on the existence of gap years
+			*	For 1996, SPL=3 if HH experience FI in 96, 97 and 99 (assuming it is also FI in 98)
+		replace	`var'=3	if	PFS_FI_glm==1	&	f1.PFS_FI_glm==1	&	f2.PFS_FI_glm==1	&	(inrange(year,1977,1985)	|	inrange(year,1990,1995))	//	For years with 3 consecutive years of observations available
+		replace	`var'=3	if	PFS_FI_glm==1	&	f1.PFS_FI_glm==1	&	f3.PFS_FI_glm==1	&	year==1996	//	For years with 3 consecutive years of observations available
+		replace	`var'=3	if	PFS_FI_glm==1	&	f2.PFS_FI_glm==1	&	inrange(year,1997,2017)	//	For years with gap years, **assuming HH experienced FI in the years between 
+		
+		*	SPL=4	if HH experience FI in four consecutive years
+		replace	`var'=4	if	PFS_FI_glm==1	&	f1.PFS_FI_glm==1	&	f2.PFS_FI_glm==1	&	f3.PFS_FI_glm==1	&	(inrange(year,1977,1984)	|	inrange(year,1990,1994))	//	For years with 4 consecutive years of observations available
+		*replace	`var'=4	if	PFS_FI_glm==1	&	f3.PFS_FI_glm==1	&	year==1987	//	If HH experienced FI in 1987 and 1990
+		
+		*	SPL=5	if	HH experience FI in 5 consecutive years
+		*	Note: It cannot be constructed in 1987, as all of the 4 consecutive years (1988-1991) are missing.
+		*	Issue: 1994/1996 cannot have value 5 as it does not observe 1998/2000 status when the PSID was not conducted.  Thus, I impose the assumption mentioned here
+			*	For 1994, SPL=5 if HH experience FI in 94, 95, 96, 97 and 99 (assuming it is also FI in 1998)
+			*	For 1996, SPL=5 if HH experience FI in 96, 97, 99, and 01 (assuming it is also FI in 98 and 00)
+		replace	`var'=5	if	PFS_FI_glm==1	&	f1.PFS_FI_glm==1	&	f2.PFS_FI_glm==1	&	f3.PFS_FI_glm==1	&	f4.PFS_FI_glm==1	&	(inrange(year,1977,1983)	|	inrange(year,1992,1993))	//	For years with 5 consecutive years of observations available
+		replace	`var'=5	if	PFS_FI_glm==1	&	f1.PFS_FI_glm==1	&	f2.PFS_FI_glm==1	&	f4.PFS_FI_glm==1	&	year==1995	//	For years with 5 consecutive years of observations available	
+		replace	`var'=5	if	PFS_FI_glm==1	&	f2.PFS_FI_glm==1	&	f4.PFS_FI_glm==1	&	inrange(year,1997,2015)
+		
+		
+		br	x11101ll	year	PFS_glm	PFS_FI_glm	_seq	_spell	_end SPL
+		
+		lab	var	`var'	"# of consecutive FI incidences over 5 years"
+		
+		*	Permanent approach (TFI and CFI)
+		
+			*	To construct CFI (Chronic Food Insecurity), we need average PFS over time at household-level.
+			*	Since households have different number of non-missing PFS, we cannot simply use "mean" function.
+			*	We add-up all non-missing PFS over time at household-level, and divide it by cut-off PFS of those non-missing years.
+			
+			*	Aggregate PFS and PFS_FI over time (numerator)
+			cap	drop	PFS_glm_total
+			cap	drop	PFS_FI_glm_total
+			
+			gen	PFS_glm_total		=	0
+			gen	PFS_FI_glm_total	=	0
+			
+			*	Add non-missing PFS of later periods, and add 0.5 to denominator 
+			forval	time=0/4	{
 				
-			*	Normalized PFS (PFS/threshold PFS)	(PFSit/PFS_underbar_t)
-			replace	PFS_glm_normal	=	PFS_glm	/	PFS_threshold_glm
+				replace	PFS_glm_total		=	PFS_glm_total		+	f`time'.PFS_glm		if	!mi(f`time'.PFS_glm)
+				replace	PFS_FI_glm_total	=	PFS_FI_glm_total	+	f`time'.PFS_FI_glm	if	!mi(f`time'.PFS_FI_glm)
+				
+			}
 			
-			*	Inner term of the food securit gap (FIG) and the squared food insecurity gap (SFIG)
-			replace	FIG_indiv	=	(1-PFS_glm_normal)^1	if	!mi(PFS_glm_normal)	&	PFS_glm_normal<1	//	PFS_glm<PFS_threshold_glm
-			replace	FIG_indiv	=	0						if	!mi(PFS_glm_normal)	&	PFS_glm_normal>=1	//	PFS_glm>=PFS_threshold_glm
-			replace	SFIG_indiv	=	(1-PFS_glm_normal)^2	if	!mi(PFS_glm_normal)	&	PFS_glm_normal<1	//	PFS_glm<PFS_threshold_glm
-			replace	SFIG_indiv	=	0						if	!mi(PFS_glm_normal)	&	PFS_glm_normal>=1	//	PFS_glm>=PFS_threshold_glm
+			replace	PFS_glm_total=.		if	num_nonmissing_PFS==0
+			replace	PFS_FI_glm_total=.	if	num_nonmissing_PFS==0
+			
+			lab	var	PFS_glm_total		"Aggregated PFS over 5 years"
+			lab	var	PFS_FI_glm_total	"Aggregated FI incidence over 5 years"
+			
+			*	Generate denominator by aggregating cut-off probability over time
+			*	Since I currently use 0.5 as a baseline threshold probability, it should be (0.5 * the number of non-missing PFS)
+			cap	drop	PFS_threshold_glm_total
+			gen			PFS_threshold_glm_total	=	0.5	*	num_nonmissing_PFS
+			lab	var		PFS_threshold_glm_total	"Sum of PFS over time"
+			
+			*	Generate (normalized) mean-PFS by dividing the numerator into the denominator (Check Calvo & Dercon (2007), page 19)
+			cap	drop	PFS_glm_mean_normal
+			gen			PFS_glm_mean_normal	=	PFS_glm_total	/	PFS_threshold_glm_total
+			lab	var		PFS_glm_mean_normal	"Normalized mean PFS"
+			
+			
+			*	Construct SFIG
+			cap	drop	FIG_indiv
+			cap	drop	SFIG_indiv
+			cap	drop	PFS_glm_normal
+			gen	double	FIG_indiv=.
+			gen	double	SFIG_indiv	=.
+			gen	double PFS_glm_normal	=.				
+					
+				br	x11101ll	year	num_nonmissing_PFS	PFS_glm	PFS_FI_glm PFS_glm_total PFS_threshold_glm_total	FIG_indiv	SFIG_indiv	PFS_glm_normal	PFS_glm_mean_normal
+				
+				*	Normalized PFS (PFS/threshold PFS)	(PFSit/PFS_underbar_t)
+				replace	PFS_glm_normal	=	PFS_glm	/	0.5
+				
+				*	Inner term of the food security gap (FIG) and the squared food insecurity gap (SFIG)
+				replace	FIG_indiv	=	(1-PFS_glm_normal)^1	if	!mi(PFS_glm_normal)	&	PFS_glm_normal<1	//	PFS_glm<0.5
+				replace	FIG_indiv	=	0						if	!mi(PFS_glm_normal)	&	PFS_glm_normal>=1	//	PFS_glm>=0.5
+				replace	SFIG_indiv	=	(1-PFS_glm_normal)^2	if	!mi(PFS_glm_normal)	&	PFS_glm_normal<1	//	PFS_glm<0.5
+				replace	SFIG_indiv	=	0						if	!mi(PFS_glm_normal)	&	PFS_glm_normal>=1	//	PFS_glm>=0.5
+			
+				
+			*	Total, Transient and Chronic FI
+			
+				*	Total FI	(Average HCR/SFIG over time)
+				cap	drop	TFI_HCR
+				cap	drop	TFI_FIG
+				cap	drop	TFI_SFIG
+				
+				gen	TFI_HCR		=	PFS_FI_glm_total	/	num_nonmissing_PFS
+				
+				gen	TFI_FIG		=	0
+				gen	TFI_SFIG	=	0
+				
+				forval	time=0/4	{
+					
+					replace	TFI_FIG		=	TFI_FIG		+	f`time'.FIG_indiv	if	!mi(f`time'.PFS_glm)
+					replace	TFI_SFIG	=	TFI_SFIG	+	f`time'.SFIG_indiv	if	!mi(f`time'.PFS_glm)
+					
+				}
+				
+				*	Divide by the number of non-missing PFS (thus non-missing FIG/SFIG) to get average value
+				replace	TFI_FIG		=	TFI_FIG		/	num_nonmissing_PFS
+				replace	TFI_SFIG	=	TFI_SFIG	/	num_nonmissing_PFS
+				
+				*	Replace with missing if all PFS are missing.
+				replace	TFI_HCR=.	if	num_nonmissing_PFS==0
+				replace	TFI_FIG=.	if	num_nonmissing_PFS==0
+				replace	TFI_SFIG=.	if	num_nonmissing_PFS==0
+					
+				*bys	fam_ID_1999:	egen	Total_FI_HCR	=	mean(PFS_FI_glm)	if	inrange(year,2,10)	//	HCR
+				*bys	fam_ID_1999:	egen	Total_FI_SFIG	=	mean(SFIG_indiv)	if	inrange(year,2,10)	//	SFIG
+				
+				label	var	TFI_HCR		"TFI (HCR)"
+				label	var	TFI_FIG		"TFI (FIG)"
+				label	var	TFI_SFIG	"TFI (SFIG)"
+
+				*	Chronic FI (SFIG(with mean PFS))					
+				gen		CFI_HCR=.
+				gen		CFI_FIG=.
+				gen		CFI_SFIG=.
+				replace	CFI_HCR		=	(1-PFS_glm_mean_normal)^0	if	!mi(PFS_glm_mean_normal)	&	PFS_glm_mean_normal<1	//	Avg PFS < Avg cut-off PFS
+				replace	CFI_FIG		=	(1-PFS_glm_mean_normal)^1	if	!mi(PFS_glm_mean_normal)	&	PFS_glm_mean_normal<1	//	Avg PFS < Avg cut-off PFS
+				replace	CFI_SFIG	=	(1-PFS_glm_mean_normal)^2	if	!mi(PFS_glm_mean_normal)	&	PFS_glm_mean_normal<1	//	Avg PFS < Avg cut-off PFS
+				replace	CFI_HCR		=	0							if	!mi(PFS_glm_mean_normal)	&	PFS_glm_mean_normal>=1	//	Avg PFS >= Avg cut-off PFS (thus zero CFI)
+				replace	CFI_FIG		=	0							if	!mi(PFS_glm_mean_normal)	&	PFS_glm_mean_normal>=1	//	Avg PFS >= Avg cut-off PFS (thus zero CFI)
+				replace	CFI_SFIG	=	0							if	!mi(PFS_glm_mean_normal)	&	PFS_glm_mean_normal>=1	//	Avg PFS >= Avg cut-off PFS (thus zero CFI)
+				
+				lab	var		CFI_HCR		"CFI (HCR)"
+				lab	var		CFI_FIG		"CFI (FIG)"
+				lab	var		CFI_SFIG	"CFI (SFIG)"
 		
-			
-		*	Total, Transient and Chronic FI
-
+		*	Save
+		save    "${SNAP_dtInt}/SNAP_long_FSD",	replace
 		
-			*	Total FI	(Average SFIG over time)
-			bys	fam_ID_1999:	egen	Total_FI_HCR	=	mean(PFS_FI_glm)	if	inrange(year,2,10)	//	HCR
-			bys	fam_ID_1999:	egen	Total_FI_SFIG	=	mean(SFIG_indiv)	if	inrange(year,2,10)	//	SFIG
-			
-			label	var	Total_FI_HCR	"TFI (HCR)"
-			label	var	Total_FI_SFIG	"TFI (SFIG)"
-
-			*	Chronic FI (SFIG(with mean PFS))					
-			gen		Chronic_FI_HCR=.
-			gen		Chronic_FI_SFIG=.
-			replace	Chronic_FI_HCR	=	(1-PFS_glm_mean_normal)^0	if	!mi(PFS_glm_mean_normal)	&	PFS_glm_mean_normal<1	//	Avg PFS < Avg cut-off PFS
-			replace	Chronic_FI_SFIG	=	(1-PFS_glm_mean_normal)^2	if	!mi(PFS_glm_mean_normal)	&	PFS_glm_mean_normal<1	//	Avg PFS < Avg cut-off PFS
-			replace	Chronic_FI_HCR	=	0							if	!mi(PFS_glm_mean_normal)	&	PFS_glm_mean_normal>=1	//	Avg PFS >= Avg cut-off PFS (thus zero CFI)
-			replace	Chronic_FI_SFIG	=	0							if	!mi(PFS_glm_mean_normal)	&	PFS_glm_mean_normal>=1	//	Avg PFS >= Avg cut-off PFS (thus zero CFI)
-			
-			lab	var		Chronic_FI_HCR	"CFI (HCR)"
-			lab	var		Chronic_FI_SFIG	"CFI (SFIG)"
-
-	
-	
+	}
 	
 	*	IV regression
 	if	`IV_reg'==1	{
-				
+		
 		*	Weak IV test 
 		*	(2022-05-01) For now, we use IV to predict T(FS participation) and use it to predict W (food expenditure per capita) (previously I used it to predict PFS in the second stage)
-		use	"${SNAP_dtInt}/SNAP_long_const", clear
+		use	"${SNAP_dtInt}/SNAP_long_FSD", clear
 		
 		*	Set globals
 		global	statevars		l2_foodexp_tot_inclFS_pc_1	l2_foodexp_tot_inclFS_pc_2 
@@ -4684,7 +4732,10 @@
 			
 			*	Dep var participation only
 			local	endovar	FS_rec_wth	/*FS_rec_amt_real*/
-			local	depvar	/*PFS_glm*/	foodexp_tot_inclFS_pc
+			local	depvar	SPL	//	PFS_glm	//		//	foodexp_tot_inclFS_pc
+			local	IV		i.major_control_cat		//	SSI_GDP_sl	share_welfare_exp_sl		int_SSI_exp_sl_01_03
+			local	time			//		${macrovars}	//	${timevars}
+			local	sample	in_sample==1 & inrange(year,1977,2019)	& income_below_200==1
 			
 						
 			global	est_1st
@@ -4693,10 +4744,12 @@
 			
 			
 			*	Test specification
-			loc	IV		i.major_control_cat	/*int_SSI_exp_sl_01_03*/
+			*loc	IV		i.major_control_cat	
 			loc	IVname	SSI_nomacro
-			ivreg2 	`depvar'	${statevars}	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	${regionvars}	/*${timevars}	${macrovars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
-				if	in_sample==1 & inrange(year,1977,2019),	robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
+			ivreg2 	`depvar'	${statevars}	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	${regionvars}	`time'	/*${timevars}	${macrovars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+				if	`sample',	robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
+	
+				
 			est	store	`IVname'_2nd
 			scalar	Fstat_`IVname'	=	e(widstat)
 			est	restore	`IVname'`endovar'
