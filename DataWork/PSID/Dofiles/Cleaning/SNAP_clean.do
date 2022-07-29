@@ -4391,11 +4391,11 @@
 		br	x11101ll	year	PFS_glm	PFS_FI_glm	_seq	_spell	_end
 		
 		*	Before genering FSDs, generate the number of non-missing PFS values over the 5-year
-		*	It will vary from 0 to the full length of reference period (currently 5)
+		*	It will vary from 0 to the full length of reference period (currently 3)
 		loc	var	num_nonmissing_PFS
 		cap	drop	`var'
 		gen	`var'=0
-		forval	time=0/4	{
+		foreach time in 0 2 4	{
 			
 			replace	`var'	=	`var'+1	if	!mi(f`time'.PFS_glm)
 
@@ -4403,29 +4403,23 @@
 		lab	var	`var'	"# of non-missing PFS over 5 years"
 		
 		
-		*	Spell length variable - the number of consecutive years experiencing food insecurity.
-		*	Start with 5-year period.
-		***	Note: I impose a very strong (and likely to be invalid) assumption, that HH experience FI in unobserved periosd if HH experience HH both before- and after- observed year.
-		***	SPL is right-censored in 1984-1987, 2017-2019 where the next 5 years of FI are not fully available.
-			*	For instance, 1984 cannot have SPL greater than 4 since PFS in 1988 is not available.
-		loc	var	SPL
+		*	Spell length variable - the consecutive years of FI experience
+		*	Start with 5-year period (SL_5)
+		*	To utilize biennial data since 1997, I use observations in every two years
+			*	Many years lose observations due to data availability
+		loc	var	SL_5
 		cap	drop	`var'
 		gen		`var'=.
 		replace	`var'=0	if	!mi(PFS_FI_glm)
 		replace	`var'=1	if	PFS_FI_glm==1
 		
-		*	SPL=2	if	HH experience FI in two consecutive years
-			*	For post-1997, SPL=2 if HH experience FI for two consecutive waves (assume HH is FI in between)
-		replace	`var'=2	if	PFS_FI_glm==1	&	f1.PFS_FI_glm==1	&	inrange(year,1977,1996)
-		replace	`var'=2	if	PFS_FI_glm==1	&	f2.PFS_FI_glm==1	&	inrange(year,1997,1999)
+		*	SL_5=2	if	HH experience FI in two consecutive rounds
+		replace	`var'=2	if	PFS_FI_glm==1	&	f2.PFS_FI_glm==1	//	&	inrange(year,1997,1999)
 		
-		*	SPL=3	if HH experience FI in three consecutive years
-		*	I code it differently based on the existence of gap years
-			*	For 1996, SPL=3 if HH experience FI in 96, 97 and 99 (assuming it is also FI in 98)
-		replace	`var'=3	if	PFS_FI_glm==1	&	f1.PFS_FI_glm==1	&	f2.PFS_FI_glm==1	&	(inrange(year,1977,1985)	|	inrange(year,1990,1995))	//	For years with 3 consecutive years of observations available
-		replace	`var'=3	if	PFS_FI_glm==1	&	f1.PFS_FI_glm==1	&	f3.PFS_FI_glm==1	&	year==1996	//	For years with 3 consecutive years of observations available
-		replace	`var'=3	if	PFS_FI_glm==1	&	f2.PFS_FI_glm==1	&	inrange(year,1997,2017)	//	For years with gap years, **assuming HH experienced FI in the years between 
+		*	SL_5=3	if HH experience FI in three consecutive rounds
+		replace	`var'=3	if	PFS_FI_glm==1	&	f2.PFS_FI_glm==1	&	f4.PFS_FI_glm==1	
 		
+		/*
 		*	SPL=4	if HH experience FI in four consecutive years
 		replace	`var'=4	if	PFS_FI_glm==1	&	f1.PFS_FI_glm==1	&	f2.PFS_FI_glm==1	&	f3.PFS_FI_glm==1	&	(inrange(year,1977,1984)	|	inrange(year,1990,1994))	//	For years with 4 consecutive years of observations available
 		*replace	`var'=4	if	PFS_FI_glm==1	&	f3.PFS_FI_glm==1	&	year==1987	//	If HH experienced FI in 1987 and 1990
@@ -4438,11 +4432,11 @@
 		replace	`var'=5	if	PFS_FI_glm==1	&	f1.PFS_FI_glm==1	&	f2.PFS_FI_glm==1	&	f3.PFS_FI_glm==1	&	f4.PFS_FI_glm==1	&	(inrange(year,1977,1983)	|	inrange(year,1992,1993))	//	For years with 5 consecutive years of observations available
 		replace	`var'=5	if	PFS_FI_glm==1	&	f1.PFS_FI_glm==1	&	f2.PFS_FI_glm==1	&	f4.PFS_FI_glm==1	&	year==1995	//	For years with 5 consecutive years of observations available	
 		replace	`var'=5	if	PFS_FI_glm==1	&	f2.PFS_FI_glm==1	&	f4.PFS_FI_glm==1	&	inrange(year,1997,2015)
+		*/
 		
+		br	x11101ll	year	PFS_glm	PFS_FI_glm	_seq	_spell	_end SL_5
 		
-		br	x11101ll	year	PFS_glm	PFS_FI_glm	_seq	_spell	_end SPL
-		
-		lab	var	`var'	"# of consecutive FI incidences over 5 years"
+		lab	var	`var'	"# of consecutive FI incidences over 5 years (0-3)"
 		
 		*	Permanent approach (TFI and CFI)
 		
@@ -4458,7 +4452,7 @@
 			gen	PFS_FI_glm_total	=	0
 			
 			*	Add non-missing PFS of later periods, and add 0.5 to denominator 
-			forval	time=0/4	{
+			foreach time in 0 2 4	{
 				
 				replace	PFS_glm_total		=	PFS_glm_total		+	f`time'.PFS_glm		if	!mi(f`time'.PFS_glm)
 				replace	PFS_FI_glm_total	=	PFS_FI_glm_total	+	f`time'.PFS_FI_glm	if	!mi(f`time'.PFS_FI_glm)
@@ -4510,12 +4504,11 @@
 				cap	drop	TFI_FIG
 				cap	drop	TFI_SFIG
 				
-				gen	TFI_HCR		=	PFS_FI_glm_total	/	num_nonmissing_PFS
-				
+				gen	TFI_HCR		=	PFS_FI_glm_total	/	num_nonmissing_PFS		
 				gen	TFI_FIG		=	0
 				gen	TFI_SFIG	=	0
 				
-				forval	time=0/4	{
+				foreach time in 0 2 4	{
 					
 					replace	TFI_FIG		=	TFI_FIG		+	f`time'.FIG_indiv	if	!mi(f`time'.PFS_glm)
 					replace	TFI_SFIG	=	TFI_SFIG	+	f`time'.SFIG_indiv	if	!mi(f`time'.PFS_glm)
@@ -4636,6 +4629,7 @@
 		lab	var	int_SSI_GDP_sl_01_03	"SSI X {2001_2003}"
 
 		
+			
 		*	Regression test
 		*	For now we test 4 models
 			*	(1) Political vars and state-level SSI, without FE
@@ -4823,20 +4817,22 @@
 			
 			
 			*	Specification 
-			local	endovar	FS_rec_wth	//	FS_rec_amt_real	//			FS_rec_wth	// 			
-			local	depvar	PFS_glm	//	foodexp_tot_inclFS_pc	//		//		//	SPL	//		//		//	
-			local	IV		SNAP_index_w	//	SSI_GDP_sl		//	SSI_GDP_sl	i.major_control_cat		//	share_welfare_GDP_sl		//		share_welfare_exp_sl	//		int_SSI_exp_sl_01_03	//	//	error_total
+			local	endovar	FS_rec_amt_real	//	FS_rec_wth	//	FS_rec_wth	// 			
+			local	depvar	PFS_glm	//	foodexp_tot_inclFS_pc	//		//		//	SL_5	//		//		//	
+			local	IV		SSI_GDP_sl	//	i.major_control_cat		//		//	SNAP_index_w	//				share_welfare_GDP_sl		//		share_welfare_exp_sl	//		int_SSI_exp_sl_01_03	//	//	error_total
 			local	time	${macrovars}		//			${timevars}		//			//	
 			local	sample	in_sample==1 & inrange(year,1977,2019)	& income_below_200==1
 			
 			*loc	IV		i.major_control_cat	
 			loc	IVname	SSI_nomacro
-			ivreg2 	`depvar'	${statevars}	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	${regionvars}	`time'	/*${timevars}	${macrovars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+			ivreg2 	`depvar'	l2.PFS_glm	/*${statevars}*/	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	${regionvars}	`time'	/*${timevars}	${macrovars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
 				if	`sample',	robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
 			
 			}
 	
-	
+			
+			*	Set the benchmark specification based on the test above.
+			global	FSD_on_FS_X	l2.PFS_glm	${demovars} ${econvars}	${healthvars}	${empvars}	${familyvars}	${eduvars}	${regionvars}	${macrovars}
 	
 			global	PFS_est_1st
 			global	PFS_est_2nd
@@ -4844,11 +4840,13 @@
 			
 			
 			*	Benchmark specification (SSI only, limiting sapmle to low-income HH, below 200% PL)
+			*	(2022-7-28) Note: the last benchmark model (SSI as single IV to instrument amount of FS benefit) tested was including "${statevars}" and excluding "lagged PFS"
+			*	But here I inclued "lagged PFS" as Chris suggested, and excluded "statevars" by my own decision. We can further test this specification with different IV/endogenous variable (political status didn't work still)
 			loc	depvar	PFS_glm
 			loc	endovar	FS_rec_amt_real
 			loc	IV		SSI_GDP_sl
 			loc	IVname	SSI_macro
-			ivreg2 	`depvar'	${statevars}	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	${regionvars}	/*${timevars}*/	${macrovars}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+			ivreg2 	`depvar'	${FSD_on_FS_X}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
 				if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
 			est	store	`IVname'_2nd
 			scalar	Fstat_`IVname'	=	e(widstat)
@@ -4868,8 +4866,7 @@
 				lab	var		FS_amt_PFS_hat	"Predicted FS amount received last month"
 			
 				*	Now, regress 2nd stage, including FS across multiple periods
-					reg	PFS_glm FS_amt_PFS_hat	l2.FS_amt_PFS_hat	l4.FS_amt_PFS_hat	///
-								${statevars}	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	${regionvars}	/*${timevars}*/	${macrovars}	[aw=wgt_long_fam_adj]	///
+					reg	PFS_glm FS_amt_PFS_hat	l2.FS_amt_PFS_hat	${FSD_on_FS_X}	[aw=wgt_long_fam_adj]	///
 								if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) // first savefirst savefprefix(`IVname')
 					est	store	PFS_dyn_X_2nd
 				
@@ -5083,7 +5080,7 @@
 				local	est_2nd	`est_2nd'	`IVname'_2nd
 				*/
 
-				
+				/*
 				*	1st-stage
 				esttab	${est_1st}	using "${SNAP_outRaw}/WeakIV_1st.csv", ///
 						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(rp_state_enum*)	///
@@ -5101,18 +5098,18 @@
 				esttab	${est_2nd}	using "${SNAP_outRaw}/WeakIV_2nd.tex", ///
 						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(rp_state_enum*)///
 						title(Weak IV_2nd)		replace	
-		
+		*/
 		
 			
 			*	Regressing FSD on predicted FS 
 			
-				*	SPL	
+			*	SL_5	
 				{
-					global	SPL_est_1st	
-					global	SPL_est_2nd	
+					global	SL_5_est_1st	
+					global	SL_5_est_2nd	
 					
 					*	Static, no control/no macro
-					loc	depvar	SPL
+					loc	depvar	SL_5
 					loc	endovar	FS_rec_amt_real
 					loc	IV		SSI_GDP_sl
 					loc	model	`depvar'_biv
@@ -5130,7 +5127,7 @@
 					
 					
 					*	Static, no control, macro
-					loc	depvar	SPL
+					loc	depvar	SL_5
 					loc	endovar	FS_rec_amt_real
 					loc	IV		SSI_GDP_sl
 					loc	model	`depvar'_macro
@@ -5148,11 +5145,11 @@
 					
 					
 					*	Static, controls, macro
-					loc	depvar	SPL
+					loc	depvar	SL_5
 					loc	endovar	FS_rec_amt_real
 					loc	IV		SSI_GDP_sl
 					loc	model	`depvar'_control
-					ivreg2 	`depvar' ${demovars} ${econvars}	${healthvars}	${empvars}	${familyvars}	${eduvars}	${regionvars}	/*${timevars}*/	${macrovars}	(FS_rec_amt_real	=	SSI_GDP_sl)	[aw=wgt_long_fam_adj]	///
+					ivreg2 	`depvar' ${FSD_on_FS_X}	(FS_rec_amt_real	=	SSI_GDP_sl)	[aw=wgt_long_fam_adj]	///
 						if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) first savefirst savefprefix(`model')
 					est	store	`model'_2nd
 					scalar	Fstat_`model'	=	e(widstat)
@@ -5175,32 +5172,31 @@
 						lab	var	FS_amt_`depvar'_hat	"Predicted FS amount received last month"
 						
 						*	Now, regress 2nd stage, including FS across multiple periods
-						reg	`depvar' FS_amt_`depvar'_hat	f2.FS_amt_`depvar'_hat	f4.FS_amt_`depvar'_hat	///
-									${demovars} ${econvars}	${healthvars}	${empvars}	${familyvars}	${eduvars}	${regionvars}	/*${timevars}*/	${macrovars}	[aw=wgt_long_fam_adj]	///
+						reg	`depvar' FS_amt_`depvar'_hat	l2.FS_amt_`depvar'_hat	${FSD_on_FS_X}	[aw=wgt_long_fam_adj]	///
 							if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) // first savefirst savefprefix(`IVname')
 						est	store	`depvar'_dyn_control_2nd
 						
-						global	`depvar'_est_2nd	${SPL_est_2nd}	SPL_dyn_control_2nd
+						global	`depvar'_est_2nd	${SL_5_est_2nd}	SL_5_dyn_control_2nd
 				
 					
 							
 					*	1st-stage
-					esttab	${SPL_est_1st}	using "${SNAP_outRaw}/SPL_on_FS_IV_1st.csv", ///
+					esttab	${SL_5_est_1st}	using "${SNAP_outRaw}/SL_5_on_FS_IV_1st.csv", ///
 							cells(b(star fmt(%8.3f)) /*&*/ se(fmt(2) par)) stats(N Fstat, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(rp_state_enum*)	///
-							title(SPL on FS_1st)		replace	
+							title(SL_5 on FS_1st)		replace	
 							
-					esttab	${SPL_est_1st}	using "${SNAP_outRaw}/SPL_on_FS_IV_1st.tex", ///
+					esttab	${SL_5_est_1st}	using "${SNAP_outRaw}/SL_5_on_FS_IV_1st.tex", ///
 							cells(b(star fmt(%8.3f)) /*&*/ se(fmt(2) par)) stats(N Fstat, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(rp_state_enum*)	///
-							title(SPL on FS_1st)		replace	
+							title(SL_5 on FS_1st)		replace	
 							
 					*	2nd-stage
-					esttab	${SPL_est_2nd}	using "${SNAP_outRaw}/SPL_on_FS_IV_2nd.csv", ///
+					esttab	${SL_5_est_2nd}	using "${SNAP_outRaw}/SL_5_on_FS_IV_2nd.csv", ///
 							cells(b(star fmt(%8.3f)) /*&*/ se(fmt(2) par)) stats(N r2, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(rp_state_enum*)	///
-							title(SPL on FS_2nd)		replace		
+							title(SL_5 on FS_2nd)		replace		
 							
-					esttab	${SPL_est_2nd}	using "${SNAP_outRaw}/SPL_on_FS_IV_2nd.tex", ///
+					esttab	${SL_5_est_2nd}	using "${SNAP_outRaw}/SL_5_on_FS_IV_2nd.tex", ///
 							cells(b(star fmt(%8.3f)) /*&*/ se(fmt(2) par)) stats(N r2, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(rp_state_enum*)	///
-							title(SPL on FS_2nd)		replace	
+							title(SL_5 on FS_2nd)		replace	
 				}			
 			
 			*	TFI (HCR)
@@ -5255,7 +5251,7 @@
 					loc	endovar	FS_amt_realK
 					loc	IV		SSI_GDP_sl
 					loc	model	`depvar'_control
-					ivreg2 	`depvar' ${demovars} ${econvars}	${healthvars}	${empvars}	${familyvars}	${eduvars}	${regionvars}	/*${timevars}*/	${macrovars}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+					ivreg2 	`depvar' ${FSD_on_FS_X}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
 						if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) first savefirst savefprefix(`model')
 					est	store	`model'_2nd
 					scalar	Fstat_`model'	=	e(widstat)
@@ -5278,8 +5274,7 @@
 						lab	var	FS_amt_`depvar'_hat	"Predicted FS amount received last month"
 						
 						*	Now, regress 2nd stage, including FS across multiple periods
-						reg	`depvar' FS_amt_`depvar'_hat	f2.FS_amt_`depvar'_hat	f4.FS_amt_`depvar'_hat	///
-									${demovars} ${econvars}	${healthvars}	${empvars}	${familyvars}	${eduvars}	${regionvars}	/*${timevars}*/	${macrovars}	[aw=wgt_long_fam_adj]	///
+						reg	`depvar' FS_amt_`depvar'_hat	l2.FS_amt_`depvar'_hat	${FSD_on_FS_X}	[aw=wgt_long_fam_adj]	///
 							if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) // first savefirst savefprefix(`IVname')
 						est	store	`depvar'_dyn_control_2nd
 					
@@ -5358,7 +5353,7 @@
 				loc	endovar	FS_amt_realK
 				loc	IV		SSI_GDP_sl
 				loc	model	`depvar'_X
-				ivreg2 	`depvar' ${demovars} ${econvars}	${healthvars}	${empvars}	${familyvars}	${eduvars}	${regionvars}	/*${timevars}*/	${macrovars}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+				ivreg2 	`depvar' ${FSD_on_FS_X}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
 					if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) first savefirst savefprefix(`model')
 				est	store	`model'_2nd
 				scalar	Fstat_`model'	=	e(widstat)
@@ -5381,8 +5376,7 @@
 					lab	var	FS_amt_`depvar'_hat	"Predicted FS amount received last month (K)"
 					
 					*	Now, regress 2nd stage, including FS across multiple periods
-					reg	`depvar' FS_amt_`depvar'_hat	f2.FS_amt_`depvar'_hat	f4.FS_amt_`depvar'_hat	///
-								${demovars} ${econvars}	${healthvars}	${empvars}	${familyvars}	${eduvars}	${regionvars}	/*${timevars}*/	${macrovars}	[aw=wgt_long_fam_adj]	///
+					reg	`depvar' FS_amt_`depvar'_hat	l2.FS_amt_`depvar'_hat	${FSD_on_FS_X}	[aw=wgt_long_fam_adj]	///
 						if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) // first savefirst savefprefix(`IVname')
 					est	store	`depvar'_dyn_X_2nd
 				
@@ -5460,7 +5454,7 @@
 				loc	endovar	FS_amt_realK
 				loc	IV		SSI_GDP_sl
 				loc	model	`depvar'_X
-				ivreg2 	`depvar' ${demovars} ${econvars}	${healthvars}	${empvars}	${familyvars}	${eduvars}	${regionvars}	/*${timevars}*/	${macrovars}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+				ivreg2 	`depvar' ${FSD_on_FS_X}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
 					if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) first savefirst savefprefix(`model')
 				est	store	`model'_2nd
 				scalar	Fstat_`model'	=	e(widstat)
@@ -5483,8 +5477,7 @@
 					lab	var	FS_amt_`depvar'_hat	"Predicted FS amount received last month (K)"
 					
 					*	Now, regress 2nd stage, including FS across multiple periods
-					reg	`depvar' FS_amt_`depvar'_hat	f2.FS_amt_`depvar'_hat	f4.FS_amt_`depvar'_hat	///
-								${demovars} ${econvars}	${healthvars}	${empvars}	${familyvars}	${eduvars}	${regionvars}	/*${timevars}*/	${macrovars}	[aw=wgt_long_fam_adj]	///
+					reg	`depvar' FS_amt_`depvar'_hat	l2.FS_amt_`depvar'_hat	${FSD_on_FS_X}	[aw=wgt_long_fam_adj]	///
 						if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) // first savefirst savefprefix(`IVname')
 					est	store	`depvar'_dyn_X_2nd
 				
@@ -5563,7 +5556,7 @@
 				loc	endovar	FS_amt_realK
 				loc	IV		SSI_GDP_sl
 				loc	model	`depvar'_X
-				ivreg2 	`depvar' ${demovars} ${econvars}	${healthvars}	${empvars}	${familyvars}	${eduvars}	${regionvars}	/*${timevars}*/	${macrovars}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+				ivreg2 	`depvar' ${FSD_on_FS_X}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
 					if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) first savefirst savefprefix(`model')
 				est	store	`model'_2nd
 				scalar	Fstat_`model'	=	e(widstat)
@@ -5586,8 +5579,7 @@
 					lab	var	FS_amt_`depvar'_hat	"Predicted FS amount received last month (K)"
 					
 					*	Now, regress 2nd stage, including FS across multiple periods
-					reg	`depvar' FS_amt_`depvar'_hat	f2.FS_amt_`depvar'_hat	f4.FS_amt_`depvar'_hat	///
-								${demovars} ${econvars}	${healthvars}	${empvars}	${familyvars}	${eduvars}	${regionvars}	/*${timevars}*/	${macrovars}	[aw=wgt_long_fam_adj]	///
+					reg	`depvar' FS_amt_`depvar'_hat	l2.FS_amt_`depvar'_hat	${FSD_on_FS_X}	[aw=wgt_long_fam_adj]	///
 						if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) // first savefirst savefprefix(`IVname')
 					est	store	`depvar'_dyn_X_2nd
 				
@@ -5666,7 +5658,7 @@
 				loc	endovar	FS_amt_realK
 				loc	IV		SSI_GDP_sl
 				loc	model	`depvar'_X
-				ivreg2 	`depvar' ${demovars} ${econvars}	${healthvars}	${empvars}	${familyvars}	${eduvars}	${regionvars}	/*${timevars}*/	${macrovars}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+				ivreg2 	`depvar' ${FSD_on_FS_X}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
 					if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) first savefirst savefprefix(`model')
 				est	store	`model'_2nd
 				scalar	Fstat_`model'	=	e(widstat)
@@ -5689,8 +5681,7 @@
 					lab	var	FS_amt_`depvar'_hat	"Predicted FS amount received last month (K)"
 					
 					*	Now, regress 2nd stage, including FS across multiple periods
-					reg	`depvar' FS_amt_`depvar'_hat	f2.FS_amt_`depvar'_hat	f4.FS_amt_`depvar'_hat	///
-								${demovars} ${econvars}	${healthvars}	${empvars}	${familyvars}	${eduvars}	${regionvars}	/*${timevars}*/	${macrovars}	[aw=wgt_long_fam_adj]	///
+					reg	`depvar' FS_amt_`depvar'_hat	l2.FS_amt_`depvar'_hat	${FSD_on_FS_X}	[aw=wgt_long_fam_adj]	///
 						if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) // first savefirst savefprefix(`IVname')
 					est	store	`depvar'_dyn_X_2nd
 				
@@ -5769,7 +5760,7 @@
 				loc	endovar	FS_amt_realK
 				loc	IV		SSI_GDP_sl
 				loc	model	`depvar'_X
-				ivreg2 	`depvar' ${demovars} ${econvars}	${healthvars}	${empvars}	${familyvars}	${eduvars}	${regionvars}	/*${timevars}*/	${macrovars}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+				ivreg2 	`depvar' ${FSD_on_FS_X}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
 					if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) first savefirst savefprefix(`model')
 				est	store	`model'_2nd
 				scalar	Fstat_`model'	=	e(widstat)
@@ -5792,8 +5783,7 @@
 					lab	var	FS_amt_`depvar'_hat	"Predicted FS amount received last month (K)"
 					
 					*	Now, regress 2nd stage, including FS across multiple periods
-					reg	`depvar' FS_amt_`depvar'_hat	f2.FS_amt_`depvar'_hat	f4.FS_amt_`depvar'_hat	///
-								${demovars} ${econvars}	${healthvars}	${empvars}	${familyvars}	${eduvars}	${regionvars}	/*${timevars}*/	${macrovars}	[aw=wgt_long_fam_adj]	///
+					reg	`depvar' FS_amt_`depvar'_hat	l2.FS_amt_`depvar'_hat	${FSD_on_FS_X}	[aw=wgt_long_fam_adj]	///
 						if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) // first savefirst savefprefix(`IVname')
 					est	store	`depvar'_dyn_X_2nd
 				
@@ -5822,20 +5812,7 @@
 				}
 		
 		
-			
-			*	Set globals
-		global	statevars		l2_foodexp_tot_inclFS_pc_1	l2_foodexp_tot_inclFS_pc_2 
-		global	demovars		rp_age rp_age_sq	rp_nonWhte	rp_married	rp_female	
-		global	econvars		ln_fam_income_pc	
-		global	healthvars		rp_disabled
-		global	familyvars		famnum	ratio_child	change_RP
-		global	empvars			rp_employed
-		global	eduvars			rp_NoHS rp_somecol rp_col
-		//global	foodvars		FS_rec_wth
-		global	macrovars		unemp_rate	CPI
-		global	regionvars		rp_state_enum1-rp_state_enum31 rp_state_enum33-rp_state_enum50 	//	Excluding NY (rp_state_enum32) and outside 48 states (1, 52, 53). The latter should be excluded when running regression
-		global	timevars		year_enum2-year_enum30	//	Exclude 1978 (base year)
-			
+		
 		
 		
 	}
@@ -6000,10 +5977,10 @@
 				local	famvars	famnum	ratio_child		split_off	fam_income_month_pc_real	foodexp_tot_inclFS_pc_real		
 				local	FSvars	FS_rec_wth	FS_rec_amt_real
 				local	IVs		share_welfare_exp_sl	SSI_GDP_sl	major_control_dem major_control_rep major_control_mix
-				local	FSDvars	PFS_glm	SPL	TFI_HCR	CFI_HCR
+				local	FSDvars	PFS_glm	SL_5	TFI_HCR	CFI_HCR	TFI_FIG	CFI_FIG	TFI_SFIG	CFI_SFIG	
 				
 				local	summvars	/*`indvars'*/	`rpvars'	`famvars'	`FSvars'	`IVs'	`FSDvars'
-				
+
 				estpost tabstat	`summvars'	 if in_sample==1	[aw=wgt_long_fam_adj],	statistics(count	mean	sd	min	median	p95	max) columns(statistics)		// save
 				est	store	sumstat_all
 				estpost tabstat	`summvars' 	if in_sample==1	&	income_below_200==1	[aw=wgt_long_fam_adj],	statistics(count	mean	sd	min	median	p95	max) columns(statistics)	// save
@@ -6011,6 +5988,12 @@
 				
 				esttab	sumstat_all	sumstat_lowinc	using	"${SNAP_outRaw}/Tab_1_Sumstats.csv",  ///
 					cells("count(fmt(%12.0f)) mean(fmt(%12.2f)) sd(fmt(%12.2f)) min(fmt(%12.2f)) p50(fmt(%12.2f)) p95(fmt(%12.2f)) max(fmt(%12.2f))") label	title("Summary Statistics") noobs 	  replace
+					
+				esttab	sumstat_all	sumstat_lowinc	using	"${SNAP_outRaw}/Tab_1_Sumstats.tex",  ///
+					cells("count(fmt(%12.0f)) mean(fmt(%12.2f)) sd(fmt(%12.2f)) min(fmt(%12.2f)) p50(fmt(%12.2f)) p95(fmt(%12.2f)) max(fmt(%12.2f))") label	title("Summary Statistics") noobs 	  replace
+					
+				summ	TFI_FIG if in_sample==1	&	income_below_200==1	& PFS_FI_glm==1 [aw=wgt_long_fam_adj]
+			
 				
 				/*
 				*estpost summ	`indvars'	if	/*   num_waves_in_FU_uniq>=2	&*/	!mi(PFS_glm)  // Temporary condition. Need to think proper condition.
