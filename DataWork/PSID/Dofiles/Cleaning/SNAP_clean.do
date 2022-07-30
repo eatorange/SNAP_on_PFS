@@ -4832,11 +4832,22 @@
 			ivreg2 	`depvar'	/*l2.PFS_glm*/	/*${statevars}*/	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}*/ `time'	/*${timevars}	${macrovars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
 				if	`sample',	robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
 		
-			} 
-	
+			 
+			/*
+			est	store	`IVname'_2nd
+			
+				
+				*	1st-stage
+				esttab	`IVname'_2nd	using "${SNAP_outRaw}/temp.csv", ///
+						cells(b(star fmt(%8.4f)) & se(fmt(2) par)) stats(N Fstat, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+						title(PFS on FS amt)		replace	
+					*/	
+						
+			}
+			
 			
 			*	Set the benchmark specification based on the test above.
-			global	FSD_on_FS_X	l2.PFS_glm	${demovars} ${econvars}	${healthvars}	${empvars}	${familyvars}	${eduvars}	${regionvars}	${macrovars}
+			global	FSD_on_FS_X	/*l2.PFS_glm*/	${demovars} ${econvars}	${healthvars}	${empvars}	${familyvars}	${eduvars}	/*${regionvars}*/	${macrovars}
 	
 			global	PFS_est_1st
 			global	PFS_est_2nd
@@ -4848,7 +4859,7 @@
 			*	But here I inclued "lagged PFS" as Chris suggested, and excluded "statevars" by my own decision. We can further test this specification with different IV/endogenous variable (political status didn't work still)
 			loc	depvar	PFS_glm
 			loc	endovar	FS_rec_amt_real
-			loc	IV		SSI_GDP_sl SSI_GDP_slx
+			loc	IV		share_welfare_GDP_sl // SSI_GDP_sl SSI_GDP_slx
 			loc	IVname	SSI_macro
 			ivreg2 	`depvar'	${FSD_on_FS_X}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
 				if	in_sample==1 & inrange(year,1977,2019) & /*!inlist(year,2001,2003)	 &*/ income_below_200==1,	robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
@@ -4879,20 +4890,20 @@
 				
 				*	1st-stage
 				esttab	${PFS_est_1st}	using "${SNAP_outRaw}/PFS_on_FSamt_1st.csv", ///
-						cells(b(star fmt(%8.4f)) & se(fmt(2) par)) stats(N Fstat, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(rp_state_enum*)	///
+						cells(b(star fmt(%8.4f)) & se(fmt(2) par)) stats(N Fstat, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
 						title(PFS on FS amt)		replace	
 						
 				esttab	${PFS_est_1st}	using "${SNAP_outRaw}/PFS_on_FSamt_1st.tex", ///
-						cells(b(star fmt(%8.4f)) & se(fmt(2) par)) stats(N Fstat, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(rp_state_enum*)	///
+						cells(b(star fmt(%8.4f)) & se(fmt(2) par)) stats(N Fstat, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
 						title(PFS on FS amt)		replace	
 						
 				*	2nd-stage
 				esttab	${PFS_est_2nd}	using "${SNAP_outRaw}/PFS_on_FSamt_2nd.csv", ///
-						cells(b(star fmt(%8.4f)) & se(fmt(2) par)) stats(N r2, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(rp_state_enum*)	///
+						cells(b(star fmt(%8.4f)) & se(fmt(2) par)) stats(N r2, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
 						title(PFS on FS amt)		replace		
 						
 				esttab	${PFS_est_2nd}	using "${SNAP_outRaw}/PFS_on_FSamt_2nd.tex", ///
-						cells(b(star fmt(%8.4f)) & se(fmt(2) par)) stats(N r2, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(rp_state_enum*)	///
+						cells(b(star fmt(%8.4f)) & se(fmt(2) par)) stats(N r2, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
 						title(PFS on FS amt)		replace	
 			
 			
@@ -5104,9 +5115,10 @@
 						title(Weak IV_2nd)		replace	
 		*/
 		
-		
+			
 
-			*	Regressing FSD on predicted FS 
+			*	Regressing FSD on predicted FS, using the model we find above
+			global	IV	share_welfare_GDP_sl
 			
 			*	SL_5	
 				{
@@ -5116,9 +5128,9 @@
 					*	Static, no control/no macro
 					loc	depvar	SL_5
 					loc	endovar	FS_rec_amt_real
-					loc	IV		SSI_GDP_sl
+					*loc	IV		share_welfare_GDP_sl
 					loc	model	`depvar'_biv
-					ivreg2 	`depvar'	${regionvars}	(FS_rec_amt_real	=	SSI_GDP_sl)	[aw=wgt_long_fam_adj]	///
+					ivreg2 	`depvar'	${regionvars}	(`endovar'	=	${IV})	[aw=wgt_long_fam_adj]	///
 						if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) first savefirst savefprefix(`model')
 					est	store	`model'_2nd
 					scalar	Fstat_`model'	=	e(widstat)
@@ -5134,9 +5146,9 @@
 					*	Static, no control, macro
 					loc	depvar	SL_5
 					loc	endovar	FS_rec_amt_real
-					loc	IV		SSI_GDP_sl
+					*loc	IV		SSI_GDP_sl
 					loc	model	`depvar'_macro
-					ivreg2 	`depvar'	${regionvars}	${macrovars}	(FS_rec_amt_real	=	SSI_GDP_sl)	[aw=wgt_long_fam_adj]	///
+					ivreg2 	`depvar'	${regionvars}	${macrovars}	(`endovar'	=	${IV})	[aw=wgt_long_fam_adj]	///
 						if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) first savefirst savefprefix(`model')
 					est	store	`model'_2nd
 					scalar	Fstat_`model'	=	e(widstat)
@@ -5152,9 +5164,9 @@
 					*	Static, controls, macro
 					loc	depvar	SL_5
 					loc	endovar	FS_rec_amt_real
-					loc	IV		SSI_GDP_sl
+					*loc	IV		SSI_GDP_sl
 					loc	model	`depvar'_control
-					ivreg2 	`depvar' ${FSD_on_FS_X}	(FS_rec_amt_real	=	SSI_GDP_sl)	[aw=wgt_long_fam_adj]	///
+					ivreg2 	`depvar' ${FSD_on_FS_X}	(`endovar'	=	${IV})	[aw=wgt_long_fam_adj]	///
 						if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) first savefirst savefprefix(`model')
 					est	store	`model'_2nd
 					scalar	Fstat_`model'	=	e(widstat)
@@ -5218,9 +5230,9 @@
 					*	Static, no control/no macro
 					loc	depvar	TFI_HCR
 					loc	endovar	FS_amt_realK
-					loc	IV		SSI_GDP_sl
+					*loc	IV		SSI_GDP_sl
 					loc	model	`depvar'_biv
-					ivreg2 	`depvar'	${regionvars}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+					ivreg2 	`depvar'	${regionvars}	(`endovar'	=	${IV})	[aw=wgt_long_fam_adj]	///
 						if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) first savefirst savefprefix(`model')
 					est	store	`model'_2nd
 					scalar	Fstat_`model'	=	e(widstat)
@@ -5236,9 +5248,9 @@
 					*	Static, no control, macro
 					loc	depvar	TFI_HCR
 					loc	endovar	FS_amt_realK
-					loc	IV		SSI_GDP_sl
+					*loc	IV		SSI_GDP_sl
 					loc	model	`depvar'_macro
-					ivreg2 	`depvar'	${regionvars}	${macrovars}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+					ivreg2 	`depvar'	${regionvars}	${macrovars}	(`endovar'	=	${IV})	[aw=wgt_long_fam_adj]	///
 						if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) first savefirst savefprefix(`model')
 					est	store	`model'_2nd
 					scalar	Fstat_`model'	=	e(widstat)
@@ -5254,9 +5266,9 @@
 					*	Static, controls, macro
 					loc	depvar	TFI_HCR
 					loc	endovar	FS_amt_realK
-					loc	IV		SSI_GDP_sl
+					*loc	IV		SSI_GDP_sl
 					loc	model	`depvar'_control
-					ivreg2 	`depvar' ${FSD_on_FS_X}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+					ivreg2 	`depvar' ${FSD_on_FS_X}	(`endovar'	=	${IV})	[aw=wgt_long_fam_adj]	///
 						if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) first savefirst savefprefix(`model')
 					est	store	`model'_2nd
 					scalar	Fstat_`model'	=	e(widstat)
@@ -5320,9 +5332,9 @@
 				*	Static, no control/no macro
 				loc	depvar	TFI_FIG
 				loc	endovar	FS_amt_realK
-				loc	IV		SSI_GDP_sl
+				*loc	IV		SSI_GDP_sl
 				loc	model	`depvar'_biv
-				ivreg2 	`depvar'	${regionvars}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+				ivreg2 	`depvar'	${regionvars}	(`endovar'	=	${IV})	[aw=wgt_long_fam_adj]	///
 					if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) first savefirst savefprefix(`model')
 				est	store	`model'_2nd
 				scalar	Fstat_`model'	=	e(widstat)
@@ -5338,9 +5350,9 @@
 				*	Static, no control, macro
 				loc	depvar	TFI_FIG
 				loc	endovar	FS_amt_realK
-				loc	IV		SSI_GDP_sl
+				*loc	IV		SSI_GDP_sl
 				loc	model	`depvar'_macro
-				ivreg2 	`depvar'	${regionvars}	${macrovars}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+				ivreg2 	`depvar'	${regionvars}	${macrovars}	(`endovar'	=	${IV})	[aw=wgt_long_fam_adj]	///
 					if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) first savefirst savefprefix(`model')
 				est	store	`model'_2nd
 				scalar	Fstat_`model'	=	e(widstat)
@@ -5356,9 +5368,9 @@
 				*	Static, controls, macro
 				loc	depvar	TFI_FIG
 				loc	endovar	FS_amt_realK
-				loc	IV		SSI_GDP_sl
+				*loc	IV		SSI_GDP_sl
 				loc	model	`depvar'_X
-				ivreg2 	`depvar' ${FSD_on_FS_X}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+				ivreg2 	`depvar' ${FSD_on_FS_X}	(`endovar'	=	${IV})	[aw=wgt_long_fam_adj]	///
 					if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) first savefirst savefprefix(`model')
 				est	store	`model'_2nd
 				scalar	Fstat_`model'	=	e(widstat)
@@ -5421,9 +5433,9 @@
 				*	Static, no control/no macro
 				loc	depvar	TFI_SFIG
 				loc	endovar	FS_amt_realK
-				loc	IV		SSI_GDP_sl
+				*loc	IV		SSI_GDP_sl
 				loc	model	`depvar'_biv
-				ivreg2 	`depvar'	${regionvars}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+				ivreg2 	`depvar'	${regionvars}	(`endovar'	=	${IV})	[aw=wgt_long_fam_adj]	///
 					if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) first savefirst savefprefix(`model')
 				est	store	`model'_2nd
 				scalar	Fstat_`model'	=	e(widstat)
@@ -5439,9 +5451,9 @@
 				*	Static, no control, macro
 				loc	depvar	TFI_SFIG
 				loc	endovar	FS_amt_realK
-				loc	IV		SSI_GDP_sl
+				*loc	IV		SSI_GDP_sl
 				loc	model	`depvar'_macro
-				ivreg2 	`depvar'	${regionvars}	${macrovars}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+				ivreg2 	`depvar'	${regionvars}	${macrovars}	(`endovar'	=	${IV})	[aw=wgt_long_fam_adj]	///
 					if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) first savefirst savefprefix(`model')
 				est	store	`model'_2nd
 				scalar	Fstat_`model'	=	e(widstat)
@@ -5457,9 +5469,9 @@
 				*	Static, controls, macro
 				loc	depvar	TFI_SFIG
 				loc	endovar	FS_amt_realK
-				loc	IV		SSI_GDP_sl
+				*loc	IV		SSI_GDP_sl
 				loc	model	`depvar'_X
-				ivreg2 	`depvar' ${FSD_on_FS_X}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+				ivreg2 	`depvar' ${FSD_on_FS_X}	(`endovar'	=	${IV})	[aw=wgt_long_fam_adj]	///
 					if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) first savefirst savefprefix(`model')
 				est	store	`model'_2nd
 				scalar	Fstat_`model'	=	e(widstat)
@@ -5523,9 +5535,9 @@
 				*	Static, no control/no macro
 				loc	depvar	CFI_HCR
 				loc	endovar	FS_amt_realK
-				loc	IV		SSI_GDP_sl
+				*loc	IV		SSI_GDP_sl
 				loc	model	`depvar'_biv
-				ivreg2 	`depvar'	${regionvars}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+				ivreg2 	`depvar'	${regionvars}	(`endovar'	=	${IV})	[aw=wgt_long_fam_adj]	///
 					if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) first savefirst savefprefix(`model')
 				est	store	`model'_2nd
 				scalar	Fstat_`model'	=	e(widstat)
@@ -5541,9 +5553,9 @@
 				*	Static, no control, macro
 				loc	depvar	CFI_HCR
 				loc	endovar	FS_amt_realK
-				loc	IV		SSI_GDP_sl
+				*loc	IV		SSI_GDP_sl
 				loc	model	`depvar'_macro
-				ivreg2 	`depvar'	${regionvars}	${macrovars}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+				ivreg2 	`depvar'	${regionvars}	${macrovars}	(`endovar'	=	${IV})	[aw=wgt_long_fam_adj]	///
 					if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) first savefirst savefprefix(`model')
 				est	store	`model'_2nd
 				scalar	Fstat_`model'	=	e(widstat)
@@ -5559,9 +5571,9 @@
 				*	Static, controls, macro
 				loc	depvar	CFI_HCR
 				loc	endovar	FS_amt_realK
-				loc	IV		SSI_GDP_sl
+				*loc	IV		SSI_GDP_sl
 				loc	model	`depvar'_X
-				ivreg2 	`depvar' ${FSD_on_FS_X}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+				ivreg2 	`depvar' ${FSD_on_FS_X}	(`endovar'	=	${IV})	[aw=wgt_long_fam_adj]	///
 					if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) first savefirst savefprefix(`model')
 				est	store	`model'_2nd
 				scalar	Fstat_`model'	=	e(widstat)
@@ -5625,9 +5637,9 @@
 				*	Static, no control/no macro
 				loc	depvar	CFI_FIG
 				loc	endovar	FS_amt_realK
-				loc	IV		SSI_GDP_sl
+				*loc	IV		SSI_GDP_sl
 				loc	model	`depvar'_biv
-				ivreg2 	`depvar'	${regionvars}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+				ivreg2 	`depvar'	${regionvars}	(`endovar'	=	${IV})	[aw=wgt_long_fam_adj]	///
 					if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) first savefirst savefprefix(`model')
 				est	store	`model'_2nd
 				scalar	Fstat_`model'	=	e(widstat)
@@ -5643,9 +5655,9 @@
 				*	Static, no control, macro
 				loc	depvar	CFI_FIG
 				loc	endovar	FS_amt_realK
-				loc	IV		SSI_GDP_sl
+				*loc	IV		SSI_GDP_sl
 				loc	model	`depvar'_macro
-				ivreg2 	`depvar'	${regionvars}	${macrovars}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+				ivreg2 	`depvar'	${regionvars}	${macrovars}	(`endovar'	=	${IV})	[aw=wgt_long_fam_adj]	///
 					if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) first savefirst savefprefix(`model')
 				est	store	`model'_2nd
 				scalar	Fstat_`model'	=	e(widstat)
@@ -5661,9 +5673,9 @@
 				*	Static, controls, macro
 				loc	depvar	CFI_FIG
 				loc	endovar	FS_amt_realK
-				loc	IV		SSI_GDP_sl
+				*loc	IV		SSI_GDP_sl
 				loc	model	`depvar'_X
-				ivreg2 	`depvar' ${FSD_on_FS_X}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+				ivreg2 	`depvar' ${FSD_on_FS_X}	(`endovar'	=	${IV})	[aw=wgt_long_fam_adj]	///
 					if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) first savefirst savefprefix(`model')
 				est	store	`model'_2nd
 				scalar	Fstat_`model'	=	e(widstat)
@@ -5727,9 +5739,9 @@
 				*	Static, no control/no macro
 				loc	depvar	CFI_SFIG
 				loc	endovar	FS_amt_realK
-				loc	IV		SSI_GDP_sl
+				*loc	IV		SSI_GDP_sl
 				loc	model	`depvar'_biv
-				ivreg2 	`depvar'	${regionvars}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+				ivreg2 	`depvar'	${regionvars}	(`endovar'	=	${IV})	[aw=wgt_long_fam_adj]	///
 					if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) first savefirst savefprefix(`model')
 				est	store	`model'_2nd
 				scalar	Fstat_`model'	=	e(widstat)
@@ -5745,9 +5757,9 @@
 				*	Static, no control, macro
 				loc	depvar	CFI_SFIG
 				loc	endovar	FS_amt_realK
-				loc	IV		SSI_GDP_sl
+				*loc	IV		SSI_GDP_sl
 				loc	model	`depvar'_macro
-				ivreg2 	`depvar'	${regionvars}	${macrovars}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+				ivreg2 	`depvar'	${regionvars}	${macrovars}	(`endovar'	=	${IV})	[aw=wgt_long_fam_adj]	///
 					if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) first savefirst savefprefix(`model')
 				est	store	`model'_2nd
 				scalar	Fstat_`model'	=	e(widstat)
@@ -5763,9 +5775,9 @@
 				*	Static, controls, macro
 				loc	depvar	CFI_SFIG
 				loc	endovar	FS_amt_realK
-				loc	IV		SSI_GDP_sl
+				*loc	IV		SSI_GDP_sl
 				loc	model	`depvar'_X
-				ivreg2 	`depvar' ${FSD_on_FS_X}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+				ivreg2 	`depvar' ${FSD_on_FS_X}	(`endovar'	=	${IV})	[aw=wgt_long_fam_adj]	///
 					if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) first savefirst savefprefix(`model')
 				est	store	`model'_2nd
 				scalar	Fstat_`model'	=	e(widstat)
