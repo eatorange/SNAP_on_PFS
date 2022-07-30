@@ -4618,16 +4618,21 @@
 		lab	val		major_control_cat	major_control_cat
 		lab	var		major_control_cat	"State control"
 		
+		cap	drop	FS_amt_real
+		cap	drop	FS_amt_realK
+		clonevar	FS_amt_real		=	FS_rec_amt_real
+		gen			FS_amt_realK	=	FS_rec_amt_real	/	1000
 		
 		*	Temporary generate interaction variable
 		gen	int_SSI_exp_sl_01_03	=	SSI_exp_sl	*	year_01_03
 		gen	int_SSI_GDP_sl_01_03	=	SSI_GDP_sl	*	year_01_03
+		gen	int_share_GDP_sl_01_03	=	share_welfare_GDP_sl	*	year_01_03
 		*gen	int_SSI_GDP_sl_post96	=	SSI_GDP_sl	*	post_1996
 		*gen	int_SSI_GDP_s_post96	=	SSI_GDP_s	*	post_1996
 		
 		lab	var	int_SSI_exp_sl_01_03	"SSI X {2001_2003}"
 		lab	var	int_SSI_GDP_sl_01_03	"SSI X {2001_2003}"
-
+		lab	var	int_share_GDP_sl_01_03	"Social expenditure share X {2001_2003}"
 		
 			
 		*	Regression test
@@ -4817,18 +4822,17 @@
 			
 			
 			*	Specification 
-			local	endovar	FS_rec_amt_real	//	FS_rec_wth	//	FS_rec_wth	// 			
+			local	endovar	FS_rec_amt_real // FS_rec_wth //    // 	//   FS_rec_amt_real //  			FS_rec_wth	//	 			
 			local	depvar	PFS_glm	//	foodexp_tot_inclFS_pc	//		//		//	SL_5	//		//		//	
-			local	IV		SSI_GDP_sl	//	i.major_control_cat		//		//	SNAP_index_w	//				share_welfare_GDP_sl		//		share_welfare_exp_sl	//		int_SSI_exp_sl_01_03	//	//	error_total
-			local	time	${macrovars}		//			${timevars}		//			//	
-			local	sample	in_sample==1 & inrange(year,1977,2019)	& income_below_200==1
+			local	IV		share_welfare_GDP_sl // SSI_GDP_sl 	 year_01_03	int_share_GDP_sl_01_03   //  year_01_03	int_share_GDP_sl_01_03 // i.major_control_cat //      		//	i.major_control_cat		//		//	SNAP_index_w	//		error_total
+			local	time	${macrovars}		//			${timevars}		//		
+			local	sample	in_sample==1 & inrange(year,1977,2019)  &  income_below_200==1 // & !inlist(year,2001,2003)
 			
-			*loc	IV		i.major_control_cat	
-			loc	IVname	SSI_nomacro
-			ivreg2 	`depvar'	l2.PFS_glm	/*${statevars}*/	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	${regionvars}	`time'	/*${timevars}	${macrovars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+			loc	IVname	SSI_macro
+			ivreg2 	`depvar'	/*l2.PFS_glm*/	/*${statevars}*/	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}*/ `time'	/*${timevars}	${macrovars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
 				if	`sample',	robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
-			
-			}
+		
+			} 
 	
 			
 			*	Set the benchmark specification based on the test above.
@@ -4844,10 +4848,10 @@
 			*	But here I inclued "lagged PFS" as Chris suggested, and excluded "statevars" by my own decision. We can further test this specification with different IV/endogenous variable (political status didn't work still)
 			loc	depvar	PFS_glm
 			loc	endovar	FS_rec_amt_real
-			loc	IV		SSI_GDP_sl
+			loc	IV		SSI_GDP_sl SSI_GDP_slx
 			loc	IVname	SSI_macro
 			ivreg2 	`depvar'	${FSD_on_FS_X}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
-				if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
+				if	in_sample==1 & inrange(year,1977,2019) & /*!inlist(year,2001,2003)	 &*/ income_below_200==1,	robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
 			est	store	`IVname'_2nd
 			scalar	Fstat_`IVname'	=	e(widstat)
 			est	restore	`IVname'`endovar'
@@ -5100,7 +5104,8 @@
 						title(Weak IV_2nd)		replace	
 		*/
 		
-			
+		
+
 			*	Regressing FSD on predicted FS 
 			
 			*	SL_5	
@@ -5992,9 +5997,9 @@
 				esttab	sumstat_all	sumstat_lowinc	using	"${SNAP_outRaw}/Tab_1_Sumstats.tex",  ///
 					cells("count(fmt(%12.0f)) mean(fmt(%12.2f)) sd(fmt(%12.2f)) min(fmt(%12.2f)) p50(fmt(%12.2f)) p95(fmt(%12.2f)) max(fmt(%12.2f))") label	title("Summary Statistics") noobs 	  replace
 					
-				summ	TFI_FIG if in_sample==1	&	income_below_200==1	& PFS_FI_glm==1 [aw=wgt_long_fam_adj]
+				summ	PFS_glm TFI_FIG if in_sample==1	&	income_below_200==1	& PFS_FI_glm==1 [aw=wgt_long_fam_adj]
 			
-				
+				 x11101ll 	if in_sample==1	&	income_below_200==1	[aw=wgt_long_fam_adj]
 				/*
 				*estpost summ	`indvars'	if	/*   num_waves_in_FU_uniq>=2	&*/	!mi(PFS_glm)  // Temporary condition. Need to think proper condition.
 				*summ	FS_rec_amt_real	if	!mi(PFS_glm)	&	FS_rec_wth==1 & inrange(rp_age,0,130) // Temporarily add age condition to take care of outlier. Will be taken care of later.
