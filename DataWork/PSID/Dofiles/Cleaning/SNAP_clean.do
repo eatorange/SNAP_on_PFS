@@ -195,8 +195,8 @@
 	
 	local	ind_agg			0	//	Aggregate individual-level variables across waves
 	local	fam_agg			0	//	Aggregate family-level variables across waves
-	local	ext_data		0	//	Prepare external data (CPI, TFP, etc.)
-	local	cr_panel		0	//	Create panel structure from ID variable
+	local	ext_data		1	//	Prepare external data (CPI, TFP, etc.)
+	local	cr_panel		1	//	Create panel structure from ID variable
 		local	panel_view	0	//	Create an excel file showing the change of certain clan over time (for internal data-check only)
 	local	merge_data		0	//	Merge ind- and family- variables and import it into ID variable
 		local	raw_reshape	1		//	Merge raw variables and reshape into long data (takes time)
@@ -4534,6 +4534,223 @@
 			global	est_1st
 			global	est_2nd
 			
+			*	Specification test
+			{
+			
+			*	Individual IV test
+			*	The following specification/sample will be tested
+				*	Different endogenous variables
+					*	Participation only
+					*	Amount only
+					*	Participation and amount
+				*	Different IVs
+					*	Single IV
+						*	SSI
+						*	State control
+						*	Share of social expenditure only
+						*	Don't forget to interact SSI/expenditure with state control!
+					*	Double IV
+						*	SSI and state control
+						*	Share of social expenditure and state control
+				*	Different fixed effects
+					*	State FE only
+					*	Year FE only
+					*	State and year
+				*	Different samples
+					*	All Households
+					*	Households with monthly income less than 130%/200% of poverty line (SNAP income eligibility)
+		
+			
+			
+			*	Specification 
+			/*
+			local	endovar	FS_rec_amt_real // FS_rec_wth //    // 	//   FS_rec_amt_real //  			FS_rec_wth	//	 			
+			local	depvar	PFS_glm	//	foodexp_tot_inclFS_pc	//		//		//	SL_5	//		//		//	
+			local	IV		share_welfare_GDP_sl // SSI_GDP_sl   // year_01_03	int_share_GDP_sl_01_03	   //  year_01_03	int_share_GDP_sl_01_03 // i.major_control_cat //      	//	i.major_control_cat		//		//	SNAP_index_w	//		error_total
+			local	time	${macrovars}	// ${timevars}	// 		 	
+			local	sample	in_sample==1 & inrange(year,1977,2019)  & income_below_200==1 //
+			*/
+			
+					
+			global	depvar	PFS_glm
+			global	endo1	FS_rec_wth
+			global	endo2	FS_rec_amt_real
+			
+			global	IV1		SSI_GDP_sl
+			global	IV2		SSI_GDP_sl	year_01_03	int_SSI_GDP_sl_01_03	
+			global	IV3		share_welfare_GDP_sl
+			global	IV4		i.major_control_cat
+			
+			global	st0
+			global	st1		${statevars}
+			global	st2		l2.PFS_glm
+					
+			global	sp1		in_sample==1 & inrange(year,1977,2019)
+			global	sp2		in_sample==1 & inrange(year,1977,2019)  & income_below_200==1
+			global	sp3		in_sample==1 & inrange(year,1977,2019)	&	!inlist(year,2001,2003)
+			global	sp4		in_sample==1 & inrange(year,1977,2019)  & income_below_200==1	&	!inlist(year,2001,2003)
+			
+			global	FE0
+			global	FE1		${macrovars}
+			global	FE2		${timevars}
+			global	FE3		${regionvars}
+			global	FE4		${regionvars}	${macrovars}
+			global	FE5		${regionvars}	${timevars}
+			
+			
+								
+			global	test_est_1st
+			global	test_est_2nd	
+//_13010_13245
+
+
+			forval	endonum	=	1/1	{				
+				forval	IVnum	=	3/3	{
+					forval	stnum	=0/2	{
+						forval	spnum=1/4	{
+							forval	FEnum=0/5	{
+								
+								loc	IVname	x`endonum'`IVnum'`stnum'`spnum'`FEnum'
+								
+								ivreg2 	${depvar}	${st`stnum'}	///
+								${demovars} ${econvars}	${healthvars}	${empvars}	${familyvars}	${eduvars}	${FE`FEnum'}	///
+										(${endo`endonum'}	=	${IV`IVnum'})	[aw=wgt_long_fam_adj]	///
+								if	${sp`spnum'},	robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
+								
+								
+								est	store	`IVname'_2nd
+								
+								scalar	Fstat_CD_`IVname'	=	 e(cdf)
+								scalar	Fstat_KP_`IVname'	=	e(widstat)
+								
+								est	restore	`IVname'${endo`endonum'}
+								estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
+								estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
+								est	store	`IVname'_1st
+								est	drop	`IVname'${endo`endonum'}
+													
+								global	test_est_1st	${test_est_1st}	`IVname'_1st
+								global	test_est_2nd	${test_est_2nd}	`IVname'_2nd
+								
+									*	Add dynamic effects.
+									*	First, predict FS amount received
+									est restore `IVname'_1st
+									cap	drop	xhat`IVname'
+									predict 	xhat`IVname', xb
+									lab	var		xhat`IVname'	"Predicted depvar"
+								
+									*	Now, regress 2nd stage, including FS across multiple periods
+									reg	PFS_glm xhat`IVname'	l2.xhat`IVname'	///
+										${st`stnum'}	${demovars} ${econvars}	${healthvars}	///
+										${empvars}	${familyvars}	${eduvars}	${FE`FEnum'}	[aw=wgt_long_fam_adj]	///
+												if	${sp`spnum'},	robust	cluster(x11101ll) 
+										est	store	`IVname'_dyn_2nd
+									
+										global	test_est_2nd	${test_est_2nd}	`IVname'_dyn_2nd							
+						
+							}
+						}
+					}	//	st(state)
+				}		//	IV			
+			}	//	endo
+			
+
+			
+			*	1st-stage
+			esttab	${test_est_1st}	using "${SNAP_outRaw}/test_1st.csv", ///
+					cells(b(star fmt(%8.4f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) ///
+					incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	///
+					/*drop(rp_state_enum*)*/	title(test specification 1st)		replace	
+			
+			*	2nd-stage
+			esttab	${test_est_2nd}	using "${SNAP_outRaw}/test_2nd.csv", ///
+					cells(b(star fmt(%8.4f)) & se(fmt(2) par)) stats(N r2, fmt(0 2)) incelldelimiter() ///
+					label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+					title(test specification 2nd)		replace		
+			
+			
+			
+		
+			 
+			/*
+			est	store	`IVname'_2nd
+			
+				
+				*	1st-stage
+				esttab	`IVname'_2nd	using "${SNAP_outRaw}/temp.csv", ///
+						cells(b(star fmt(%8.4f)) & se(fmt(2) par)) stats(N Fstat, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+						title(PFS on FS amt)		replace	
+					*/	
+						
+			}
+			
+			
+			*	Set the benchmark specification based on the test above.
+			global	FSD_on_FS_X	${statevars}	${demovars} ${econvars}	${healthvars}	${empvars}	///
+								${familyvars}	${eduvars} /*${regionvars}	${timevars}	*/		${macrovars}
+	
+			global	PFS_est_1st
+			global	PFS_est_2nd
+	
+			*	Benchmark specification
+			*	(2022-7-28) Note: the last benchmark model (SSI as single IV to instrument amount of FS benefit) tested was including "${statevars}" and excluding "lagged PFS"
+			*	But here I inclued "lagged PFS" as Chris suggested, and excluded "statevars" by my own decision. We can further test this specification with different IV/endogenous variable (political status didn't work still)
+			loc	depvar	PFS_glm
+			loc	endovar	FS_rec_amt_real	//	FS_amt_realK	//	FS_rec_wth	//	
+			loc	IV		SSI_GDP_sl	year_01_03	int_SSI_GDP_sl_01_03	//	share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
+			loc	IVname	SSI_macro
+			ivreg2 	`depvar'	${FSD_on_FS_X}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+				if	in_sample==1 & inrange(year,1977,2019)  & income_below_200==1,	///
+				robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
+			est	store	`IVname'_2nd
+			scalar	Fstat_CD_`IVname'	=	 e(cdf)
+			scalar	Fstat_KP_`IVname'	=	e(widstat)
+			
+			est	restore	`IVname'`endovar'
+			estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
+			estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
+			est	store	`IVname'_1st
+			est	drop	`IVname'`endovar'
+								
+			global	PFS_est_1st	${PFS_est_1st}	`IVname'_1st
+			global	PFS_est_2nd	${PFS_est_2nd}	`IVname'_2nd
+			
+				*	Add dynamic effects.
+				*	First, predict FS amount received
+				est restore SSI_macro_1st
+				cap	drop	FS_wth_PFS_hat
+				predict 	FS_wth_PFS_hat, xb
+				lab	var		FS_wth_PFS_hat	"Predicted FS dummy received last month"
+			
+				*	Now, regress 2nd stage, including FS across multiple periods
+					reg	PFS_glm FS_wth_PFS_hat	l2.FS_wth_PFS_hat	${FSD_on_FS_X}	[aw=wgt_long_fam_adj]	///
+								if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) // first savefirst savefprefix(`IVname')
+					est	store	PFS_dyn_X_2nd
+				
+					global	PFS_est_2nd	${PFS_est_2nd}	PFS_dyn_X_2nd
+				
+				
+				*	1st-stage
+				esttab	${PFS_est_1st}	using "${SNAP_outRaw}/PFS_on_FSdummy_1st.csv", ///
+						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+						title(PFS on FS amt)		replace	
+						
+				esttab	${PFS_est_1st}	using "${SNAP_outRaw}/PFS_on_FSdummy_1st.tex", ///
+						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+						title(PFS on FS amt)		replace	
+						
+				*	2nd-stage
+				esttab	${PFS_est_2nd}	using "${SNAP_outRaw}/PFS_on_FSdummy_2nd.csv", ///
+						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+						title(PFS on FS amt)		replace		
+						
+				esttab	${PFS_est_2nd}	using "${SNAP_outRaw}/PFS_on_FSdummy_2nd.tex", ///
+						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+						title(PFS on FS amt)		replace	
+			
+
+			/*
+			
 			*	SSI (share of s&l exp as % of GDP), with 2001/2003 interaction, w/o FE
 			loc	IV		SSI_GDP_sl	int_SSI_exp_sl_01_03
 			loc	IVname	SSI_nomacro
@@ -4739,6 +4956,754 @@
 				esttab	${est_2nd}	using "${SNAP_outRaw}/WeakIV_2nd.tex", ///
 						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(_cons)*/	///
 						title(Weak IV_2nd)		replace	
+
+		*/
+		
+			
+
+			*	Regressing FSD on predicted FS, using the model we find above
+			global	endovar	FS_amt_realK // FS_rec_wth
+			global	IV	SSI_GDP_sl	year_01_03	int_SSI_GDP_sl_01_03
+			
+			*	SL_5	
+				{
+					global	SL_5_est_1st	
+					global	SL_5_est_2nd	
+					
+					*	Static, no control/no macro
+					loc	depvar	SL_5
+					*loc	endovar	FS_rec_amt_real
+					*loc	IV		share_welfare_GDP_sl
+					loc	model	`depvar'_biv
+					ivreg2 	`depvar'	/*${regionvars}*/	(${endovar}	=	${IV})	[aw=wgt_long_fam_adj]	///
+						if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) first savefirst savefprefix(`model')
+					est	store	`model'_2nd
+					scalar	Fstat_`model'	=	e(widstat)
+					est	restore	`model'${endovar}
+					estadd	scalar	Fstat	=	Fstat_`model', replace
+					est	store	`model'_1st
+					est	drop	`model'${endovar}
+										
+					global	`depvar'_est_1st	${`depvar'_est_1st}	`model'_1st
+					global	`depvar'_est_2nd	${`depvar'_est_2nd}	`model'_2nd
+					
+					
+					*	Static, no control, macro
+					loc	depvar	SL_5
+					*loc	endovar	FS_rec_amt_real
+					*loc	IV		SSI_GDP_sl
+					loc	model	`depvar'_macro
+					ivreg2 	`depvar'	/*${regionvars}*/	${macrovars}	(${endovar}	=	${IV})	[aw=wgt_long_fam_adj]	///
+						if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) first savefirst savefprefix(`model')
+					est	store	`model'_2nd
+					scalar	Fstat_`model'	=	e(widstat)
+					est	restore	`model'${endovar}
+					estadd	scalar	Fstat	=	Fstat_`model', replace
+					est	store	`model'_1st
+					est	drop	`model'${endovar}
+										
+					global	`depvar'_est_1st	${`depvar'_est_1st}	`model'_1st
+					global	`depvar'_est_2nd	${`depvar'_est_2nd}	`model'_2nd
+					
+					
+					*	Static, controls, macro
+					loc	depvar	SL_5
+					*loc	endovar	FS_rec_amt_real
+					*loc	IV		SSI_GDP_sl
+					loc	model	`depvar'_control
+					ivreg2 	`depvar' ${FSD_on_FS_X}	(${endovar}	=	${IV})	[aw=wgt_long_fam_adj]	///
+						if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) first savefirst savefprefix(`model')
+					est	store	`model'_2nd
+					scalar	Fstat_`model'	=	e(widstat)
+					est	restore	`model'${endovar}
+					estadd	scalar	Fstat	=	Fstat_`model', replace
+					est	store	`model'_1st
+					est	drop	`model'${endovar}
+										
+					global	`depvar'_est_1st	${`depvar'_est_1st}	`model'_1st
+					global	`depvar'_est_2nd	${`depvar'_est_2nd}	`model'_2nd
+					
+						
+						*	Dynamic model (including FS amount from multiple periods)
+						*	We will do this manually
+						*	First, predict FS amount from the first stage.
+						
+						est restore `depvar'_control_1st
+						cap	drop	FS_amt_`depvar'_hat
+						predict FS_amt_`depvar'_hat, xb
+						lab	var	FS_amt_`depvar'_hat	"Predicted FS amount received last month"
+						
+						*	Now, regress 2nd stage, including FS across multiple periods
+						reg	`depvar' FS_amt_`depvar'_hat	l2.FS_amt_`depvar'_hat	${FSD_on_FS_X}	[aw=wgt_long_fam_adj]	///
+							if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) // first savefirst savefprefix(`IVname')
+						est	store	`depvar'_dyn_control_2nd
+						
+						global	`depvar'_est_2nd	${SL_5_est_2nd}	SL_5_dyn_control_2nd
+				
+					
+							
+					*	1st-stage
+					esttab	${SL_5_est_1st}	using "${SNAP_outRaw}/SL_5_on_FS_IV_1st.csv", ///
+							cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+							title(SL_5 on FS_1st)		replace	
+							
+					esttab	${SL_5_est_1st}	using "${SNAP_outRaw}/SL_5_on_FS_IV_1st.tex", ///
+							cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+							title(SL_5 on FS_1st)		replace	
+							
+					*	2nd-stage
+					esttab	${SL_5_est_2nd}	using "${SNAP_outRaw}/SL_5_on_FS_IV_2nd.csv", ///
+							cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+							title(SL_5 on FS_2nd)		replace		
+							
+					esttab	${SL_5_est_2nd}	using "${SNAP_outRaw}/SL_5_on_FS_IV_2nd.tex", ///
+							cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+							title(SL_5 on FS_2nd)		replace	
+				}			
+			
+			*	TFI (HCR)
+				{	
+					global	TFI_HCR_est_1st	
+					global	TFI_HCR_est_2nd	
+					
+					cap	drop	FS_amt_real
+					cap	drop	FS_amt_realK
+					clonevar	FS_amt_real		=	FS_rec_amt_real
+					gen			FS_amt_realK	=	FS_rec_amt_real	/	1000
+					
+					
+					*	Static, no control/no macro
+					loc	depvar	TFI_HCR
+					*loc	endovar	FS_amt_realK
+					*loc	IV		SSI_GDP_sl
+					loc	model	`depvar'_biv
+					ivreg2 	`depvar'	/*${regionvars}*/	(${endovar}	=	${IV})	[aw=wgt_long_fam_adj]	///
+						if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) first savefirst savefprefix(`model')
+					est	store	`model'_2nd
+					scalar	Fstat_`model'	=	e(widstat)
+					est	restore	`model'${endovar}
+					estadd	scalar	Fstat	=	Fstat_`model', replace
+					est	store	`model'_1st
+					est	drop	`model'${endovar}
+										
+					global	`depvar'_est_1st	${`depvar'_est_1st}	`model'_1st
+					global	`depvar'_est_2nd	${`depvar'_est_2nd}	`model'_2nd
+					
+					
+					*	Static, no control, macro
+					loc	depvar	TFI_HCR
+					*loc	endovar	FS_amt_realK
+					*loc	IV		SSI_GDP_sl
+					loc	model	`depvar'_macro
+					ivreg2 	`depvar'	/*${regionvars}*/	${macrovars}	(${endovar}	=	${IV})	[aw=wgt_long_fam_adj]	///
+						if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) first savefirst savefprefix(`model')
+					est	store	`model'_2nd
+					scalar	Fstat_`model'	=	e(widstat)
+					est	restore	`model'${endovar}
+					estadd	scalar	Fstat	=	Fstat_`model', replace
+					est	store	`model'_1st
+					est	drop	`model'${endovar}
+										
+					global	`depvar'_est_1st	${`depvar'_est_1st}	`model'_1st
+					global	`depvar'_est_2nd	${`depvar'_est_2nd}	`model'_2nd
+					
+					
+					*	Static, controls, macro
+					loc	depvar	TFI_HCR
+					*loc	endovar	FS_amt_realK
+					*loc	IV		SSI_GDP_sl
+					loc	model	`depvar'_control
+					ivreg2 	`depvar' ${FSD_on_FS_X}	(${endovar}	=	${IV})	[aw=wgt_long_fam_adj]	///
+						if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) first savefirst savefprefix(`model')
+					est	store	`model'_2nd
+					scalar	Fstat_`model'	=	e(widstat)
+					est	restore	`model'${endovar}
+					estadd	scalar	Fstat	=	Fstat_`model', replace
+					est	store	`model'_1st
+					est	drop	`model'${endovar}
+										
+					global	`depvar'_est_1st	${`depvar'_est_1st}	`model'_1st
+					global	`depvar'_est_2nd	${`depvar'_est_2nd}	`model'_2nd
+					
+						
+						*	Dynamic model (including FS amount from multiple periods)
+						*	We will do this manually
+						*	First, predict FS amount from the first stage.
+						loc	depvar	TFI_HCR
+						est restore `depvar'_control_1st
+						cap	drop	FS_amt_`depvar'_hat
+						predict FS_amt_`depvar'_hat, xb
+						lab	var	FS_amt_`depvar'_hat	"Predicted FS amount received last month"
+						
+						*	Now, regress 2nd stage, including FS across multiple periods
+						reg	`depvar' FS_amt_`depvar'_hat	l2.FS_amt_`depvar'_hat	${FSD_on_FS_X}	[aw=wgt_long_fam_adj]	///
+							if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) // first savefirst savefprefix(`IVname')
+						est	store	`depvar'_dyn_control_2nd
+					
+						global	`depvar'_est_2nd	${`depvar'_est_2nd}	`depvar'_dyn_control_2nd
+				
+					
+							
+					*	1st-stage
+					esttab	${TFI_HCR_est_1st}	using "${SNAP_outRaw}/TFI_HCR_on_FS_IV_1st.csv", ///
+							cells(b(star fmt(%8.3f)) /*&*/ se(fmt(2) par)) stats(N Fstat, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+							title(TFI_HCR on FS_1st)		replace	
+							
+					esttab	${TFI_HCR_est_1st}	using "${SNAP_outRaw}/TFI_HCR_on_FS_IV_1st.tex", ///
+							cells(b(star fmt(%8.3f)) /*&*/ se(fmt(2) par)) stats(N Fstat, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+							title(TFI_HCR on FS_1st)		replace	
+							
+					*	2nd-stage
+					esttab	${TFI_HCR_est_2nd}	using "${SNAP_outRaw}/TFI_HCR_on_FS_IV_2nd.csv", ///
+							cells(b(star fmt(%8.3f)) /*&*/ se(fmt(2) par)) stats(N r2, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+							title(TFI_HCR on FS_2nd)		replace		
+							
+					esttab	${TFI_HCR_est_2nd}	using "${SNAP_outRaw}/TFI_HCR_on_FS_IV_2nd.tex", ///
+							cells(b(star fmt(%8.3f)) /*&*/ se(fmt(2) par)) stats(N r2, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+							title(TFI_HCR on FS_2nd)		replace	
+				}	
+					
+			*	TFI (FIG)
+				{
+				global	TFI_FIG_est_1st	
+				global	TFI_FIG_est_2nd	
+				
+				cap	drop	FS_amt_real
+				cap	drop	FS_amt_realK
+				clonevar	FS_amt_real		=	FS_rec_amt_real
+				gen			FS_amt_realK	=	FS_rec_amt_real	/	1000
+				
+								
+				*	Static, no control/no macro
+				loc	depvar	TFI_FIG
+				*loc	endovar	FS_amt_realK
+				*loc	IV		SSI_GDP_sl
+				loc	model	`depvar'_biv
+				ivreg2 	`depvar'	/*${regionvars}*/	(${endovar}	=	${IV})	[aw=wgt_long_fam_adj]	///
+					if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) first savefirst savefprefix(`model')
+				est	store	`model'_2nd
+				scalar	Fstat_`model'	=	e(widstat)
+				est	restore	`model'${endovar}
+				estadd	scalar	Fstat	=	Fstat_`model', replace
+				est	store	`model'_1st
+				est	drop	`model'${endovar}
+									
+				global	`depvar'_est_1st	${`depvar'_est_1st}	`model'_1st
+				global	`depvar'_est_2nd	${`depvar'_est_2nd}	`model'_2nd
+				
+				
+				*	Static, no control, macro
+				loc	depvar	TFI_FIG
+				*loc	endovar	FS_amt_realK
+				*loc	IV		SSI_GDP_sl
+				loc	model	`depvar'_macro
+				ivreg2 	`depvar'	/*${regionvars}*/	${macrovars}	(${endovar}	=	${IV})	[aw=wgt_long_fam_adj]	///
+					if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) first savefirst savefprefix(`model')
+				est	store	`model'_2nd
+				scalar	Fstat_`model'	=	e(widstat)
+				est	restore	`model'${endovar}
+				estadd	scalar	Fstat	=	Fstat_`model', replace
+				est	store	`model'_1st
+				est	drop	`model'${endovar}
+									
+				global	`depvar'_est_1st	${`depvar'_est_1st}	`model'_1st
+				global	`depvar'_est_2nd	${`depvar'_est_2nd}	`model'_2nd
+				
+				
+				*	Static, controls, macro
+				loc	depvar	TFI_FIG
+				*loc	endovar	FS_amt_realK
+				*loc	IV		SSI_GDP_sl
+				loc	model	`depvar'_X
+				ivreg2 	`depvar' ${FSD_on_FS_X}	(${endovar}	=	${IV})	[aw=wgt_long_fam_adj]	///
+					if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) first savefirst savefprefix(`model')
+				est	store	`model'_2nd
+				scalar	Fstat_`model'	=	e(widstat)
+				est	restore	`model'${endovar}
+				estadd	scalar	Fstat	=	Fstat_`model', replace
+				est	store	`model'_1st
+				est	drop	`model'${endovar}
+									
+				global	`depvar'_est_1st	${`depvar'_est_1st}	`model'_1st
+				global	`depvar'_est_2nd	${`depvar'_est_2nd}	`model'_2nd
+				
+					
+					*	Dynamic model (including FS amount from multiple periods)
+					*	We will do this manually
+					*	First, predict FS amount from the first stage.
+					loc	depvar	TFI_FIG
+					est restore `depvar'_X_1st
+					cap	drop	FS_amt_`depvar'_hat
+					predict FS_amt_`depvar'_hat, xb
+					lab	var	FS_amt_`depvar'_hat	"Predicted FS amount received last month (K)"
+					
+					*	Now, regress 2nd stage, including FS across multiple periods
+					reg	`depvar' FS_amt_`depvar'_hat	l2.FS_amt_`depvar'_hat	${FSD_on_FS_X}	[aw=wgt_long_fam_adj]	///
+						if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) // first savefirst savefprefix(`IVname')
+					est	store	`depvar'_dyn_X_2nd
+				
+					global	`depvar'_est_2nd	${`depvar'_est_2nd}	`depvar'_dyn_X_2nd
+			
+				
+						
+				*	1st-stage
+				esttab	${TFI_FIG_est_1st}	using "${SNAP_outRaw}/TFI_FIG_on_FS_IV_1st.csv", ///
+						cells(b(star fmt(%8.5f)) /*&*/ se(fmt(2) par)) stats(N Fstat, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+						title(TFI_FIG on FS_1st)		replace	
+						
+				esttab	${TFI_FIG_est_1st}	using "${SNAP_outRaw}/TFI_FIG_on_FS_IV_1st.tex", ///
+						cells(b(star fmt(%8.5f)) /*&*/ se(fmt(2) par)) stats(N Fstat, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+						title(TFI_FIG on FS_1st)		replace	
+						
+				*	2nd-stage
+				esttab	${TFI_FIG_est_2nd}	using "${SNAP_outRaw}/TFI_FIG_on_FS_IV_2nd.csv", ///
+						cells(b(star fmt(%8.5f)) /*&*/ se(fmt(2) par)) stats(N r2, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+						title(TFI_FIG on FS_2nd)		replace		
+						
+				esttab	${TFI_FIG_est_2nd}	using "${SNAP_outRaw}/TFI_FIG_on_FS_IV_2nd.tex", ///
+						cells(b(star fmt(%8.5f)) /*&*/ se(fmt(2) par)) stats(N r2, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+						title(TFI_FIG on FS_2nd)		replace	
+				}
+			
+			*	TFI (SFIG)
+				{
+				global	TFI_SFIG_est_1st	
+				global	TFI_SFIG_est_2nd	
+				
+				cap	drop	FS_amt_real
+				cap	drop	FS_amt_realK
+				clonevar	FS_amt_real		=	FS_rec_amt_real
+				gen			FS_amt_realK	=	FS_rec_amt_real	/	1000
+							
+				*	Static, no control/no macro
+				loc	depvar	TFI_SFIG
+				*loc	endovar	FS_amt_realK
+				*loc	IV		SSI_GDP_sl
+				loc	model	`depvar'_biv
+				ivreg2 	`depvar'	/*${regionvars}*/	(${endovar}	=	${IV})	[aw=wgt_long_fam_adj]	///
+					if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) first savefirst savefprefix(`model')
+				est	store	`model'_2nd
+				scalar	Fstat_`model'	=	e(widstat)
+				est	restore	`model'${endovar}
+				estadd	scalar	Fstat	=	Fstat_`model', replace
+				est	store	`model'_1st
+				est	drop	`model'${endovar}
+									
+				global	`depvar'_est_1st	${`depvar'_est_1st}	`model'_1st
+				global	`depvar'_est_2nd	${`depvar'_est_2nd}	`model'_2nd
+				
+				
+				*	Static, no control, macro
+				loc	depvar	TFI_SFIG
+				*loc	endovar	FS_amt_realK
+				*loc	IV		SSI_GDP_sl
+				loc	model	`depvar'_macro
+				ivreg2 	`depvar'	/*${regionvars}*/	${macrovars}	(${endovar}	=	${IV})	[aw=wgt_long_fam_adj]	///
+					if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) first savefirst savefprefix(`model')
+				est	store	`model'_2nd
+				scalar	Fstat_`model'	=	e(widstat)
+				est	restore	`model'${endovar}
+				estadd	scalar	Fstat	=	Fstat_`model', replace
+				est	store	`model'_1st
+				est	drop	`model'${endovar}
+									
+				global	`depvar'_est_1st	${`depvar'_est_1st}	`model'_1st
+				global	`depvar'_est_2nd	${`depvar'_est_2nd}	`model'_2nd
+				
+				
+				*	Static, controls, macro
+				loc	depvar	TFI_SFIG
+				*loc	endovar	FS_amt_realK
+				*loc	IV		SSI_GDP_sl
+				loc	model	`depvar'_X
+				ivreg2 	`depvar' ${FSD_on_FS_X}	(${endovar}	=	${IV})	[aw=wgt_long_fam_adj]	///
+					if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) first savefirst savefprefix(`model')
+				est	store	`model'_2nd
+				scalar	Fstat_`model'	=	e(widstat)
+				est	restore	`model'${endovar}
+				estadd	scalar	Fstat	=	Fstat_`model', replace
+				est	store	`model'_1st
+				est	drop	`model'${endovar}
+									
+				global	`depvar'_est_1st	${`depvar'_est_1st}	`model'_1st
+				global	`depvar'_est_2nd	${`depvar'_est_2nd}	`model'_2nd
+				
+					
+					*	Dynamic model (including FS amount from multiple periods)
+					*	We will do this manually
+					*	First, predict FS amount from the first stage.
+					loc	depvar	TFI_SFIG
+					est restore `depvar'_X_1st
+					cap	drop	FS_amt_`depvar'_hat
+					predict FS_amt_`depvar'_hat, xb
+					lab	var	FS_amt_`depvar'_hat	"Predicted FS amount received last month (K)"
+					
+					*	Now, regress 2nd stage, including FS across multiple periods
+					reg	`depvar' FS_amt_`depvar'_hat	l2.FS_amt_`depvar'_hat	${FSD_on_FS_X}	[aw=wgt_long_fam_adj]	///
+						if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) // first savefirst savefprefix(`IVname')
+					est	store	`depvar'_dyn_X_2nd
+				
+					global	`depvar'_est_2nd	${`depvar'_est_2nd}	`depvar'_dyn_X_2nd
+			
+				
+						
+				*	1st-stage
+				esttab	${TFI_SFIG_est_1st}	using "${SNAP_outRaw}/TFI_SFIG_on_FS_IV_1st.csv", ///
+						cells(b(star fmt(%8.3f)) /*&*/ se(fmt(2) par)) stats(N Fstat, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+						title(TFI_HCR on FS_1st)		replace	
+						
+				esttab	${TFI_SFIG_est_1st}	using "${SNAP_outRaw}/TFI_SFIG_on_FS_IV_1st.tex", ///
+						cells(b(star fmt(%8.3f)) /*&*/ se(fmt(2) par)) stats(N Fstat, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+						title(TFI_HCR on FS_1st)		replace	
+						
+				*	2nd-stage
+				esttab	${TFI_SFIG_est_2nd}	using "${SNAP_outRaw}/TFI_SFIG_on_FS_IV_2nd.csv", ///
+						cells(b(star fmt(%8.3f)) /*&*/ se(fmt(2) par)) stats(N r2, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+						title(TFI_HCR on FS_2nd)		replace		
+						
+				esttab	${TFI_SFIG_est_2nd}	using "${SNAP_outRaw}/TFI_SFIG_on_FS_IV_2nd.tex", ///
+						cells(b(star fmt(%8.3f)) /*&*/ se(fmt(2) par)) stats(N r2, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+						title(TFI_HCR on FS_2nd)		replace	
+	
+				}
+		
+			*	CFI (HCR)
+				{
+				global	CFI_HCR_est_1st	
+				global	CFI_HCR_est_2nd	
+				
+				cap	drop	FS_amt_real
+				cap	drop	FS_amt_realK
+				clonevar	FS_amt_real		=	FS_rec_amt_real
+				gen			FS_amt_realK	=	FS_rec_amt_real	/	1000
+							
+				*	Static, no control/no macro
+				loc	depvar	CFI_HCR
+				*loc	endovar	FS_amt_realK
+				*loc	IV		SSI_GDP_sl
+				loc	model	`depvar'_biv
+				ivreg2 	`depvar'	/*${regionvars}*/	(${endovar}	=	${IV})	[aw=wgt_long_fam_adj]	///
+					if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) first savefirst savefprefix(`model')
+				est	store	`model'_2nd
+				scalar	Fstat_`model'	=	e(widstat)
+				est	restore	`model'${endovar}
+				estadd	scalar	Fstat	=	Fstat_`model', replace
+				est	store	`model'_1st
+				est	drop	`model'${endovar}
+									
+				global	`depvar'_est_1st	${`depvar'_est_1st}	`model'_1st
+				global	`depvar'_est_2nd	${`depvar'_est_2nd}	`model'_2nd
+				
+				
+				*	Static, no control, macro
+				loc	depvar	CFI_HCR
+				*loc	endovar	FS_amt_realK
+				*loc	IV		SSI_GDP_sl
+				loc	model	`depvar'_macro
+				ivreg2 	`depvar'	/*${regionvars}*/	${macrovars}	(${endovar}	=	${IV})	[aw=wgt_long_fam_adj]	///
+					if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) first savefirst savefprefix(`model')
+				est	store	`model'_2nd
+				scalar	Fstat_`model'	=	e(widstat)
+				est	restore	`model'${endovar}
+				estadd	scalar	Fstat	=	Fstat_`model', replace
+				est	store	`model'_1st
+				est	drop	`model'${endovar}
+									
+				global	`depvar'_est_1st	${`depvar'_est_1st}	`model'_1st
+				global	`depvar'_est_2nd	${`depvar'_est_2nd}	`model'_2nd
+				
+				
+				*	Static, controls, macro
+				loc	depvar	CFI_HCR
+				*loc	endovar	FS_amt_realK
+				*loc	IV		SSI_GDP_sl
+				loc	model	`depvar'_X
+				ivreg2 	`depvar' ${FSD_on_FS_X}	(${endovar}	=	${IV})	[aw=wgt_long_fam_adj]	///
+					if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) first savefirst savefprefix(`model')
+				est	store	`model'_2nd
+				scalar	Fstat_`model'	=	e(widstat)
+				est	restore	`model'${endovar}
+				estadd	scalar	Fstat	=	Fstat_`model', replace
+				est	store	`model'_1st
+				est	drop	`model'${endovar}
+									
+				global	`depvar'_est_1st	${`depvar'_est_1st}	`model'_1st
+				global	`depvar'_est_2nd	${`depvar'_est_2nd}	`model'_2nd
+				
+					
+					*	Dynamic model (including FS amount from multiple periods)
+					*	We will do this manually
+					*	First, predict FS amount from the first stage.
+					loc	depvar	CFI_HCR
+					est restore `depvar'_X_1st
+					cap	drop	FS_amt_`depvar'_hat
+					predict FS_amt_`depvar'_hat, xb
+					lab	var	FS_amt_`depvar'_hat	"Predicted FS amount received last month (K)"
+					
+					*	Now, regress 2nd stage, including FS across multiple periods
+					reg	`depvar' FS_amt_`depvar'_hat	l2.FS_amt_`depvar'_hat	${FSD_on_FS_X}	[aw=wgt_long_fam_adj]	///
+						if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) // first savefirst savefprefix(`IVname')
+					est	store	`depvar'_dyn_X_2nd
+				
+					global	`depvar'_est_2nd	${`depvar'_est_2nd}	`depvar'_dyn_X_2nd
+			
+				
+						
+				*	1st-stage
+				esttab	${CFI_HCR_est_1st}	using "${SNAP_outRaw}/CFI_HCR_on_FS_IV_1st.csv", ///
+						cells(b(star fmt(%8.3f)) /*&*/ se(fmt(2) par)) stats(N Fstat, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+						title(CFI_HCR on FS_1st)		replace	
+						
+				esttab	${CFI_HCR_est_1st}	using "${SNAP_outRaw}/CFI_HCR_on_FS_IV_1st.tex", ///
+						cells(b(star fmt(%8.3f)) /*&*/ se(fmt(2) par)) stats(N Fstat, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+						title(CFI_HCR on FS_1st)		replace	
+						
+				*	2nd-stage
+				esttab	${CFI_HCR_est_2nd}	using "${SNAP_outRaw}/CFI_HCR_on_FS_IV_2nd.csv", ///
+						cells(b(star fmt(%8.3f)) /*&*/ se(fmt(2) par)) stats(N r2, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+						title(CFI_HCR on FS_2nd)		replace		
+						
+				esttab	${CFI_HCR_est_2nd}	using "${SNAP_outRaw}/CFI_HCR_on_FS_IV_2nd.tex", ///
+						cells(b(star fmt(%8.3f)) /*&*/ se(fmt(2) par)) stats(N r2, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+						title(CFI_HCR on FS_2nd)		replace	
+	
+				}
+		
+			*	CFI (FIG)
+				{
+				global	CFI_FIG_est_1st	
+				global	CFI_FIG_est_2nd	
+				
+				cap	drop	FS_amt_real
+				cap	drop	FS_amt_realK
+				clonevar	FS_amt_real		=	FS_rec_amt_real
+				gen			FS_amt_realK	=	FS_rec_amt_real	/	1000
+							
+				*	Static, no control/no macro
+				loc	depvar	CFI_FIG
+				*loc	endovar	FS_amt_realK
+				*loc	IV		SSI_GDP_sl
+				loc	model	`depvar'_biv
+				ivreg2 	`depvar'	/*${regionvars}*/	(${endovar}	=	${IV})	[aw=wgt_long_fam_adj]	///
+					if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) first savefirst savefprefix(`model')
+				est	store	`model'_2nd
+				scalar	Fstat_`model'	=	e(widstat)
+				est	restore	`model'${endovar}
+				estadd	scalar	Fstat	=	Fstat_`model', replace
+				est	store	`model'_1st
+				est	drop	`model'${endovar}
+									
+				global	`depvar'_est_1st	${`depvar'_est_1st}	`model'_1st
+				global	`depvar'_est_2nd	${`depvar'_est_2nd}	`model'_2nd
+				
+				
+				*	Static, no control, macro
+				loc	depvar	CFI_FIG
+				*loc	endovar	FS_amt_realK
+				*loc	IV		SSI_GDP_sl
+				loc	model	`depvar'_macro
+				ivreg2 	`depvar'	/*${regionvars}*/	${macrovars}	(${endovar}	=	${IV})	[aw=wgt_long_fam_adj]	///
+					if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) first savefirst savefprefix(`model')
+				est	store	`model'_2nd
+				scalar	Fstat_`model'	=	e(widstat)
+				est	restore	`model'${endovar}
+				estadd	scalar	Fstat	=	Fstat_`model', replace
+				est	store	`model'_1st
+				est	drop	`model'${endovar}
+									
+				global	`depvar'_est_1st	${`depvar'_est_1st}	`model'_1st
+				global	`depvar'_est_2nd	${`depvar'_est_2nd}	`model'_2nd
+				
+				
+				*	Static, controls, macro
+				loc	depvar	CFI_FIG
+				*loc	endovar	FS_amt_realK
+				*loc	IV		SSI_GDP_sl
+				loc	model	`depvar'_X
+				ivreg2 	`depvar' ${FSD_on_FS_X}	(${endovar}	=	${IV})	[aw=wgt_long_fam_adj]	///
+					if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) first savefirst savefprefix(`model')
+				est	store	`model'_2nd
+				scalar	Fstat_`model'	=	e(widstat)
+				est	restore	`model'${endovar}
+				estadd	scalar	Fstat	=	Fstat_`model', replace
+				est	store	`model'_1st
+				est	drop	`model'${endovar}
+									
+				global	`depvar'_est_1st	${`depvar'_est_1st}	`model'_1st
+				global	`depvar'_est_2nd	${`depvar'_est_2nd}	`model'_2nd
+				
+					
+					*	Dynamic model (including FS amount from multiple periods)
+					*	We will do this manually
+					*	First, predict FS amount from the first stage.
+					loc	depvar	CFI_FIG
+					est restore `depvar'_X_1st
+					cap	drop	FS_amt_`depvar'_hat
+					predict FS_amt_`depvar'_hat, xb
+					lab	var	FS_amt_`depvar'_hat	"Predicted FS amount received last month (K)"
+					
+					*	Now, regress 2nd stage, including FS across multiple periods
+					reg	`depvar' FS_amt_`depvar'_hat	l2.FS_amt_`depvar'_hat	${FSD_on_FS_X}	[aw=wgt_long_fam_adj]	///
+						if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) // first savefirst savefprefix(`IVname')
+					est	store	`depvar'_dyn_X_2nd
+				
+					global	`depvar'_est_2nd	${`depvar'_est_2nd}	`depvar'_dyn_X_2nd
+			
+				
+						
+				*	1st-stage
+				esttab	${CFI_FIG_est_1st}	using "${SNAP_outRaw}/CFI_FIG_on_FS_IV_1st.csv", ///
+						cells(b(star fmt(%8.3f)) /*&*/ se(fmt(2) par)) stats(N Fstat, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+						title(CFI_FIG on FS_1st)		replace	
+						
+				esttab	${CFI_FIG_est_1st}	using "${SNAP_outRaw}/CFI_FIG_on_FS_IV_1st.tex", ///
+						cells(b(star fmt(%8.3f)) /*&*/ se(fmt(2) par)) stats(N Fstat, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+						title(CFI_FIG on FS_1st)		replace	
+						
+				*	2nd-stage
+				esttab	${CFI_FIG_est_2nd}	using "${SNAP_outRaw}/CFI_FIG_on_FS_IV_2nd.csv", ///
+						cells(b(star fmt(%8.3f)) /*&*/ se(fmt(2) par)) stats(N r2, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+						title(CFI_FIG on FS_2nd)		replace		
+						
+				esttab	${CFI_FIG_est_2nd}	using "${SNAP_outRaw}/CFI_FIG_on_FS_IV_2nd.tex", ///
+						cells(b(star fmt(%8.3f)) /*&*/ se(fmt(2) par)) stats(N r2, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+						title(CFI_FIG on FS_2nd)		replace	
+	
+				}
+		
+			*	CFI (SFIG)
+				{
+				global	CFI_SFIG_est_1st	
+				global	CFI_SFIG_est_2nd	
+				
+				cap	drop	FS_amt_real
+				cap	drop	FS_amt_realK
+				clonevar	FS_amt_real		=	FS_rec_amt_real
+				gen			FS_amt_realK	=	FS_rec_amt_real	/	1000
+							
+				*	Static, no control/no macro
+				loc	depvar	CFI_SFIG
+				*loc	endovar	FS_amt_realK
+				*loc	IV		SSI_GDP_sl
+				loc	model	`depvar'_biv
+				ivreg2 	`depvar'	/*${regionvars}*/	(${endovar}	=	${IV})	[aw=wgt_long_fam_adj]	///
+					if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) first savefirst savefprefix(`model')
+				est	store	`model'_2nd
+				scalar	Fstat_`model'	=	e(widstat)
+				est	restore	`model'${endovar}
+				estadd	scalar	Fstat	=	Fstat_`model', replace
+				est	store	`model'_1st
+				est	drop	`model'${endovar}
+									
+				global	`depvar'_est_1st	${`depvar'_est_1st}	`model'_1st
+				global	`depvar'_est_2nd	${`depvar'_est_2nd}	`model'_2nd
+				
+				
+				*	Static, no control, macro
+				loc	depvar	CFI_SFIG
+				*loc	endovar	FS_amt_realK
+				*loc	IV		SSI_GDP_sl
+				loc	model	`depvar'_macro
+				ivreg2 	`depvar'	/*${regionvars}*/	${macrovars}	(${endovar}	=	${IV})	[aw=wgt_long_fam_adj]	///
+					if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) first savefirst savefprefix(`model')
+				est	store	`model'_2nd
+				scalar	Fstat_`model'	=	e(widstat)
+				est	restore	`model'${endovar}
+				estadd	scalar	Fstat	=	Fstat_`model', replace
+				est	store	`model'_1st
+				est	drop	`model'${endovar}
+									
+				global	`depvar'_est_1st	${`depvar'_est_1st}	`model'_1st
+				global	`depvar'_est_2nd	${`depvar'_est_2nd}	`model'_2nd
+				
+				
+				*	Static, controls, macro
+				loc	depvar	CFI_SFIG
+				*loc	endovar	FS_amt_realK
+				*loc	IV		SSI_GDP_sl
+				loc	model	`depvar'_X
+				ivreg2 	`depvar' ${FSD_on_FS_X}	(${endovar}	=	${IV})	[aw=wgt_long_fam_adj]	///
+					if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) first savefirst savefprefix(`model')
+				est	store	`model'_2nd
+				scalar	Fstat_`model'	=	e(widstat)
+				est	restore	`model'${endovar}
+				estadd	scalar	Fstat	=	Fstat_`model', replace
+				est	store	`model'_1st
+				est	drop	`model'${endovar}
+									
+				global	`depvar'_est_1st	${`depvar'_est_1st}	`model'_1st
+				global	`depvar'_est_2nd	${`depvar'_est_2nd}	`model'_2nd
+				
+					
+					*	Dynamic model (including FS amount from multiple periods)
+					*	We will do this manually
+					*	First, predict FS amount from the first stage.
+					loc	depvar	CFI_SFIG
+					est restore `depvar'_X_1st
+					cap	drop	FS_amt_`depvar'_hat
+					predict FS_amt_`depvar'_hat, xb
+					lab	var	FS_amt_`depvar'_hat	"Predicted FS amount received last month (K)"
+					
+					*	Now, regress 2nd stage, including FS across multiple periods
+					reg	`depvar' FS_amt_`depvar'_hat	l2.FS_amt_`depvar'_hat	${FSD_on_FS_X}	[aw=wgt_long_fam_adj]	///
+						if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) // first savefirst savefprefix(`IVname')
+					est	store	`depvar'_dyn_X_2nd
+				
+					global	`depvar'_est_2nd	${`depvar'_est_2nd}	`depvar'_dyn_X_2nd
+			
+				
+						
+				*	1st-stage
+				esttab	${CFI_SFIG_est_1st}	using "${SNAP_outRaw}/CFI_SFIG_on_FS_IV_1st.csv", ///
+						cells(b(star fmt(%8.3f)) /*&*/ se(fmt(2) par)) stats(N Fstat, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+						title(CFI_SFIG on FS_1st)		replace	
+						
+				esttab	${CFI_SFIG_est_1st}	using "${SNAP_outRaw}/CFI_SFIG_on_FS_IV_1st.tex", ///
+						cells(b(star fmt(%8.3f)) /*&*/ se(fmt(2) par)) stats(N Fstat, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+						title(CFI_SFIG on FS_1st)		replace	
+						
+				*	2nd-stage
+				esttab	${CFI_SFIG_est_2nd}	using "${SNAP_outRaw}/CFI_SFIG_on_FS_IV_2nd.csv", ///
+						cells(b(star fmt(%8.3f)) /*&*/ se(fmt(2) par)) stats(N r2, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+						title(CFI_SFIG on FS_2nd)		replace		
+						
+				esttab	${CFI_SFIG_est_2nd}	using "${SNAP_outRaw}/CFI_SFIG_on_FS_IV_2nd.tex", ///
+						cells(b(star fmt(%8.3f)) /*&*/ se(fmt(2) par)) stats(N r2, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+						title(CFI_SFIG on FS_2nd)		replace	
+	
+				}
+		
+			
+			
+			*	Print TFI/CFI with control model only
+			esttab	TFI_HCR_control_2nd	TFI_HCR_dyn_control_2nd	CFI_HCR_X_2nd	CFI_HCR_dyn_X_2nd	///
+			using "${SNAP_outRaw}/TFI_CFI_HCR.csv", ///
+						cells(b(star fmt(%8.3f)) se(fmt(2) par)) stats(N r2, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ ///
+						star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+						title(PFS on FS amt)		replace		
+						
+			esttab	TFI_HCR_control_2nd	TFI_HCR_dyn_control_2nd	CFI_HCR_X_2nd	CFI_HCR_dyn_X_2nd	///
+			using "${SNAP_outRaw}/TFI_CFI_HCR.tex", ///
+						cells(b(star fmt(%8.3f)) se(fmt(2) par)) stats(N r2, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ ///
+						star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+						title(PFS on FS amt)		replace		
+			
+			
+			esttab	TFI_FIG_X_2nd	TFI_FIG_dyn_X_2nd	CFI_FIG_X_2nd	CFI_FIG_dyn_X_2nd	///
+			using "${SNAP_outRaw}/TFI_CFI_FIG.csv", ///
+						cells(b(star fmt(%8.3f)) se(fmt(2) par)) stats(N r2, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ ///
+						star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+						title(PFS on FS amt)		replace		
+						
+			esttab	TFI_FIG_X_2nd	TFI_FIG_dyn_X_2nd	CFI_FIG_X_2nd	CFI_FIG_dyn_X_2nd	///
+			using "${SNAP_outRaw}/TFI_CFI_FIG.tex", ///
+						cells(b(star fmt(%8.3f)) se(fmt(2) par)) stats(N r2, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ ///
+						star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+						title(PFS on FS amt)		replace		
+			
+			summ	PFS_glm TFI_FIG CFI_FIG if in_sample==1	&	income_below_200==1 & PFS_FI_glm==1 [aw=wgt_long_fam_adj],d
+		
+
 		
 	}
 	
@@ -4900,7 +5865,18 @@
 				local	famvars	split_off	fam_income_month_pc_real	foodexp_tot_inclFS_pc_real	FS_rec_amt_real	famnum	childnum	FS_rec_wth
 				
 				
+
 				estpost summ	`indvars'	if	/*   num_waves_in_FU_uniq>=2	&*/	!mi(PFS_glm)  // Temporary condition. Need to think proper condition.
+
+				esttab	sumstat_all	sumstat_lowinc	using	"${SNAP_outRaw}/Tab_1_Sumstats.csv",  ///
+					cells("count(fmt(%12.0f)) mean(fmt(%12.2f)) sd(fmt(%12.2f)) min(fmt(%12.2f)) p50(fmt(%12.2f)) p95(fmt(%12.2f)) max(fmt(%12.2f))") label	title("Summary Statistics") noobs 	  replace
+					
+				esttab	sumstat_all	sumstat_lowinc	using	"${SNAP_outRaw}/Tab_1_Sumstats.tex",  ///
+					cells("count(fmt(%12.0f)) mean(fmt(%12.2f)) sd(fmt(%12.2f)) min(fmt(%12.2f)) p50(fmt(%12.2f)) p95(fmt(%12.2f)) max(fmt(%12.2f))") label	title("Summary Statistics") noobs 	  replace
+					
+				summ	PFS_glm TFI_FIG if in_sample==1	&	income_below_200==1 & PFS_FI_glm==1 [aw=wgt_long_fam_adj],d
+				summ	PFS_glm TFI_FIG if in_sample==1	&	income_below_200==1	& PFS_FI_glm==1 & FS_rec_wth!=1 [aw=wgt_long_fam_adj],d // didn't receive SNAP
+
 			
 				summ	FS_rec_amt_real	if	!mi(PFS_glm)	&	FS_rec_wth==1 & inrange(rp_age,0,130) // Temporarily add age condition to take care of outlier. Will be taken care of later.
 			
