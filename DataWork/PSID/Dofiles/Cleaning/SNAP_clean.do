@@ -195,12 +195,12 @@
 	
 	local	ind_agg			0	//	Aggregate individual-level variables across waves
 	local	fam_agg			0	//	Aggregate family-level variables across waves
-	local	ext_data		0	//	Prepare external data (CPI, TFP, etc.)
-	local	cr_panel		0	//	Create panel structure from ID variable
+	local	ext_data		1	//	Prepare external data (CPI, TFP, etc.)
+	local	cr_panel		1	//	Create panel structure from ID variable
 		local	panel_view	0	//	Create an excel file showing the change of certain clan over time (for internal data-check only)
-	local	merge_data		0	//	Merge ind- and family- variables and import it into ID variable
-		local	raw_reshape	0		//	Merge raw variables and reshape into long data (takes time)
-		local	add_clean	0		//	Do additional cleaning and import external data (CPI, TFP)
+	local	merge_data		1	//	Merge ind- and family- variables and import it into ID variable
+		local	raw_reshape	1		//	Merge raw variables and reshape into long data (takes time)
+		local	add_clean	1		//	Do additional cleaning and import external data (CPI, TFP)
 		local	import_dta	1		//	Import aggregated variables into ID data. 
 	local	clean_vars		1	//	Clean variables and construct consistent variables
 	local	PFS_const		1	//	Construct PFS
@@ -1269,17 +1269,29 @@
 				*	(2022-4-11) I only label state-level as I don't use state & local level. Will add label if needed later
 				*	(2022-5-3) I now use state and local data only.
 				
-					label	var	share_edu_exp_sl	"\% of total Exp on Education"
-					label	var	share_welfare_exp_sl	"\% of total Exp on Pub. Welfare"
-					label	var	share_health_exp_sl	"\% of total Exp on Health and Hospital"
-					label	var	share_housing_exp_sl	"\% of total Exp on Housing and Comm Dev"
-					label	var	SSI_exp_sl	"Social Spending Index (Exp)"
+					label	var	share_edu_exp_sl		"State \& local exp on education (as \% of total exp)"
+					label	var	share_welfare_exp_sl	"State \& local exp on public welfare (as \% of total exp)"
+					label	var	share_health_exp_sl		"State \& local exp on health (as \% of total exp)"
+					label	var	share_housing_exp_sl	"State \& local exp on housing (as \% of total exp)"
+					label	var	SSI_exp_sl				"Social Spending Index (state \& local as \% of total exp)"
 					
-					label	var	share_edu_GDP_sl	"\% of GDP on Education"
-					label	var	share_welfare_GDP_sl	"\% of GDP on Pub. Welfare"
-					label	var	share_health_GDP_sl	"\% of GDP on Health and Hospital"
-					label	var	share_housing_GDP_sl	"\% of GDP on Housing and Comm Dev"
-					label	var	SSI_GDP_sl	"Social Spending Index (GDP)"
+					label	var	share_edu_GDP_sl		"State \& local exp on education (as \% of GDP)"
+					label	var	share_welfare_GDP_sl	"State \& local exp on public welfare (as \% of GDP)"
+					label	var	share_health_GDP_sl		"State \& local exp on health (as \% of GDP)"
+					label	var	share_housing_GDP_sl	"State \& local exp on housing (as \% of GDP)"
+					label	var	SSI_GDP_sl				"Social Spending Index (state \& local as \% of GDP)"
+					
+					label	var	share_edu_exp_s			"State exp on education (as \% of total exp)"
+					label	var	share_welfare_exp_s		"State exp on public welfare (as \% of total exp)"
+					label	var	share_health_exp_s		"State exp on health (as \% of total exp)"
+					label	var	share_housing_exp_s		"State exp on housing (as \% of total exp)"
+					label	var	SSI_exp_s				"Social Spending Index (state as \% of total exp)"
+					
+					label	var	share_edu_GDP_s			"State exp on education (as \% of GDP)"
+					label	var	share_welfare_GDP_s		"State exp on public welfare (as \% of GDP)"
+					label	var	share_health_GDP_s		"State exp on health (as \% of GDP)"
+					label	var	share_housing_GDP_s		"State exp on housing (as \% of GDP)"
+					label	var	SSI_GDP_s				"Social Spending Index (state as \% of GDP)"
 					
 			*	Robustness check between SSI from old GDP (pre-1997) and from new GDP (post-1997)
 					
@@ -1309,6 +1321,8 @@
 					drop	*oldGDP*	*newGDP*
 					
 					
+					
+					
 					*	Save
 					compress
 					save	"${SNAP_dtInt}/SSI",	replace
@@ -1322,10 +1336,10 @@
 							/*(line TFP_monthly_cost	year, lpattern(dash_dot) xaxis(1 2) yaxis(2)) */ 	///
 							/*(line FS_rec_amt	year, lpattern(dash_dot) xaxis(1 2) yaxis(2))*/,  ///
 							xline(1980 1993 1999 2007, axis(1) lpattern(dot)) xlabel(/*1980 "No payment" 1993 "xxx" 2009 "ARRA" 2020 "COVID"*/, axis(2))	///
-							xtitle(Year)	xtitle("", axis(2))  title(Monthly Food Expenditure and FS Benefit)	bgcolor(white)	graphregion(color(white)) /*note(Source: USDA & BLS)*/	name(foodexp_FSamt_byyear, replace)
+							xtitle(Year)	xtitle("", axis(2))  title(Share of State & Local Social Spending by Year)	bgcolor(white)	graphregion(color(white)) /*note(Source: USDA & BLS)*/	name(foodexp_FSamt_byyear, replace)
 			
 			
-			*graph	export	"${SNAP_outRaw}/foodexp_FSamt_byyear.png", replace
+			graph	export	"${SNAP_outRaw}/SSI_byyear.png", replace
 			graph	close
 			
 			restore
@@ -1991,9 +2005,9 @@
 			save	"${SNAP_dtInt}/Poverty_guideline", replace
 		
 		
-		*	SNAP payment error rate
-		*	Note: some years are missing.
-			foreach	year	in	1997	1999	2001	2003	2005	2007	2009	2011	2013	2017	2019	{
+		*	SNAP payment error rate (1980-2019)
+
+			forval	year=1983/2019		{
 		
 				import excel "${clouldfolder}/DataWork/USDA/Error Rates/Error_Rates.xlsx", sheet("FY`year'") firstrow clear
 				
@@ -2004,25 +2018,7 @@
 				save		`error_rate_`year''
 				
 			}
-
-			foreach	year	in	1993	1994	1995	1996	{
-				
-				import excel	"${clouldfolder}/DataWork/USDA/Error Rates/Error_Rates.xlsx", sheet("FY`year'") firstrow clear
-
-				rename	(State PaymentErrorRates)	(state	error_total)
-				gen	year	=	`year'
-
-				tempfile	error_rate_`year'
-				save		`error_rate_`year''
-				
-			}
-
-			import excel "${clouldfolder}/DataWork/USDA/Error Rates/Error_Rates.xlsx", sheet("FY1983") firstrow clear
-			rename	(State Overpayments Underpayments PaymentErrorRates)	(state	error_over	error_under	error_total)
-			gen	year	=	1983
-
-			tempfile	error_rate_1983
-			save		`error_rate_1983'
+	
 
 			foreach	year	in	1980	1981	1982	{
 				
@@ -2039,7 +2035,7 @@
 
 
 			use	`error_rate_1980',	clear
-			foreach	year	in	1981	1982	1983	1993	1994	1995	1996	1997	1999	2001	2003	2005	2007	2009	2011	2013	2017	2019	{
+			forval	year=1981/2019	{
 				
 				di "year is `year'"
 				append	using	`error_rate_`year''
@@ -2047,7 +2043,11 @@
 			}
 
 			replace	state	=	strproper(state)
+			replace	state	=	stritrim(state)
+			replace	state	=	strtrim(state) 
+			
 			replace	state	=	"Washington D.C." 	if regexm(state,"Dist")
+			replace	state	=	"Indiana"			if regexm(state,"Indiana")	
 			replace	state	=	"National Average"	if	inlist(state,"U.S. Average","Total")
 			
 			lab	var	error_over 	"Overpayment Rate"
@@ -2062,7 +2062,6 @@
 		
 			*	Save
 			save	"${SNAP_dtInt}/Payment_Error_Rates", replace
-		
 
 
 		
@@ -4905,33 +4904,30 @@
 			*/
 			
 			*	Specification test
-			{
-			
-			*	Individual IV test
-			*	The following specification/sample will be tested
-				*	Different endogenous variables
-					*	Participation only
-					*	Amount only
-					*	Participation and amount
-				*	Different IVs
-					*	Single IV
-						*	SSI
-						*	State control
-						*	Share of social expenditure only
-						*	Don't forget to interact SSI/expenditure with state control!
-					*	Double IV
-						*	SSI and state control
-						*	Share of social expenditure and state control
-				*	Different fixed effects
-					*	State FE only
-					*	Year FE only
-					*	State and year
-				*	Different samples
-					*	All Households
-					*	Households with monthly income less than 130%/200% of poverty line (SNAP income eligibility)
-				
-			
-			*	Specification test
+						
+				*	Individual IV test
+				*	The following specification/sample will be tested
+					*	Different endogenous variables
+						*	Participation only
+						*	Amount only
+						*	Participation and amount
+					*	Different IVs
+						*	Single IV
+							*	SSI
+							*	State control
+							*	Share of social expenditure only
+							*	Don't forget to interact SSI/expenditure with state control!
+						*	Double IV
+							*	SSI and state control
+							*	Share of social expenditure and state control
+					*	Different fixed effects
+						*	State FE only
+						*	Year FE only
+						*	State and year
+					*	Different samples
+						*	All Households
+						*	Households with monthly income less than 130%/200% of poverty line (SNAP income eligibility)
+
 			{
 			
 			*	Individual IV test
@@ -5092,8 +5088,8 @@
 			*	(2022-7-28) Note: the last benchmark model (SSI as single IV to instrument amount of FS benefit) tested was including "${statevars}" and excluding "lagged PFS"
 			*	But here I inclued "lagged PFS" as Chris suggested, and excluded "statevars" by my own decision. We can further test this specification with different IV/endogenous variable (political status didn't work still)
 			loc	depvar	PFS_glm
-			loc	endovar	FS_rec_amt_real	//	FS_amt_realK	//	FS_rec_wth	//	
-			loc	IV		SSI_GDP_sl	year_01_03	int_SSI_GDP_sl_01_03	//	share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
+			loc	endovar	FS_rec_wth	//		FS_rec_amt_real	//	FS_amt_realK	//	
+			loc	IV		errorrate_total	//	SSI_GDP_sl	year_01_03	int_SSI_GDP_sl_01_03	//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
 			loc	IVname	SSI_macro
 			ivreg2 	`depvar'	${FSD_on_FS_X}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
 				if	in_sample==1 & inrange(year,1977,2019)  & income_below_200==1,	///
