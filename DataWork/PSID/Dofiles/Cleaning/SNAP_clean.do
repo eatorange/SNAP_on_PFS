@@ -195,7 +195,7 @@
 	
 	local	ind_agg			0	//	Aggregate individual-level variables across waves
 	local	fam_agg			0	//	Aggregate family-level variables across waves
-	local	ext_data		1	//	Prepare external data (CPI, TFP, etc.)
+	local	ext_data		0	//	Prepare external data (CPI, TFP, etc.)
 	local	cr_panel		1	//	Create panel structure from ID variable
 		local	panel_view	0	//	Create an excel file showing the change of certain clan over time (for internal data-check only)
 	local	merge_data		1	//	Merge ind- and family- variables and import it into ID variable
@@ -2107,67 +2107,6 @@
 			drop	if	year<1977
 			save	"${SNAP_dtInt}/TFP cost/TFP_costs_all", replace
 			
-		*	Error rate (some years are missing)
-		foreach	year	in	1980	1981	1982	1983	1993	1994	1995	1996	1997	1999	2001	2003	2005	2007	2009	2011	2013	2017	2019	{
-			
-			import excel "${clouldfolder}/DataWork/USDA/Error Rates/Error_Rates.xlsx", sheet("FY`year'") firstrow clear
-			
-			if	inlist(`year',1980,1981,1982)	{
-				
-				rename	* (state errorrate_over_h1	errorrate_over_h2	errorrate_over errorate_under_h1	errorate_under_h2 errorate_under	errorrate_total_h1	rrorrate_total_h2	errorrate_total)
-				drop	errorrate_over_h1	errorrate_over_h2	errorate_under_h1	errorate_under_h2	errorrate_total_h1	rrorrate_total_h2
-				gen	year=`year'
-				
-			}
-			
-			else	if	inlist(`year',1983,1997,1999,2001,2003,2005,2007,2009,2011,2013,2017,2019)	{
-				
-				rename	* (state errorrate_over errorate_under errorrate_total)
-				gen	year=`year'
-			}
-			
-			else	{
-				
-				rename	* (state errorrate_total)
-				gen	year=`year'
-			}
-			
-			drop	if	mi(state)
-			replace	state	=	strproper(state)
-			replace	state = "Washington D.C." if inlist(state,"Dist. Of Col.","District Of Columbia","Dist. Of Columbia","Dist.Of Columbia")
-			
-			tempfile	error_rate_`year'
-			save		`error_rate_`year''
-			
-			
-			if	`year'==1980	{
-				
-				tempfile	error_rate_appended
-				save		`error_rate_appended', replace
-				
-			}
-			
-			else	{
-				
-				use	`error_rate_appended', clear
-				append	using	`error_rate_`year''
-				save	`error_rate_appended', replace
-				
-			}
-			
-			
-		}	//	year
-		
-		use	`error_rate_appended', clear
-		drop	if	inlist(state,"Guam","Virgin Islands")
-		replace	state="National Average"	if	inlist(state,"Total","U.S. Average")
-		drop	if	state=="National Average" // drop national average for now.
-		
-		merge	m:1	state using "${SNAP_dtRaw}/Statecode.dta", nogen assert(3) //	Merge statecode
-		
-		rename	statecode	rp_state
-		
-		save	"${SNAP_dtInt}/FSP_payment_error_rates", replace
 		
 		*	Income Poverty from Poverty Guideline (which determines income eligibility)
 		*	(Source: HHS Poverty Guideline, https://aspe.hhs.gov/topics/poverty-economic-mobility/poverty-guidelines/prior-hhs-poverty-guidelines-federal-register-references)
@@ -6144,7 +6083,16 @@
 		
 		
 		*	Sample information
-			count if !mi(PFS_glm)	&	in_sample	//	Sample size
+			count if in_sample	&	income_below_200==1	//	Sample size
+				count if in_sample	&	income_below_200==1	&	!mi(PFS_glm)		//	Sample with non-missing PFS
+				count if in_sample	&	income_below_200==1		&	baseline_indiv==1	//	Baseline individual in sapmle
+				count if in_sample	&	income_below_200==1		&	splitoff_indiv==1	//	Splitoff individual in sapmle
+				
+			*	Number of individuals
+				distinct	x11101ll	if in_sample	&	income_below_200==1		//	# of baseline individuals in sapmle
+				distinct	x11101ll	if in_sample	&	income_below_200==1		&	baseline_indiv==1	//	# of baseline individuals in sapmle
+				distinct	x11101ll	if	in_sample	&	income_below_200==1		&	splitoff_indiv==1	//	Baseline individual in sapmle
+			
 			unique	x11101ll	if	!mi(PFS_glm)	//	Total individuals
 			unique	year		if	!mi(PFS_glm)		//	Total waves
 	
@@ -6273,7 +6221,7 @@
 
 				esttab	sumstat_all	sumstat_lowinc	using	"${SNAP_outRaw}/Tab_1_Sumstats.csv",  ///
 					cells("count(fmt(%12.0f)) mean(fmt(%12.2f)) sd(fmt(%12.2f)) min(fmt(%12.2f)) p50(fmt(%12.2f)) p95(fmt(%12.2f)) max(fmt(%12.2f))") label	title("Summary Statistics") noobs 	  replace
-					
+									
 				esttab	sumstat_all	sumstat_lowinc	using	"${SNAP_outRaw}/Tab_1_Sumstats.tex",  ///
 					cells("count(fmt(%12.0f)) mean(fmt(%12.2f)) sd(fmt(%12.2f)) min(fmt(%12.2f)) p50(fmt(%12.2f)) p95(fmt(%12.2f)) max(fmt(%12.2f))") label	title("Summary Statistics") noobs 	  replace
 					
