@@ -4469,6 +4469,8 @@
 		*	SL_5=3	if HH experience FI in three consecutive rounds
 		replace	`var'=3	if	PFS_FI_glm==1	&	f2.PFS_FI_glm==1	&	f4.PFS_FI_glm==1	
 		
+		lab	var	`var'	"# of consecutive FI incidences over the next 5 years (0-3)"
+		
 		/*
 		*	SPL=4	if HH experience FI in four consecutive years
 		replace	`var'=4	if	PFS_FI_glm==1	&	f1.PFS_FI_glm==1	&	f2.PFS_FI_glm==1	&	f3.PFS_FI_glm==1	&	(inrange(year,1977,1984)	|	inrange(year,1990,1994))	//	For years with 4 consecutive years of observations available
@@ -4484,9 +4486,24 @@
 		replace	`var'=5	if	PFS_FI_glm==1	&	f2.PFS_FI_glm==1	&	f4.PFS_FI_glm==1	&	inrange(year,1997,2015)
 		*/
 		
-		br	x11101ll	year	PFS_glm	PFS_FI_glm	_seq	_spell	_end SL_5
+	
 		
-		lab	var	`var'	"# of consecutive FI incidences over 5 years (0-3)"
+			*	Construct SL_5 backwards, since regression current redemption on future outcome may not make sense (Chris said something like that...)
+			loc	var	SL_5_backward
+			cap	drop	`var'
+			gen		`var'=.
+			replace	`var'=0	if	!mi(PFS_FI_glm)
+			replace	`var'=1	if	PFS_FI_glm==1
+			
+			*	SL_5=2	if	HH experience FI in "past" two consecutive rounds
+			replace	`var'=2	if	PFS_FI_glm==1	&	l2.PFS_FI_glm==1	//	&	inrange(year,1997,1999)
+		
+			*	SL_5=3	if HH experience FI in "past" three consecutive rounds
+			replace	`var'=3	if	PFS_FI_glm==1	&	l2.PFS_FI_glm==1	&	l4.PFS_FI_glm==1	
+		
+			lab	var	`var'	"# of consecutive FI incidences over the past 5 years (0-3)"
+		
+			br	x11101ll	year	PFS_glm	PFS_FI_glm	_seq	_spell	_end SL_5	SL_5_backward
 		
 		*	Permanent approach (TFI and CFI)
 		
@@ -4989,7 +5006,7 @@
 			*	(2022-7-28) Note: the last benchmark model (SSI as single IV to instrument amount of FS benefit) tested was including "${statevars}" and excluding "lagged PFS"
 			*	But here I inclued "lagged PFS" as Chris suggested, and excluded "statevars" by my own decision. We can further test this specification with different IV/endogenous variable (political status didn't work still)
 			loc	depvar	PFS_glm
-			loc	endovar	FS_rec_amt_real		//	FS_rec_wth		//	FS_amt_realK	//	
+			loc	endovar	FS_rec_wth	//	FS_rec_amt_real		//	FS_amt_realK	//	
 			loc	IV		SSI_GDP_sl	year_01_03	int_SSI_GDP_sl_01_03	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
 			loc	IVname	SSI_macro
 			ivreg2 	`depvar'	${FSD_on_FS_X}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
@@ -5254,7 +5271,7 @@
 
 		*/
 		
-			
+		
 
 			*	Regressing FSD on predicted FS, using the model we find above
 			global	endovar	FS_amt_realK // FS_rec_wth
@@ -6045,15 +6062,17 @@
 		
 		
 		*	Sample information
-			count if in_sample	&	income_below_200==1	//	Sample size
-				count if in_sample	&	income_below_200==1	&	!mi(PFS_glm)		//	Sample with non-missing PFS
-				count if in_sample	&	income_below_200==1		&	baseline_indiv==1	//	Baseline individual in sapmle
-				count if in_sample	&	income_below_200==1		&	splitoff_indiv==1	//	Splitoff individual in sapmle
+			
+			count if in_sample	&	income_below_200==1		&	!mi(PFS_glm)		//	Sample with non-missing PFS
+				count if in_sample	&	income_below_200==1	//	Sample size	(including missing PFS)
+			count if in_sample	&	income_below_200==1		&	!mi(PFS_glm)	&	baseline_indiv==1	//	Baseline individual in sapmle
+			count if in_sample	&	income_below_200==1		&	!mi(PFS_glm)	&	splitoff_indiv==1	//	Splitoff individual in sapmle
 				
 			*	Number of individuals
-				distinct	x11101ll	if in_sample	&	income_below_200==1		//	# of baseline individuals in sapmle
-				distinct	x11101ll	if in_sample	&	income_below_200==1		&	baseline_indiv==1	//	# of baseline individuals in sapmle
-				distinct	x11101ll	if	in_sample	&	income_below_200==1		&	splitoff_indiv==1	//	Baseline individual in sapmle
+				distinct	x11101ll	if	in_sample	&	!mi(PFS_glm)	&	income_below_200==1		//	# of baseline individuals in sapmle
+				distinct	x11101ll	if	in_sample	&	income_below_200==1		//	# of baseline individuals in sapmle (including missing PFS)
+				distinct	x11101ll	if	in_sample	&	!mi(PFS_glm)	&	income_below_200==1		&	baseline_indiv==1	//	# of baseline individuals in sapmle
+				distinct	x11101ll	if	in_sample	&	!mi(PFS_glm)	&	income_below_200==1		&	splitoff_indiv==1	//	Baseline individual in sapmle
 			
 			unique	x11101ll	if	!mi(PFS_glm)	//	Total individuals
 			unique	year		if	!mi(PFS_glm)		//	Total waves
@@ -6171,15 +6190,18 @@
 				local	IVs		share_welfare_exp_sl	SSI_GDP_sl	major_control_dem major_control_rep major_control_mix
 				local	FSDvars	PFS_glm	SL_5	TFI_HCR	CFI_HCR	TFI_FIG	CFI_FIG	TFI_SFIG	CFI_SFIG	
 				
+				estpost summ	`indvars'		if	!mi(PFS_glm)	/*  num_waves_in_FU_uniq>=2	 &*/	  // Temporary condition. Need to think proper condition.
+				estpost summ	`indvars'		if	in_sample==1	&	income_below_200==1	/*  num_waves_in_FU_uniq>=2	 &*/	  // Temporary condition. Need to think proper condition.
+				
 				local	summvars	/*`indvars'*/	`rpvars'	`famvars'	`FSvars'	`IVs'	`FSDvars'
 
-				estpost tabstat	`summvars'	 if in_sample==1	[aw=wgt_long_fam_adj],	statistics(count	mean	sd	min	median	p95	max) columns(statistics)		// save
+				estpost tabstat	`summvars'	 if in_sample==1	&	!mi(PFS_glm)	[aw=wgt_long_fam_adj],	statistics(count	mean	sd	min	median	p95	max) columns(statistics)		// save
 				est	store	sumstat_all
-				estpost tabstat	`summvars' 	if in_sample==1	&	income_below_200==1	[aw=wgt_long_fam_adj],	statistics(count	mean	sd	min	median	p95	max) columns(statistics)	// save
+				estpost tabstat	`summvars' 	if in_sample==1	&	!mi(PFS_glm)	&	income_below_200==1	[aw=wgt_long_fam_adj],	statistics(count	mean	sd	min	median	p95	max) columns(statistics)	// save
 				est	store	sumstat_lowinc
 				
 
-				estpost summ	`indvars'	if	/*   num_waves_in_FU_uniq>=2	&*/	!mi(PFS_glm)  // Temporary condition. Need to think proper condition.
+				
 
 				esttab	sumstat_all	sumstat_lowinc	using	"${SNAP_outRaw}/Tab_1_Sumstats.csv",  ///
 					cells("count(fmt(%12.0f)) mean(fmt(%12.2f)) sd(fmt(%12.2f)) min(fmt(%12.2f)) p50(fmt(%12.2f)) p95(fmt(%12.2f)) max(fmt(%12.2f))") label	title("Summary Statistics") noobs 	  replace
@@ -6187,8 +6209,8 @@
 				esttab	sumstat_all	sumstat_lowinc	using	"${SNAP_outRaw}/Tab_1_Sumstats.tex",  ///
 					cells("count(fmt(%12.0f)) mean(fmt(%12.2f)) sd(fmt(%12.2f)) min(fmt(%12.2f)) p50(fmt(%12.2f)) p95(fmt(%12.2f)) max(fmt(%12.2f))") label	title("Summary Statistics") noobs 	  replace
 					
-				summ	PFS_glm TFI_FIG if in_sample==1	&	income_below_200==1 & PFS_FI_glm==1 [aw=wgt_long_fam_adj],d
-				summ	PFS_glm TFI_FIG if in_sample==1	&	income_below_200==1	& PFS_FI_glm==1 & FS_rec_wth!=1 [aw=wgt_long_fam_adj],d // didn't receive SNAP
+				summ	PFS_glm SL_5 TFI_HCR CFI_HCR TFI_FIG CFI_FIG if in_sample==1	&	income_below_200==1 & PFS_FI_glm==1 [aw=wgt_long_fam_adj],d
+				summ	PFS_glm SL_5 TFI_HCR CFI_HCR TFI_FIG CFI_FIG if in_sample==1	&	income_below_200==1	& PFS_FI_glm==1 & FS_rec_wth!=1 [aw=wgt_long_fam_adj],d // didn't receive SNAP
 
 			
 				 x11101ll 	if in_sample==1	&	income_below_200==1	[aw=wgt_long_fam_adj]
