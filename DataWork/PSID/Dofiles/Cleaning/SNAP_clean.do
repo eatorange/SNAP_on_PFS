@@ -196,16 +196,16 @@
 	local	ind_agg			0	//	Aggregate individual-level variables across waves
 	local	fam_agg			0	//	Aggregate family-level variables across waves
 	local	ext_data		0	//	Prepare external data (CPI, TFP, etc.)
-	local	cr_panel		1	//	Create panel structure from ID variable
+	local	cr_panel		0	//	Create panel structure from ID variable
 		local	panel_view	0	//	Create an excel file showing the change of certain clan over time (for internal data-check only)
-	local	merge_data		1	//	Merge ind- and family- variables and import it into ID variable
+	local	merge_data		0	//	Merge ind- and family- variables and import it into ID variable
 		local	raw_reshape	1		//	Merge raw variables and reshape into long data (takes time)
 		local	add_clean	1		//	Do additional cleaning and import external data (CPI, TFP)
 		local	import_dta	1		//	Import aggregated variables into ID data. 
-	local	clean_vars		1	//	Clean variables and construct consistent variables
-	local	PFS_const		1	//	Construct PFS
-	local	FSD_construct	1	//	Construct FSD
-	local	IV_reg			0	//	Run IV-2SLS regression
+	local	clean_vars		0	//	Clean variables and construct consistent variables
+	local	PFS_const		0	//	Construct PFS
+	local	FSD_construct	0	//	Construct FSD
+	local	IV_reg			1	//	Run IV-2SLS regression
 	local	summ_stats		0	//	Generate summary statistics (will be moved to another file later)
 
 	
@@ -4843,34 +4843,12 @@
 			*/
 			
 			*	Specification test
-						
-				*	Individual IV test
-				*	The following specification/sample will be tested
-					*	Different endogenous variables
-						*	Participation only
-						*	Amount only
-						*	Participation and amount
-					*	Different IVs
-						*	Single IV
-							*	SSI
-							*	State control
-							*	Share of social expenditure only
-							*	Don't forget to interact SSI/expenditure with state control!
-						*	Double IV
-							*	SSI and state control
-							*	Share of social expenditure and state control
-					*	Different fixed effects
-						*	State FE only
-						*	Year FE only
-						*	State and year
-					*	Different samples
-						*	All Households
-						*	Households with monthly income less than 130%/200% of poverty line (SNAP income eligibility)
-
+			*	Specification Test to see which one has 1) valid 1st-stage F-test and (2) reasonable effect size.
+			*	(2022-9-13). Disable by default Turn it on when needed			
+			/*
 			{
 			
-			*	Individual IV test
-			*	The following specification/sample will be tested
+				*	The following specification/sample will be tested
 				*	Different endogenous variables
 					*	Participation only
 					*	Amount only
@@ -4894,16 +4872,8 @@
 		
 			
 			
-			*	Specification 
-			/*
-			local	endovar	FS_rec_amt_real // FS_rec_wth //    // 	//   FS_rec_amt_real //  			FS_rec_wth	//	 			
-			local	depvar	PFS_glm	//	foodexp_tot_inclFS_pc	//		//		//	SL_5	//		//		//	
-			local	IV		share_welfare_GDP_sl // SSI_GDP_sl   // year_01_03	int_share_GDP_sl_01_03	   //  year_01_03	int_share_GDP_sl_01_03 // i.major_control_cat //      	//	i.major_control_cat		//		//	SNAP_index_w	//		error_total
-			local	time	${macrovars}	// ${timevars}	// 		 	
-			local	sample	in_sample==1 & inrange(year,1977,2019)  & income_below_200==1 //
-			*/
 			
-					
+						
 			global	depvar	PFS_glm
 			global	endo1	FS_rec_wth
 			global	endo2	FS_rec_amt_real
@@ -5000,18 +4970,10 @@
 					label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
 					title(test specification 2nd)		replace		
 			
-			
-			
+			}
+			*/
 			 
-			/*
-			est	store	`IVname'_2nd
-			
-				
-				*	1st-stage
-				esttab	`IVname'_2nd	using "${SNAP_outRaw}/temp.csv", ///
-						cells(b(star fmt(%8.4f)) & se(fmt(2) par)) stats(N Fstat, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
-						title(PFS on FS amt)		replace	
-					*/	
+	
 						
 			}
 			
@@ -5027,8 +4989,8 @@
 			*	(2022-7-28) Note: the last benchmark model (SSI as single IV to instrument amount of FS benefit) tested was including "${statevars}" and excluding "lagged PFS"
 			*	But here I inclued "lagged PFS" as Chris suggested, and excluded "statevars" by my own decision. We can further test this specification with different IV/endogenous variable (political status didn't work still)
 			loc	depvar	PFS_glm
-			loc	endovar	FS_rec_wth	//		FS_rec_amt_real	//	FS_amt_realK	//	
-			loc	IV		errorrate_total	//	SSI_GDP_sl	year_01_03	int_SSI_GDP_sl_01_03	//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
+			loc	endovar	FS_rec_amt_real		//	FS_rec_wth		//	FS_amt_realK	//	
+			loc	IV		SSI_GDP_sl	year_01_03	int_SSI_GDP_sl_01_03	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
 			loc	IVname	SSI_macro
 			ivreg2 	`depvar'	${FSD_on_FS_X}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
 				if	in_sample==1 & inrange(year,1977,2019)  & income_below_200==1,	///
