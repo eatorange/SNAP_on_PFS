@@ -195,12 +195,12 @@
 	
 	local	ind_agg			0	//	Aggregate individual-level variables across waves
 	local	fam_agg			0	//	Aggregate family-level variables across waves
-	local	ext_data		0	//	Prepare external data (CPI, TFP, etc.)
+	local	ext_data		1	//	Prepare external data (CPI, TFP, etc.)
 	local	cr_panel		0	//	Create panel structure from ID variable
 		local	panel_view	0	//	Create an excel file showing the change of certain clan over time (for internal data-check only)
-	local	merge_data		0	//	Merge ind- and family- variables and import it into ID variable
-		local	raw_reshape	1		//	Merge raw variables and reshape into long data (takes time)
-		local	add_clean	1		//	Do additional cleaning and import external data (CPI, TFP)
+	local	merge_data		1	//	Merge ind- and family- variables and import it into ID variable
+		local	raw_reshape	0		//	Merge raw variables and reshape into long data (takes time)
+		local	add_clean	0		//	Do additional cleaning and import external data (CPI, TFP)
 		local	import_dta	1		//	Import aggregated variables into ID data. 
 	local	clean_vars		0	//	Clean variables and construct consistent variables
 	local	PFS_const		0	//	Construct PFS
@@ -2996,9 +2996,6 @@
 				assert	`zero_seqnum'	|	`invalid_mth'	if	_merge==1
 				drop	_merge
 				
-			
-			*	Import FSP error data
-			merge	m:1	rp_state year using "${SNAP_dtInt}/FSP_payment_error_rates",	nogen	keep(1 3)	 keepusing(errorrate*)
 			
 			*	Import income poverty line
 			merge	m:1	year famnum	using	"${SNAP_dtInt}/incomePL", nogen keep(1 3)
