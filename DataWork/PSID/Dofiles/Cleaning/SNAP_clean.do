@@ -1011,6 +1011,30 @@
 		*	State data with unique PSID code
 		*	This data will be merged with other data which has state name
 		
+		*	Citizen and state ideology (1960-2016, 2017 (government ideology only))
+			use	"${clouldfolder}/DataWork/State Ideology/stateideology_v2018.dta", clear
+			drop	if	mi(state)
+			
+			*	Fill in missing state name in later years
+			bys	state:	replace	statename	=	statename[_n+1]	if	mi(statename)
+			bys	state:	replace	statename	=	statename[_n-1]	if	mi(statename)
+
+			drop	state
+			rename	statename	state
+			
+			*	Merge statecode
+			merge	m:1	state using "${SNAP_dtRaw}/Statecode.dta"
+			assert	state=="Washington D.C." if _merge==2	//	Washington D.C. is missing
+			drop	if	_merge==2
+			drop	_merge
+			rename	statecode	rp_state
+			
+			*	Save
+			sort	rp_state	year
+			compress
+			save	"${SNAP_dtInt}/citizen_government_ideology",	replace
+			
+		
 		*	State GDP
 			
 			*	1976-1996
@@ -2965,8 +2989,6 @@
 			*	Import CPI data
 			merge	m:1	prev_yrmonth	using	"${SNAP_dtInt}/CPI_1947_2021", 	keep(1 3) keepusing(CPI)
 			
-			
-			
 				*	Validate merge
 				local	zero_seqnum	seqnum==0
 				local	invalid_mth	svy_month==0
@@ -2980,6 +3002,10 @@
 			
 			*	Import income poverty line
 			merge	m:1	year famnum	using	"${SNAP_dtInt}/incomePL", nogen keep(1 3)
+						
+			*	Import	state and government ideology data
+			merge	m:1	year	rp_state	using	"${SNAP_dtInt}/citizen_government_ideology", /*gen(merge2)*/ keep(1 3) keepusing(citi6016 inst6017_nom)
+			
 			
 			compress
 			save	"${SNAP_dtInt}/SNAP_Merged_long",	replace
@@ -4335,7 +4361,7 @@
 		local	depvar	e1_foodexp_sq_glm
 		
 		*	For now (2021-11-28) GLM in step 2 does not converge. Will use OLS for now.
-		*svy: glm 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	${foodvars}	${macrovars}	/*${regionvars}	${timevars}*/, family(gamma)	link(log)
+		svy: glm 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	${foodvars}	${macrovars}	/*${regionvars}	${timevars}*/, family(gamma)	link(log)
 		svy: reg 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}*/	${macrovars}	/*${regionvars}	${timevars}*/
 			
 		est store glm_step2
