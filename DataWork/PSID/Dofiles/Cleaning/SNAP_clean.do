@@ -193,19 +193,19 @@
 									49	"Wyoming"		50	"Alaska"			51	"Hawaii"	99	"DK/NA",	replace
 	}
 	
-	local	ind_agg			0	//	Aggregate individual-level variables across waves
-	local	fam_agg			0	//	Aggregate family-level variables across waves
+	local	ind_agg			1	//	Aggregate individual-level variables across waves
+	local	fam_agg			1	//	Aggregate family-level variables across waves
 	local	ext_data		1	//	Prepare external data (CPI, TFP, etc.)
-	local	cr_panel		0	//	Create panel structure from ID variable
+	local	cr_panel		1	//	Create panel structure from ID variable
 		local	panel_view	0	//	Create an excel file showing the change of certain clan over time (for internal data-check only)
 	local	merge_data		1	//	Merge ind- and family- variables and import it into ID variable
-		local	raw_reshape	0		//	Merge raw variables and reshape into long data (takes time)
-		local	add_clean	0		//	Do additional cleaning and import external data (CPI, TFP)
+		local	raw_reshape	1		//	Merge raw variables and reshape into long data (takes time)
+		local	add_clean	1		//	Do additional cleaning and import external data (CPI, TFP)
 		local	import_dta	1		//	Import aggregated variables into ID data. 
-	local	clean_vars		0	//	Clean variables and construct consistent variables
-	local	PFS_const		0	//	Construct PFS
-	local	FSD_construct	0	//	Construct FSD
-	local	IV_reg			1	//	Run IV-2SLS regression
+	local	clean_vars		1	//	Clean variables and construct consistent variables
+	local	PFS_const		1	//	Construct PFS
+	local	FSD_construct	1	//	Construct FSD
+	local	IV_reg			0	//	Run IV-2SLS regression
 	local	summ_stats		0	//	Generate summary statistics (will be moved to another file later)
 
 	
@@ -488,6 +488,15 @@
 		
 		*	Income
 		
+			*	RP labor income
+			loc	var	rp_laborinc
+			psid use || `var' [68]V74 [69]V514 [70]V1196 [71]V1897 [72]V2498 [73]V3051 [74]V3463 [75]V3863 [76]V5031 [77]V5627 [78]V6174 [79]V6767 [80]V7413 [81]V8066 [82]V8690 [83]V9376 [84]V11023 [85]V12372 [86]V13624 [87]V14671 [88]V16145 [89]V17534 [90]V18878 [91]V20178 [92]V21484 [93]V23323 [94]ER4140 [95]ER6980 [96]ER9231 [97]ER12080 [99]ER16463 [01]ER20443 [03]ER24116 [05]ER27931 [07]ER40921 [09]ER46829 [11]ER52237 [13]ER58038 [15]ER65216 [17]ER71293	[19]ER77315	///
+			using "${SNAP_dtRaw}/Unpacked" , keepnotes design(any) clear		
+			keep	x11101ll	`var'*
+			save	"${SNAP_dtInt}/Fam_vars/`var'", replace
+			
+			
+			
 			*	Total family income
 			loc	var	fam_income
 			psid use || `var' [68]V81 [69]V529 [70]V1514 [71]V2226 [72]V2852 [73]V3256 [74]V3676 [75]V4154 [76]V5029 [77]V5626 [78]V6173 [79]V6766 [80]V7412 [81]V8065 [82]V8689 [83]V9375 [84]V11022 [85]V12371 [86]V13623 [87]V14670 [88]V16144 [89]V17533 [90]V18875 [91]V20175 [92]V21481 [93]V23322 [94]ER4153 [95]ER6993 [96]ER9244 [97]ER12079 [99]ER16462 [01]ER20456 [03]ER24099 [05]ER28037 [07]ER41027 [09]ER46935 [11]ER52343 [13]ER58152 [15]ER65349 [17]ER71426 [19]ER77448	///
@@ -1029,11 +1038,60 @@
 			drop	_merge
 			rename	statecode	rp_state
 			
+			
 			*	Save
 			sort	rp_state	year
 			compress
 			save	"${SNAP_dtInt}/citizen_government_ideology",	replace
 			
+			*	Descriptive stats/figures
+
+				
+				*	By most & least conservative 
+				use	"${SNAP_dtInt}/citizen_government_ideology", clear
+				twoway	(line citi6016	year		if state=="Mississippi",	yaxis(1) lc(green) lp(solid) lwidth(medium) graphregion(fcolor(white)) legend(label(1 "Citizen (MI)")))		///
+						(line citi6016	year		if state=="Massachusetts", 	yaxis(1)  lc(blue) lp(dash) lwidth(medium) graphregion(fcolor(white)) legend(label(2 "Citizen (MA)")))		///
+						(line inst6017_nom	year	if state=="Idaho", 	yaxis(2) lc(purple) lp(dot) lwidth(medium) graphregion(fcolor(white)) legend(label(3 "Government (ID)")))	///
+						(line inst6017_nom	year	if state=="Hawaii", yaxis(2)	lc(red) lp(dashdot) lwidth(medium) graphregion(fcolor(white)) legend(label(4 "Government (ID)"))),	///
+						title("Citizen and state ideology") ytitle("Citizen score", axis(1)) ytitle("Govt score.rate", axis(2)) xtitle("year")
+				graph	export	"${SNAP_outRaw}/ideology_by_state.png", as(png) replace
+				graph	close
+				
+				
+				*	By year
+				use	"${SNAP_dtInt}/citizen_government_ideology", clear
+				collapse	citi6016 inst6017_nom, by(year)
+				merge	1:1	year	using	"${SNAP_dtInt}/Unemployment Rate_nation"
+				graph	twoway	(line citi6016	year, 	 yaxis(1) lc(green) lp(solid) lwidth(medium) graphregion(fcolor(white)) legend(label(1 "Citizen ideology")))		///
+								(line inst6017_nom	year, yaxis(1) 	 lc(blue) lp(dash) lwidth(medium) graphregion(fcolor(white)) legend(label(2 "Government ideology")))	///
+								(line unemp_rate	year, yaxis(2) lc(purple) lp(dot) lwidth(medium) graphregion(fcolor(white)) legend(label(3 "Uemployment Rate"))),	///
+								title("Times series of state/government ideology") ytitle("score", axis(1)) ytitle("Unemp.rate", axis(2)) xtitle("year") note(0 most conservative - 100 most liberal)
+				graph	export	"${SNAP_outRaw}/ideology_by_year.png", as(png) replace
+				graph	close	
+				
+				*	Correlation by specific PSID wave
+					
+					*	2015
+					use "E:\Box\US Food Security Dynamics\DataWork\PSID\DataSets\Raw\Main\fam2015er.dta", clear
+					gen	year=2015
+					rename	ER60003 rp_state
+					rename	ER60735	FS_rec_wth
+					recode	FS_rec_wth	(5=0)	(8 9=.)
+					tempfile psid2015
+					save	`psid2015'
+					
+					use	"${SNAP_dtInt}/citizen_government_ideology", clear
+					keep	if	year==2015
+					merge	1:m	year	rp_state	using	`psid2015', assert(2 3) keep(3) nogen keepusing(FS_rec_wth)
+				
+					*	Correlation
+					pwcorr FS_rec_wth citi6016 inst6017_nom, sig
+					
+					*	Bivariate regression
+					reg FS_rec_wth citi6016, robust
+					reg	FS_rec_wth	inst6017_nom, robust
+			
+				
 		
 		*	State GDP
 			
@@ -3516,6 +3574,12 @@
 			
 			label	var	`var'	"FS/SNAP amount received last month"
 			
+			*	FS amt received per capita
+			loc	var	FS_rec_amt_capita
+			cap	drop	`var'
+			gen	`var'	=	FS_rec_amt	/	famnum
+			lab	var	`var'	"FS/SNAP amount receive last month per capita"
+			
 			*	Quick summary stat
 			tab FS_rec_wth FS_rec_crtyr_wth if inrange(year,1999,2007)
 			tab FS_rec_wth if inrange(year,1999,2007) & FS_rec_crtyr_wth==1	//	FU that used FS this year, but not last month			
@@ -4643,10 +4707,22 @@
 	
 	*	IV regression
 	if	`IV_reg'==1	{
-		
+	
 		*	Weak IV test 
 		*	(2022-05-01) For now, we use IV to predict T(FS participation) and use it to predict W (food expenditure per capita) (previously I used it to predict PFS in the second stage)
 		use	"${SNAP_dtInt}/SNAP_long_FSD", clear
+		
+		
+			
+		*	(Corrlation and bivariate regression of stamp redemption with state/govt ideology)
+		pwcorr	FS_rec_wth	citi6016 inst6017_nom 	if	in_sample==1 & inrange(year,1977,2019)  & income_below_200==1,	sig
+		reg	FS_rec_wth	citi6016	[aw=wgt_long_fam_adj]	///
+					if	in_sample==1 & inrange(year,1977,2019)  & income_below_200==1,	///
+					robust	cluster(x11101ll) 
+		reg	FS_rec_wth	inst6017_nom	[aw=wgt_long_fam_adj]	///
+					if	in_sample==1 & inrange(year,1977,2019)  & income_below_200==1,	///
+					robust	cluster(x11101ll) 
+		
 		
 		*	Set globals
 		global	statevars		l2_foodexp_tot_inclFS_pc_1	l2_foodexp_tot_inclFS_pc_2 
@@ -4680,6 +4756,33 @@
 		lab	var	SNAP_index_uw 	"Unweighted SNAP index"
 		lab	var	SNAP_index_w 	"Weighted SNAP index"
 		
+		
+		
+		
+		*	Temporary create a copy of endogenous variable (name too long)
+		
+			*	FS amount per capita (this is included in the clean variable. I added here temporarily but can be erased.)
+			loc	var	FS_rec_amt_capita
+			cap	drop	`var'
+			gen	`var'	=	FS_rec_amt_real	/	famnum
+			lab	var	`var'	"FS/SNAP amount receive last month per capita"
+		
+			*	Other variables
+			cap	drop	FSdummy	FSamt	FSamtK
+			clonevar	FSdummy	=	FS_rec_wth
+			clonevar	FSamt	=	FS_rec_amt_real
+			clonevar	FSamt_capita	=	FS_rec_amt_capita
+			
+			gen			FSamtK	=	FSamt/1000
+			lab	var		FSamtK	"Stamp benefit (USD) (K)"
+			
+			cap	drop	FS_amt_real
+			cap	drop	FS_amt_realK
+			clonevar	FS_amt_real		=	FS_rec_amt_real
+			gen			FS_amt_realK	=	FS_rec_amt_real	/	1000
+			
+		
+	
 		*	Temporarily rescale SSI and share variables (0-1 to 1-100)
 		qui	ds	share_edu_exp_sl-SSI_GDP_s
 		
@@ -4707,11 +4810,6 @@
 		lab	define	major_control_cat	0	"Mixed"	1	"Demo control"	2	"Repub control"
 		lab	val		major_control_cat	major_control_cat
 		lab	var		major_control_cat	"State control"
-		
-		cap	drop	FS_amt_real
-		cap	drop	FS_amt_realK
-		clonevar	FS_amt_real		=	FS_rec_amt_real
-		gen			FS_amt_realK	=	FS_rec_amt_real	/	1000
 		
 		*	Temporary generate interaction variable
 		gen	int_SSI_exp_sl_01_03	=	SSI_exp_sl	*	year_01_03
@@ -4885,7 +4983,7 @@
 			*	Specification test
 			*	Specification Test to see which one has 1) valid 1st-stage F-test and (2) reasonable effect size.
 			*	(2022-9-13). Disable by default Turn it on when needed			
-			/*
+			
 			{
 			
 				*	The following specification/sample will be tested
@@ -4915,13 +5013,22 @@
 			
 						
 			global	depvar	PFS_glm
-			global	endo1	FS_rec_wth
-			global	endo2	FS_rec_amt_real
+			global	endo1	FSdummy
+			global	endo2	FSamt_capita
 			
+			 
+			
+			/*
 			global	IV1		SSI_GDP_sl
 			global	IV2		SSI_GDP_sl	year_01_03	int_SSI_GDP_sl_01_03	
 			global	IV3		share_welfare_GDP_sl
 			global	IV4		i.major_control_cat
+			*/
+			
+			global	IV1		share_welfare_GDP_sl	
+			global	IV2		SNAP_index_uw
+			global	IV3		SNAP_index_w
+			global	IV4		error_total
 			
 			global	st0
 			global	st1		${statevars}
@@ -4929,8 +5036,8 @@
 					
 			global	sp1		in_sample==1 & inrange(year,1977,2019)
 			global	sp2		in_sample==1 & inrange(year,1977,2019)  & income_below_200==1
-			global	sp3		in_sample==1 & inrange(year,1977,2019)	&	!inlist(year,2001,2003)
-			global	sp4		in_sample==1 & inrange(year,1977,2019)  & income_below_200==1	&	!inlist(year,2001,2003)
+			*global	sp3		in_sample==1 & inrange(year,1977,2019)	& !inlist(year,2001,2003)
+			*global	sp4		in_sample==1 & inrange(year,1977,2019)  & income_below_200==1	&	!inlist(year,2001,2003)
 			
 			global	FE0
 			global	FE1		${macrovars}
@@ -4947,9 +5054,9 @@
 
 
 			forval	endonum	=	1/1	{				
-				forval	IVnum	=	3/3	{
+				forval	IVnum	=	1/2	{
 					forval	stnum	=0/2	{
-						forval	spnum=1/4	{
+						forval	spnum=1/2	{
 							forval	FEnum=0/5	{
 								
 								loc	IVname	x`endonum'`IVnum'`stnum'`spnum'`FEnum'
@@ -5011,20 +5118,166 @@
 					title(test specification 2nd)		replace		
 			
 			}
-			*/
+			
 			 
 	
 						
 			}
 			
-			
-			*	Set the benchmark specification based on the test above.
+			*	Set up global			
 			global	FSD_on_FS_X	${statevars}	${demovars} ${econvars}	${healthvars}	${empvars}	///
 								${familyvars}	${eduvars} /*${regionvars}	${timevars}	*/		${macrovars}
 	
 			global	PFS_est_1st
 			global	PFS_est_2nd
-	
+			
+			
+			*	(2022-11-14) Test with SNAP index (using available data)
+			loc	IV						SNAP_index_uw	
+			loc	IVname					SNAP_index_uw
+			*loc	FS_rec_wth_name			FSdummy
+			*loc	FS_rec_amt_real_name	FSamt
+			
+			
+				foreach	endovar	in	FSdummy	FSamt	{
+					
+					loc	IV						SNAP_index_uw	
+					loc	IVname					SNAP_index_uw
+					loc	depvar	PFS_glm
+					*loc	endovar			FSdummy		//	FS_amt_realK	FS_rec_wth	//
+					ivreg2 	`depvar'	${FSD_on_FS_X}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+						if	in_sample==1 & inrange(year,1977,2019)  & income_below_200==1,	///
+						robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
+					est	store	`IVname'`endovar'_2nd
+					scalar	Fstat_CD	=	 e(cdf)
+					scalar	Fstat_KP	=	e(widstat)
+					
+					est	restore	`IVname'`endovar'
+					estadd	scalar	Fstat_CD	=	Fstat_CD, replace
+					estadd	scalar	Fstat_KP	=	Fstat_KP, replace
+					est	store	`IVname'`endovar'_1st
+					est	drop	`IVname'`endovar'
+										
+					global	PFS_est_1st	${PFS_est_1st}	`IVname'`endovar'_1st
+					global	PFS_est_2nd	${PFS_est_2nd}	`IVname'`endovar'_2nd
+				
+				}
+				
+				*	1st-stage
+				esttab	${PFS_est_1st}	using "${SNAP_outRaw}/PFS_IV_SNAPindex_1st.csv", ///
+						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+						title(PFS on FS amt)		replace	
+
+				*	2nd-stage
+				esttab	${PFS_est_2nd}	using "${SNAP_outRaw}/PFS_IV_SNAPindex_2nd.csv", ///
+						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+						title(PFS on FS amt)		replace		
+						
+				
+			
+			
+			*	SNAP error rate
+				loc	depvar	PFS_glm
+				loc	endovar		FS_rec_wth	//	FS_rec_amt_real		//	FS_amt_realK	//
+				loc	IV		error_total	
+				loc	IVname	error_total
+				ivreg2 	`depvar'	${FSD_on_FS_X}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+					if	in_sample==1 & inrange(year,1977,2019)  & income_below_200==1,	///
+					robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
+				est	store	`IVname'_2nd
+				scalar	Fstat_CD_`IVname'	=	 e(cdf)
+				scalar	Fstat_KP_`IVname'	=	e(widstat)
+				
+				est	restore	`IVname'`endovar'
+				estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
+				estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
+
+				est	store	`IVname'_1st
+				est	drop	`IVname'`endovar'
+									
+				global	PFS_est_1st	${PFS_est_1st}	`IVname'_1st
+				global	PFS_est_2nd	${PFS_est_2nd}	`IVname'_2nd
+			
+			*	(2022-10-13) Test with political ideology
+			
+				*	Citizen ideology only 
+				*	Weak IV result shows 
+					*	participation dummy: 11.9 (CD), 1.3(KP), very weak
+					*	amount redeemed: 17.9 (CD), 4.4 (KP), still weak
+				loc	depvar	PFS_glm
+				loc	endovar		FS_rec_wth	//	FS_rec_amt_real		//	FS_amt_realK	//
+				loc	IV		citi6016	
+				loc	IVname	citizen_ideo
+				ivreg2 	`depvar'	${FSD_on_FS_X}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+					if	in_sample==1 & inrange(year,1977,2019)  & income_below_200==1,	///
+					robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
+				est	store	`IVname'_2nd
+				scalar	Fstat_CD_`IVname'	=	 e(cdf)
+				scalar	Fstat_KP_`IVname'	=	e(widstat)
+				
+				est	restore	`IVname'`endovar'
+				estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
+				estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
+
+				est	store	`IVname'_1st
+				est	drop	`IVname'`endovar'
+									
+				global	PFS_est_1st	${PFS_est_1st}	`IVname'_1st
+				global	PFS_est_2nd	${PFS_est_2nd}	`IVname'_2nd
+				
+				*	Government ideology only 
+				*	Weak IV result shows
+					*	Participation dummy: 22.7 (CD), 3.4(KP), slightly stronger than the citizen ideology but still weak.
+					*	Amount redeemed: 18/8 (CD), 4.0 (KP), still weak.
+				loc	depvar	PFS_glm
+				loc	endovar	FS_rec_amt_real		//	FS_rec_wth	//		FS_amt_realK	//	
+				loc	IV		inst6017_nom	
+				loc	IVname	govt_ideo
+				ivreg2 	`depvar'	${FSD_on_FS_X}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+					if	in_sample==1 & inrange(year,1977,2019)  & income_below_200==1,	///
+					robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
+				est	store	`IVname'_2nd
+				scalar	Fstat_CD_`IVname'	=	 e(cdf)
+				scalar	Fstat_KP_`IVname'	=	e(widstat)
+				
+				est	restore	`IVname'`endovar'
+				estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
+				estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
+
+				est	store	`IVname'_1st
+				est	drop	`IVname'`endovar'
+									
+				global	PFS_est_1st	${PFS_est_1st}	`IVname'_1st
+				global	PFS_est_2nd	${PFS_est_2nd}	`IVname'_2nd
+			
+				
+				*	Both citizen and state ideology
+				*	Weak IV test is 11.9 (CD), 1.8 (KP), still weak
+				loc	depvar	PFS_glm
+				loc	endovar	FS_rec_wth	//	FS_rec_amt_real		//	FS_amt_realK	//	
+				loc	IV		citi6016	inst6017_nom	
+				loc	IVname	citiz_govt_ideo
+				ivreg2 	`depvar'	${FSD_on_FS_X}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+					if	in_sample==1 & inrange(year,1977,2019)  & income_below_200==1,	///
+					robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
+				est	store	`IVname'_2nd
+				scalar	Fstat_CD_`IVname'	=	 e(cdf)
+				scalar	Fstat_KP_`IVname'	=	e(widstat)
+				
+				est	restore	`IVname'`endovar'
+				estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
+				estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
+
+				est	store	`IVname'_1st
+				est	drop	`IVname'`endovar'
+									
+				global	PFS_est_1st	${PFS_est_1st}	`IVname'_1st
+				global	PFS_est_2nd	${PFS_est_2nd}	`IVname'_2nd
+			
+			
+					
+			*	Set the benchmark specification based on the test above.
+			
 			*	Benchmark specification
 			*	(2022-7-28) Note: the last benchmark model (SSI as single IV to instrument amount of FS benefit) tested was including "${statevars}" and excluding "lagged PFS"
 			*	But here I inclued "lagged PFS" as Chris suggested, and excluded "statevars" by my own decision. We can further test this specification with different IV/endogenous variable (political status didn't work still)
@@ -5048,6 +5301,34 @@
 								
 			global	PFS_est_1st	${PFS_est_1st}	`IVname'_1st
 			global	PFS_est_2nd	${PFS_est_2nd}	`IVname'_2nd
+			
+			
+			*	(2022-11-15) Add SNAP (weighted) policy index to the benchmark specification.
+			loc	depvar	PFS_glm
+			loc	endovar	FS_rec_wth	//	FS_rec_amt_real		//	FS_amt_realK	//	
+			loc	IV		SNAP_index_w	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
+			loc	IVname	index_w
+			ivreg2 	`depvar'	${FSD_on_FS_X}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+				if	in_sample==1 & inrange(year,1977,2019)  & income_below_200==1,	///
+				robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
+			est	store	`IVname'_2nd
+			scalar	Fstat_CD_`IVname'	=	 e(cdf)
+			scalar	Fstat_KP_`IVname'	=	e(widstat)
+			
+			est	restore	`IVname'`endovar'
+			estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
+			estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
+
+			est	store	`IVname'_1st
+			est	drop	`IVname'`endovar'
+								
+			global	PFS_est_1st	${PFS_est_1st}	`IVname'_1st
+			global	PFS_est_2nd	${PFS_est_2nd}	`IVname'_2nd
+			
+			
+			
+			*	Testing political ideology
+			
 			
 				*	Add dynamic effects.
 				*	First, predict FS amount received
