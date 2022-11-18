@@ -4338,12 +4338,12 @@
 		*	Set globals
 		global	statevars		l2_foodexp_tot_exclFS_pc_1_real l2_foodexp_tot_exclFS_pc_2_real	//	l2_foodexp_tot_exclFS_pc_1_real l2_foodexp_tot_exclFS_pc_2_real  * Need to use real value later
 		global	demovars		rp_age rp_age_sq	rp_nonWhte	rp_married	rp_female	
-		global	econvars		ln_fam_income_pc	ln_fam_income_pc	//	ln_fam_income_pc_real   * Need to use real value later
+		global	econvars		ln_fam_income_pc	//	ln_fam_income_pc_real   * Need to use real value later
 		global	healthvars		rp_disabled
 		global	familyvars		famnum	ratio_child
 		global	empvars			rp_employed
 		global	eduvars			rp_NoHS rp_somecol rp_col
-		// global	foodvars		FS_rec_wth	//	Should I use prected FS redemption from 1st-stage IV?, or even drop it for exclusion restriction?
+		global	foodvars		FS_rec_wth	//	Should I use prected FS redemption from 1st-stage IV?, or even drop it for exclusion restriction?
 		global	macrovars		unemp_rate	CPI
 		global	regionvars		rp_state_enum1-rp_state_enum31 rp_state_enum33-rp_state_enum50 	//	Excluding NY (rp_state_enum32) and outside 48 states (1, 52, 53). The latter should be excluded when running regression
 		global	timevars		year_enum3-year_enum30 //	Exclude year_enum2 as base category
@@ -4481,29 +4481,36 @@
 		*	Regress PFS on characteristics
 		use    "${SNAP_dtInt}/SNAP_long_PFS",	clear	
 		
-			*	PFS, without region FE
 			local	depvar	PFS_glm
 			
-			svy, subpop(if !mi(PFS_glm)):	///
+			*	Without region FE, without SNAP redemption, without macroeconomic status
+			svy, subpop(if !mi(PFS_glm) & income_below_200==1):	///
 				reg	`depvar'	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}	${macrovars}*/
 			est	store	PFS_base	
 			
-			svy, subpop(if !mi(PFS_glm)):	///
+			*	Add SNAP redemption dummy
+			svy, subpop(if !mi(PFS_glm) & income_below_200==1):	///
 				reg	`depvar'	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	${foodvars}		/*${macrovars}	*/
 			est	store	PFS_FS	
 			
-			svy, subpop(if !mi(PFS_glm)):	///
+			*	Add macroeconomic status
+			svy, subpop(if !mi(PFS_glm) & income_below_200==1):	///
 				reg	`depvar'	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	${foodvars}	${macrovars}					
 			est	store	PFS_FS_macro
 			
+			*	Add state FE
+			svy, subpop(if !mi(PFS_glm) & income_below_200==1):	///
+				reg	`depvar'	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	${foodvars}	${macrovars}	${regionvars}				
+			est	store	PFS_FS_stateFE
+			
 		*	Food Security Indicators and Their Correlates (Table 4 of 2020/11/16 draft)
-			esttab	PFS_base	PFS_FS	PFS_FS_macro	using "${SNAP_outRaw}/Tab_3_PFS_association.csv", ///
-					cells(b(star fmt(3)) se(fmt(2) par)) stats(N_sub r2) label legend nobaselevels star(* 0.10 ** 0.05 *** 0.01)	/*drop(_cons)*/	///
+			esttab	PFS_base	PFS_FS	PFS_FS_macro	PFS_FS_stateFE	using "${SNAP_outRaw}/Tab_3_PFS_association.csv", ///
+					cells(b(star fmt(3)) se(fmt(2) par)) stats(N_sub r2) label legend nobaselevels star(* 0.10 ** 0.05 *** 0.01)	drop(rp_state_enum*)	///
 					title(Effect of Correlates on Food Security Status) replace
 					
 					
-			esttab	PFS_base	PFS_FS	PFS_FS_macro	using "${SNAP_outRaw}/Tab_3_PFS_association.tex", ///
-					cells(b(star fmt(3)) & se(fmt(2) par)) stats(N_sub r2) incelldelimiter() label legend nobaselevels star(* 0.10 ** 0.05 *** 0.01)	/*drop(_cons)*/		///
+			esttab	PFS_base	PFS_FS	PFS_FS_macro	PFS_FS_stateFE	using "${SNAP_outRaw}/Tab_3_PFS_association.tex", ///
+					cells(b(star fmt(3)) & se(fmt(2) par)) stats(N_sub r2) incelldelimiter() label legend nobaselevels star(* 0.10 ** 0.05 *** 0.01)	drop(rp_state_enum*)	///
 					/*cells(b(nostar fmt(%8.3f)) & se(fmt(2) par)) stats(N_sub r2, fmt(%8.0fc %8.3fc)) incelldelimiter() label legend nobaselevels /*nostar star(* 0.10 ** 0.05 *** 0.01)*/	/*drop(_cons)*/	*/	///
 					title(Effect of Correlates on Food Security Status) replace
 		
@@ -4711,8 +4718,6 @@
 		*	Weak IV test 
 		*	(2022-05-01) For now, we use IV to predict T(FS participation) and use it to predict W (food expenditure per capita) (previously I used it to predict PFS in the second stage)
 		use	"${SNAP_dtInt}/SNAP_long_FSD", clear
-		
-		
 			
 		*	(Corrlation and bivariate regression of stamp redemption with state/govt ideology)
 		pwcorr	FS_rec_wth	citi6016 inst6017_nom 	if	in_sample==1 & inrange(year,1977,2019)  & income_below_200==1,	sig
@@ -4799,7 +4804,7 @@
 		replace	l2_foodexp_tot_inclFS_pc_2	=	l2_foodexp_tot_inclFS_pc_2/1000
 		
 		lab	var	rp_age_sq	"Age(RP)$^2$/1000"
-		lab	var	l2_foodexp_tot_inclFS_pc_2		"Food exp in t-2 (K)"
+		lab	var	l2_foodexp_tot_inclFS_pc_2		"(Food Exp in t-2)$^2$ (K)"
 		
 		*	Temporary generate state control categorical variable
 		cap	drop	major_control_cat
@@ -4823,7 +4828,9 @@
 		lab	var	int_SSI_GDP_sl_01_03	"SSI X {2001_2003}"
 		lab	var	int_share_GDP_sl_01_03	"Social expenditure share X {2001_2003}"
 		
-			
+		
+		*	Mean PFS in the sample
+		
 		*	Regression test
 		*	For now we test 4 models
 			*	(1) Political vars and state-level SSI, without FE
@@ -5124,7 +5131,7 @@
 			 
 	
 						
-			}
+			
 			
 			*	Set up global			
 			global	FSD_on_FS_X	${statevars}	${demovars} ${econvars}	${healthvars}	${empvars}	///
@@ -5135,11 +5142,12 @@
 			
 			
 			*	(2022-11-14) Test with SNAP index (using available data)
-			loc	IV						SNAP_index_uw	
+			loc	IV						SSI_GDP_sl	year_01_03	int_SSI_GDP_sl_01_03	//	SNAP_index_uw	
 			loc	IVname					SNAP_index_uw
 			*loc	FS_rec_wth_name			FSdummy
 			*loc	FS_rec_amt_real_name	FSamt
 			
+				
 			
 				foreach	endovar	in	FSdummy	FSamt	{
 					
@@ -5147,7 +5155,7 @@
 					loc	IVname					SNAP_index_uw
 					loc	depvar	PFS_glm
 					*loc	endovar			FSdummy		//	FS_amt_realK	FS_rec_wth	//
-					ivreg2 	`depvar'	${FSD_on_FS_X}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+					ivreg2 	`depvar'	${FSD_on_FS_X}	(`endovar'	=	`IV') 	[aw=wgt_long_fam_adj]	///
 						if	in_sample==1 & inrange(year,1977,2019)  & income_below_200==1,	///
 						robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
 					est	store	`IVname'`endovar'_2nd
@@ -5505,7 +5513,8 @@
 				
 				*	Social spending				
 				loc	depvar		PFS_glm
-				loc	endovar		FSdummy	//	FSamt_capita
+				loc	endovar		FSamt_capita	//	FSdummy	//
+				loc	endovarname	amtcap	//	dummy	// 
 				loc	IV			SSI_GDP_sl	year_01_03	int_SSI_GDP_sl_01_03	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
 				loc	IVname		SSI
 				
@@ -5515,14 +5524,14 @@
 						reg		`depvar'	`endovar'	${FSD_on_FS_X}	[aw=wgt_long_fam_adj]	///
 							if	in_sample==1 & inrange(year,1977,2019)  & income_below_200==1,	///
 						robust	cluster(x11101ll) // first savefirst savefprefix(`IVname')
-						est	store	`IVname'_nofe_ols
+						est	store	`IVname'_`endovarname'_nofe_ols
 							
 						
 						*	With state FE
 						reg		`depvar'	`endovar'	${FSD_on_FS_X}	${regionvars}	[aw=wgt_long_fam_adj]	///
 							if	in_sample==1 & inrange(year,1977,2019)  & income_below_200==1,	///
 						robust	cluster(x11101ll) // first savefirst savefprefix(`IVname')
-						est	store	`IVname'_fe_ols
+						est	store	`IVname'_`endovarname'_fe_ols
 						
 								
 					*	IV
@@ -5530,7 +5539,7 @@
 							ivreg2 	`depvar'	${FSD_on_FS_X}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
 								if	in_sample==1 & inrange(year,1977,2019)  & income_below_200==1,	///
 								robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
-							est	store	`IVname'_IV_nofe_2nd
+							est	store	`IVname'_`endovarname'_nofe_IV_2nd
 							scalar	Fstat_CD_`IVname'	=	 e(cdf)
 							scalar	Fstat_KP_`IVname'	=	e(widstat)
 						
@@ -5538,7 +5547,7 @@
 							estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
 							estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
 
-							est	store	`IVname'_nofe_IV_1st
+							est	store	`IVname'_`endovarname'_nofe_IV_1st
 							est	drop	`IVname'`endovar'
 												
 							*global	PFS_est_1st	${PFS_est_1st}	`IVname'_1st
@@ -5547,15 +5556,17 @@
 						
 							*	Add dynamic effects.
 							*	First, predict FS amount received
-							est restore `IVname'_nofe_IV_1st
-							cap	drop	FS_wth_PFS_hat
-							predict 	FS_wth_PFS_hat, xb
-							lab	var		FS_wth_PFS_hat	"Predicted FS dummy received last month"
+							est restore `IVname'_`endovarname'_nofe_IV_1st
+							cap	drop	FS_`IVname'_`endovarname'_hat
+							predict 	FS_`IVname'_`endovarname'_hat, xb
+							
+							cap	lab	var		FS_`IVname'_dummy_hat	"Predicted FS dummy received last month"
+							cap	lab	var		FS_`IVname'_amtcap_hat	"Predicted FS amount received last month per capita"
 					
 							*	Now, regress 2nd stage, including FS across multiple periods
-							reg	PFS_glm FS_wth_PFS_hat	l2.FS_wth_PFS_hat	${FSD_on_FS_X}	[aw=wgt_long_fam_adj]	///
+							reg	PFS_glm FS_`IVname'_`endovarname'_hat	l2.FS_`IVname'_`endovarname'_hat	${FSD_on_FS_X}	[aw=wgt_long_fam_adj]	///
 										if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) // first savefirst savefprefix(`IVname')
-							est	store	`IVname'_dyn_X_nofe_2nd
+							est	store	`IVname'_`endovarname'_hat_dyn_nofe
 						
 							*global	PFS_est_2nd	${PFS_est_2nd}	PFS_dyn_X_2nd
 					
@@ -5564,7 +5575,7 @@
 							ivreg2 	`depvar'	${FSD_on_FS_X}	${regionvars}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
 								if	in_sample==1 & inrange(year,1977,2019)  & income_below_200==1,	///
 								robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
-							est	store	`IVname'_IV_fe_2nd
+							est	store	`IVname'_`endovarname'_fe_IV_2nd
 							scalar	Fstat_CD_`IVname'	=	 e(cdf)
 							scalar	Fstat_KP_`IVname'	=	e(widstat)
 						
@@ -5572,7 +5583,7 @@
 							estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
 							estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
 
-							est	store	`IVname'_fe_IV_1st
+							est	store	`IVname'_`endovarname'_fe_IV_1st
 							est	drop	`IVname'`endovar'
 												
 							*global	PFS_est_1st	${PFS_est_1st}	`IVname'_1st
@@ -5581,20 +5592,24 @@
 						
 							*	Add dynamic effects.
 							*	First, predict FS amount received
-							est restore `IVname'_fe_IV_1st
-							cap	drop	FS_wth_PFS_hat
-							predict 	FS_wth_PFS_hat, xb
-							lab	var		FS_wth_PFS_hat	"Predicted FS dummy received last month"
+							est restore `IVname'_`endovarname'_fe_IV_1st
+							cap	drop	FS_`IVname'_`endovarname'_hat
+							predict 	FS_`IVname'_`endovarname'_hat, xb
+							
+							cap	lab	var		FS_`IVname'_dummy_hat	"Predicted FS dummy received last month"
+							cap	lab	var		FS_`IVname'_amtcap_hat	"Predicted FS amount received last month per capita"
 					
 							*	Now, regress 2nd stage, including FS across multiple periods
-							reg	PFS_glm FS_wth_PFS_hat	l2.FS_wth_PFS_hat	${FSD_on_FS_X}	${regionvars}	[aw=wgt_long_fam_adj]	///
+							reg	PFS_glm FS_`IVname'_`endovarname'_hat	l2.FS_`IVname'_`endovarname'_hat	${FSD_on_FS_X}	${regionvars}	[aw=wgt_long_fam_adj]	///
 										if	in_sample==1 & inrange(year,1977,2019)	 & income_below_200==1,	robust	cluster(x11101ll) // first savefirst savefprefix(`IVname')
-							est	store	`IVname'_dyn_X_fe_2nd
+							est	store	`IVname'_`endovarname'_hat_dyn_fe
 						
 				
+				/*
 				*	SNAP index (1996-2015)		
 				loc	depvar	PFS_glm
-				loc	endovar	FSdummy	//	FSamt_capita	//	
+				loc	endovar		FSdummy	//	FSamt_capita
+				loc	endovarname	dummy	// amtcap
 				loc	IV		SNAP_index_w
 				loc	IVname	index
 				
@@ -5604,13 +5619,13 @@
 						reg		`depvar'	`endovar'	${FSD_on_FS_X}	[aw=wgt_long_fam_adj]	///
 							if	in_sample==1 & inrange(year,1996,2015)  & income_below_200==1,	///
 						robust	cluster(x11101ll) // first savefirst savefprefix(`IVname')
-						est	store	`IVname'_nofe_ols
+						est	store	`IVname'_`endovarname'_nofe_ols
 												
 						*	With state FE
 						reg		`depvar'	`endovar'	${FSD_on_FS_X}	${regionvars}	[aw=wgt_long_fam_adj]	///
 							if	in_sample==1 & inrange(year,1996,2015)   & income_below_200==1,	///
 						robust	cluster(x11101ll) // first savefirst savefprefix(`IVname')
-						est	store	`IVname'_fe_ols
+						est	store	`IVname'_`endovarname'_fe_ols
 						
 								
 					*	IV
@@ -5619,7 +5634,7 @@
 							ivreg2 	`depvar'	${FSD_on_FS_X}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
 								if	in_sample==1 & inrange(year,1996,2015)   & income_below_200==1,	///
 								robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
-							est	store	`IVname'_IV_nofe_2nd
+							est	store	`IVname'_`endovarname'_IV_nofe_2nd
 							scalar	Fstat_CD_`IVname'	=	 e(cdf)
 							scalar	Fstat_KP_`IVname'	=	e(widstat)
 						
@@ -5627,7 +5642,7 @@
 							estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
 							estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
 
-							est	store	`IVname'_nofe_IV_1st
+							est	store	`IVname'_`endovarname'_IV_nofe_1st
 							est	drop	`IVname'`endovar'
 												
 							*global	PFS_est_1st	${PFS_est_1st}	`IVname'_1st
@@ -5636,15 +5651,18 @@
 						
 							*	Add dynamic effects.
 							*	First, predict FS amount received
-							est restore `IVname'_nofe_IV_1st
-							cap	drop	FS_wth_PFS_hat
-							predict 	FS_wth_PFS_hat, xb
-							lab	var		FS_wth_PFS_hat	"Predicted FS dummy received last month"
+							est restore `IVname'_`endovarname'_IV_nofe_1st
+							cap	drop	FS_`IVname'_`endovarname'_hat
+							predict 	FS_`IVname'_`endovarname'_hat, xb
+							
+							cap	lab	var		FS_`IVname'_dummy_hat	"Predicted FS dummy received last month"
+							cap	lab	var		FS_`IVname'_amtcap_hat	"Predicted FS amount received last month per capita"
+					
 					
 							*	Now, regress 2nd stage, including FS across multiple periods
 							reg	PFS_glm FS_wth_PFS_hat	l2.FS_wth_PFS_hat	${FSD_on_FS_X}	[aw=wgt_long_fam_adj]	///
 										if	in_sample==1 & inrange(year,1996,2015)	 & income_below_200==1,	robust	cluster(x11101ll) // first savefirst savefprefix(`IVname')
-							est	store	`IVname'_dyn_X_nofe_2nd
+							est	store	`IVname'_`endovarname'_hat_dyn_nofe
 						
 							*global	PFS_est_2nd	${PFS_est_2nd}	PFS_dyn_X_2nd
 					
@@ -5653,7 +5671,7 @@
 							ivreg2 	`depvar'	${FSD_on_FS_X}	${regionvars}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
 								if	in_sample==1 & inrange(year,1996,2015)   & income_below_200==1,	///
 								robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
-							est	store	`IVname'_IV_fe_2nd
+							est	store	`IVname'_`endovarname'_IV_fe_2nd
 							scalar	Fstat_CD_`IVname'	=	 e(cdf)
 							scalar	Fstat_KP_`IVname'	=	e(widstat)
 						
@@ -5661,7 +5679,7 @@
 							estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
 							estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
 
-							est	store	`IVname'_fe_IV_1st
+							est	store	`IVname'_`endovarname'_IV_fe_1st
 							est	drop	`IVname'`endovar'
 												
 							*global	PFS_est_1st	${PFS_est_1st}	`IVname'_1st
@@ -5670,16 +5688,20 @@
 						
 							*	Add dynamic effects.
 							*	First, predict FS amount received
-							est restore `IVname'_fe_IV_1st
-							cap	drop	FS_wth_PFS_hat
-							predict 	FS_wth_PFS_hat, xb
-							lab	var		FS_wth_PFS_hat	"Predicted FS dummy received last month"
+							est restore	`IVname'_`endovarname'_IV_fe_1st
+							cap	drop	FS_`IVname'_`endovarname'_hat
+							predict 	FS_`IVname'_`endovarname'_hat, xb
+							
+							cap	lab	var		FS_`IVname'_dummy_hat	"Predicted FS dummy received last month"
+							cap	lab	var		FS_`IVname'_amtcap_hat	"Predicted FS amount received last month per capita"
 					
 							*	Now, regress 2nd stage, including FS across multiple periods
-							reg	PFS_glm FS_wth_PFS_hat	l2.FS_wth_PFS_hat	${FSD_on_FS_X}	${regionvars}	[aw=wgt_long_fam_adj]	///
+							reg	PFS_glm FS_`IVname'_`endovarname'_hat	l2.FS_`IVname'_`endovarname'_hat	${FSD_on_FS_X}	${regionvars}	[aw=wgt_long_fam_adj]	///
 										if	in_sample==1 & inrange(year,1996,2015)  & income_below_200==1,	robust	cluster(x11101ll) // first savefirst savefprefix(`IVname')
-							est	store	`IVname'_dyn_X_fe_2nd
-						
+							est	store	`IVname'_`endovarname'_hat_dyn_fe
+					*/
+				
+				
 				/*
 				*	Both SSI and index
 				loc	depvar	PFS_glm
@@ -5739,25 +5761,47 @@
 							
 							*	1st stage (SSI with and w/o FE, index with and w/o FE, all with and w/o FE)
 							
-								esttab	SSI_nofe_IV_1st	SSI_fe_IV_1st	index_nofe_IV_1st	index_fe_IV_1st	/*SSI_index_nofe_IV_1st	SSI_index_fe_IV_1st*/	using "${SNAP_outRaw}/PFS_SSI_index_IV_1st_new.csv", ///
-								cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
-								title(PFS on FS dummy)		replace	
-								
-								esttab	SSI_nofe_IV_1st	SSI_fe_IV_1st	index_nofe_IV_1st	index_fe_IV_1st	/*SSI_index_nofe_IV_1st	SSI_index_fe_IV_1st*/	using "${SNAP_outRaw}/PFS_SSI_index_IV_1st_new.tex", ///
-								cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
-								title(PFS on FS dummy)		replace	
+									*	Participation dummy
+									esttab	SSI_dummy_nofe_IV_1st	SSI_dummy_fe_IV_1st	/*index_nofe_IV_1st	index_fe_IV_1st*/	/*SSI_index_nofe_IV_1st	SSI_index_fe_IV_1st*/	using "${SNAP_outRaw}/PFS_SSI_dummy_IV_1st_new.csv", ///
+									cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+									title(PFS on FS dummy)		replace	
+									
+									esttab	SSI_dummy_nofe_IV_1st	SSI_dummy_fe_IV_1st	/*index_nofe_IV_1st	index_fe_IV_1st*/	/*SSI_index_nofe_IV_1st	SSI_index_fe_IV_1st*/	using "${SNAP_outRaw}/PFS_SSI_dummy_IV_1st_new.tex", ///
+									cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+									title(PFS on FS dummy)		replace	
+									
+									*	Amount redeemed
+									esttab	SSI_amtcap_nofe_IV_1st	SSI_amtcap_fe_IV_1st	/*index_nofe_IV_1st	index_fe_IV_1st*/	/*SSI_index_nofe_IV_1st	SSI_index_fe_IV_1st*/	using "${SNAP_outRaw}/PFS_SSI_amt_IV_1st_new.csv", ///
+									cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+									title(PFS on FS dummy)		replace	
+									
+									esttab	SSI_amtcap_nofe_IV_1st	SSI_amtcap_fe_IV_1st	/*index_nofe_IV_1st	index_fe_IV_1st*/	/*SSI_index_nofe_IV_1st	SSI_index_fe_IV_1st*/	using "${SNAP_outRaw}/PFS_SSI_amt_IV_1st_new.tex", ///
+									cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+									title(PFS on FS dummy)		replace	
 							
 							*	2nd stage (OLS with and w/o FE, IV with and w/o FE)
 								
 								*	SSI
-								esttab	SSI_nofe_ols	SSI_fe_ols	SSI_IV_nofe_2nd	SSI_IV_fe_2nd	using "${SNAP_outRaw}/PFS_SSI_ols_IV_new.csv", ///
-								cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
-								title(PFS on FS dummy)		replace	
-								
-								esttab	SSI_nofe_ols	SSI_fe_ols	SSI_IV_nofe_2nd	SSI_IV_fe_2nd	using "${SNAP_outRaw}/PFS_SSI_ols_IV_new.tex", ///
-								cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
-								title(PFS on FS dummy)		replace	
-				
+									
+									* Participation dummy
+									esttab	SSI_dummy_nofe_ols	SSI_dummy_fe_ols	SSI_dummy_nofe_IV_2nd	SSI_dummy_fe_IV_2nd	using "${SNAP_outRaw}/PFS_SSI_dummy_ols_IV_new.csv", ///
+									cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+									title(PFS on FS dummy)		replace	
+									
+									esttab	SSI_dummy_nofe_ols	SSI_dummy_fe_ols	SSI_dummy_IV_nofe_2nd	SSI_dummy_IV_fe_2nd	using "${SNAP_outRaw}/PFS_SSI_dummy_ols_IV_new.tex", ///
+									cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+									title(PFS on FS dummy)		replace	
+									
+									*	Amount redeemed
+									esttab	SSI_amtcap_nofe_ols	SSI_amtcap_fe_ols	SSI_amtcap_nofe_IV_2nd	SSI_amtcap_fe_IV_2nd	using "${SNAP_outRaw}/PFS_SSI_amt_ols_IV_new.csv", ///
+									cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+									title(PFS on FS dummy)		replace	
+									
+									esttab	SSI_amtcap_nofe_ols	SSI_amtcap_fe_ols	SSI_amtcap_nofe_IV_2nd	SSI_amtcap_fe_IV_2nd	using "${SNAP_outRaw}/PFS_SSI_amt_ols_IV_new.tex", ///
+									cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+									title(PFS on FS dummy)		replace	
+									
+								/*
 								*	SNAP index
 								esttab	index_nofe_ols	index_fe_ols	index_IV_nofe_2nd	index_IV_fe_2nd	using "${SNAP_outRaw}/PFS_index_ols_IV_new.csv", ///
 								cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
@@ -5766,6 +5810,8 @@
 								esttab	index_nofe_ols	index_fe_ols	index_IV_nofe_2nd	index_IV_fe_2nd	using "${SNAP_outRaw}/PFS_index_ols_IV_new.tex", ///
 								cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
 								title(PFS on FS dummy)		replace	
+								*/
+								
 								
 								/*
 								*	Both SSI and index 
@@ -5777,6 +5823,36 @@
 								cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
 								title(PFS on FS dummy)		replace	
 								*/
+								
+								*	Tables in the draft
+									
+									*	Weak IV table
+										*	(1) IV=SSI, endo = FS dummy, no FE
+										*	(2) IV=SSI, endo = FS amt, no FE
+									esttab	SSI_dummy_nofe_IV_1st	SSI_amtcap_nofe_IV_1st	using "${SNAP_outRaw}/PFS_SSI_weakIV_new.csv", ///
+									cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+									title(WeakIV_SSI)		replace	
+									
+									esttab	SSI_dummy_nofe_IV_1st	SSI_amtcap_nofe_IV_1st	using "${SNAP_outRaw}/PFS_SSI_weakIV_new.tex", ///
+									cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+									title(WeakIV_SSI)		replace	
+									
+									*	2nd-stage table on PFS
+										*	(1) OLS, FS dummy, no FE
+										*	(2) IV, FS dummy, no FE
+										*	(3) IV, FS dummy, no FE, dyn
+										*	(4) OLS, FS amount, no FE
+										*	(5) IV, FS amount, no FE
+										*	(6) IV, FS amount, no FE, dyn
+									
+									esttab	SSI_dummy_nofe_ols	SSI_dummy_nofe_IV_2nd	SSI_dummy_hat_dyn_nofe	SSI_amtcap_nofe_ols	SSI_amtcap_nofe_IV_2nd	SSI_amtcap_hat_dyn_nofe	using "${SNAP_outRaw}/PFS_SSI_2nd_new.csv", ///
+									cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+									title(WeakIV_SSI)		replace	
+									
+									esttab	SSI_dummy_nofe_ols	SSI_dummy_nofe_IV_2nd	SSI_dummy_hat_dyn_nofe	SSI_amtcap_nofe_ols	SSI_amtcap_nofe_IV_2nd	SSI_amtcap_hat_dyn_nofe	using "${SNAP_outRaw}/PFS_SSI_2nd_new.tex", ///
+									cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+									title(WeakIV_SSI)		replace	
+								
 							
 								
 			/*
@@ -5837,12 +5913,16 @@
 				clonevar	CFI1=CFI_FIG
 				clonevar	CFI2=CFI_SFIG
 				
+				cap	drop	FSamt_capita_K
+				gen	FSamt_capita_K	=	FSamt_capita / 1000
+				lab	var	FSamt_capita_K	"FS amount per capita (K)"
+				
 				*	Choose which endogeneous variable/IV to use
 				*	Make sure to turn on/off both variable and associated names.
-				global	endovar	FSdummy	//	participation dummy
-					global	endovarname	dummy
-				*global	endovar	FSamt_capita	//	amount received per capita
-				*	global	endovarname	amtcap
+				*global	endovar	FSdummy	//	participation dummy
+				*	global	endovarname	dummy
+				global	endovar	FSamt_capita_K	//	amount received per capita
+					global	endovarname	amtcap
 				
 				global	IV	SSI_GDP_sl	year_01_03	int_SSI_GDP_sl_01_03	//	SSI
 					global	IVname SSI
@@ -5905,7 +5985,7 @@
 					estadd	scalar	Fstat	=	Fstat_`model', replace
 					est	store	${depvar}_${endovarname}_${IVname}_noFE_1st
 					est	drop	`model'${endovar}
-					
+
 						*	Dynamic model (including FS amount from multiple periods)
 						*	We will do this manually
 						*	First, predict FS amount from the first stage.
@@ -5971,17 +6051,17 @@
 							cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
 							title(${depvar} on ${endovarname}_${IVname}_2nd)		replace
 							
-					*	Exporting relevant models only (FE-1st, FE-2nd, FE-dyn-2nd) for ppt
-					esttab	${depvar}_${endovarname}_${IVname}_FE_1st		///
-							${depvar}_${endovarname}_${IVname}_FE_2nd		${depvar}_${endovarname}_${IVname}_dyn_FE	///
+					*	Exporting relevant models only (noFE-1st, noFE-2nd, noFE-dyn-2nd) for ppt
+					esttab	${depvar}_${endovarname}_${IVname}_noFE_1st		///
+							${depvar}_${endovarname}_${IVname}_noFE_2nd		${depvar}_${endovarname}_${IVname}_dyn_noFE	///
 							using "${SNAP_outRaw}/${depvar}_${endovarname}_${IVname}_est_ppt.csv", ///
-							cells(b(star fmt(%8.3f)) /*&*/ se(fmt(2) par)) stats(N Fstat r2, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(rp_state_enum*)	///
+							cells(b(star fmt(%8.3f)) /*&*/ se(fmt(2) par)) stats(N Fstat r2, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
 							title(${depvar} on ${endovarname}_${IVname})		replace
 					
-					esttab	${depvar}_${endovarname}_${IVname}_FE_1st		///
-							${depvar}_${endovarname}_${IVname}_FE_2nd		${depvar}_${endovarname}_${IVname}_dyn_FE	///
+					esttab	${depvar}_${endovarname}_${IVname}_noFE_1st		///
+							${depvar}_${endovarname}_${IVname}_noFE_2nd		${depvar}_${endovarname}_${IVname}_dyn_noFE	///
 							using "${SNAP_outRaw}/${depvar}_${endovarname}_${IVname}_est_ppt.tex", ///
-							cells(b(star fmt(%8.3f)) /*&*/ se(fmt(2) par)) stats(N Fstat r2, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(rp_state_enum*)	///
+							cells(b(star fmt(%8.3f)) /*&*/ se(fmt(2) par)) stats(N Fstat r2, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
 							title(${depvar} on ${endovarname}_${IVname})		replace
 				}			
 			
@@ -6799,7 +6879,88 @@
 	
 				}
 		
+			*	Print selected models for the draft/ppt
 			
+				*	Food security incidence table (dummy)
+					*	(1) SL_5, static, noFE
+					*	(2) SL_5, dynamic, noFE
+					*	(3) TFI0, static, noFE
+					*	(4) TFI0, dynamic, noFE
+					*	(5) CFI0, static, noFE
+					*	(6) CFI0, dynamic, noFE
+				esttab	SL_5_dummy_SSI_noFE_2nd	SL_5_dummy_SSI_dyn_noFE	TFI0_dummy_SSI_noFE_2nd	TFI0_dummy_SSI_dyn_noFE	CFI0_dummy_SSI_noFE_2nd	CFI0_dummy_SSI_dyn_noFE	///
+				using "${SNAP_outRaw}/SL5_TFI0_CFI0_dummy.csv", ///
+						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ ///
+						star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+						title(Food Security Incidence on Program participation)		replace	
+						
+				esttab	SL_5_dummy_SSI_noFE_2nd	SL_5_dummy_SSI_dyn_noFE	TFI0_dummy_SSI_noFE_2nd	TFI0_dummy_SSI_dyn_noFE	CFI0_dummy_SSI_noFE_2nd	CFI0_dummy_SSI_dyn_noFE	///
+				using "${SNAP_outRaw}/SL5_TFI0_CFI0_dummy.tex", ///
+						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ ///
+						star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+						title(Food Security Incidence on Program participation)		replace	
+						
+				
+				*	Food security incidence table (amount)
+					*	(1) SL_5, static, noFE
+					*	(2) SL_5, dynamic, noFE
+					*	(3) TFI0, static, noFE
+					*	(4) TFI0, dynamic, noFE
+					*	(5) CFI0, static, noFE
+					*	(6) CFI0, dynamic, noFE
+				esttab	SL_5_amtcap_SSI_noFE_2nd	SL_5_amtcap_SSI_dyn_noFE	TFI0_amtcap_SSI_noFE_2nd	TFI0_amtcap_SSI_dyn_noFE	CFI0_amtcap_SSI_noFE_2nd	CFI0_amtcap_SSI_dyn_noFE	///
+				using "${SNAP_outRaw}/SL5_TFI0_CFI0_amt.csv", ///
+						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ ///
+						star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+						title(Food Security Incidence on Benefit Amount)		replace	
+						
+				esttab	SL_5_amtcap_SSI_noFE_2nd	SL_5_amtcap_SSI_dyn_noFE	TFI0_amtcap_SSI_noFE_2nd	TFI0_amtcap_SSI_dyn_noFE	CFI0_amtcap_SSI_noFE_2nd	CFI0_amtcap_SSI_dyn_noFE	///
+				using "${SNAP_outRaw}/SL5_TFI0_CFI0_amt.tex", ///
+						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ ///
+						star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+						title(Food Security Incidence on Benefit Amount)		replace	
+						
+						
+				*	Food security level table (dummy)
+					*	(1) TFI1, static, noFE
+					*	(2) TFI1, dynamic, noFE
+					*	(3) CFI1, static, noFE
+					*	(4) CFI1, dynamic, noFE
+				esttab	TFI1_dummy_SSI_noFE_2nd	TFI1_dummy_SSI_dyn_noFE	CFI1_dummy_SSI_noFE_2nd	CFI1_dummy_SSI_dyn_noFE	///
+				using "${SNAP_outRaw}/TFI1_CFI1_dummy.csv", ///
+						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ ///
+						star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+						title(Food Security Level on Program participation)		replace	
+						
+				esttab	TFI1_dummy_SSI_noFE_2nd	TFI1_dummy_SSI_dyn_noFE	CFI1_dummy_SSI_noFE_2nd	CFI1_dummy_SSI_dyn_noFE	///
+				using "${SNAP_outRaw}/TFI1_CFI1_dummy.tex", ///
+						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ ///
+						star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+						title(Food Security Level on Program participation)		replace	
+						
+				
+				*	Food security level table (amount)
+					*	(1) TFI1, static, noFE
+					*	(2) TFI1, dynamic, noFE
+					*	(3) CFI1, static, noFE
+					*	(4) CFI1, dynamic, noFE
+				esttab	TFI1_amtcap_SSI_noFE_2nd	TFI1_amtcap_SSI_dyn_noFE	CFI1_amtcap_SSI_noFE_2nd	CFI1_amtcap_SSI_dyn_noFE	///
+				using "${SNAP_outRaw}/TFI1_CFI1_amt.csv", ///
+						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ ///
+						star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+						title(Food Security Level on Benefit Amount)		replace	
+						
+				esttab	TFI1_amtcap_SSI_noFE_2nd	TFI1_amtcap_SSI_dyn_noFE	CFI1_amtcap_SSI_noFE_2nd	CFI1_amtcap_SSI_dyn_noFE	///
+				using "${SNAP_outRaw}/TFI1_CFI1_amt.tex", ///
+						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ ///
+						star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+						title(Food Security Level on Benefit Amount)		replace	
+				
+				summ	PFS_glm SL_5 TFI0 CFI0	TFI1 CFI1	if in_sample==1	&	income_below_200==1 /*& PFS_FI_glm==1*/ [aw=wgt_long_fam_adj] //,d
+				*summ	PFS_glm SL_5 TFI0 CFI0	TFI1 CFI1	if in_sample==1	&	income_below_200==1 & PFS_FI_glm==1 [aw=wgt_long_fam_adj] //,d
+				summ	PFS_glm SL_5 TFI0 CFI0 	TFI1 CFI1	if in_sample==1	&	income_below_200==1 & FS_rec_wth==1 [aw=wgt_long_fam_adj] //,d
+			
+			/*
 			*	Print TFI/CFI with control model only
 			esttab	TFI_HCR_control_2nd	TFI_HCR_dyn_control_2nd	CFI_HCR_X_2nd	CFI_HCR_dyn_X_2nd	///
 			using "${SNAP_outRaw}/TFI_CFI_HCR.csv", ///
@@ -6825,8 +6986,10 @@
 						cells(b(star fmt(%8.3f)) se(fmt(2) par)) stats(N r2, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ ///
 						star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
 						title(PFS on FS amt)		replace		
+			*/
 			
-			summ	PFS_glm TFI_FIG CFI_FIG if in_sample==1	&	income_below_200==1 & PFS_FI_glm==1 [aw=wgt_long_fam_adj],d
+			
+			summ	PFS_glm TFI_FIG CFI_FIG if in_sample==1	&	income_below_200==1 /*& PFS_FI_glm==1*/ [aw=wgt_long_fam_adj],d
 		
 
 		
@@ -6856,16 +7019,16 @@
 			
 			
 			*	PFS by gender
-			graph twoway 		(kdensity PFS_glm	if	ind_female==0, bwidth(0.05) )	///
-								(kdensity PFS_glm	if	ind_female==1, bwidth(0.05) ),	///
+			graph twoway 		(kdensity PFS_glm	if	ind_female==0 & income_below_200==1, bwidth(0.05) )	///
+								(kdensity PFS_glm	if	ind_female==1 & income_below_200==1, bwidth(0.05) ),	///
 								/*title (Density Estimates of the USDA scale and the PFS)*/	xtitle(PFS) ytitle(Density)		///
 								name(PFS_ind_gender, replace) graphregion(color(white)) bgcolor(white)		///
 								legend(lab (1 "Male") lab(2 "Female") rows(1))	
 								
 								
 			*	PFS by race
-			graph twoway 		(kdensity PFS_glm	if	rp_nonWhte==0, bwidth(0.05) )	///
-								(kdensity PFS_glm	if	rp_nonWhte==1, bwidth(0.05) ),	///
+			graph twoway 		(kdensity PFS_glm	if	rp_nonWhte==0 & income_below_200==1, bwidth(0.05) )	///
+								(kdensity PFS_glm	if	rp_nonWhte==1 & income_below_200==1, bwidth(0.05) ),	///
 								/*title (Density Estimates of the USDA scale and the PFS)*/	xtitle(PFS) ytitle(Density)		///
 								name(PFS_rp_race, replace) graphregion(color(white)) bgcolor(white)		///
 								legend(lab (1 "White") lab(2 "non-White") rows(1))	
@@ -6996,23 +7159,25 @@
 				label 	var	childnum					"\# of child"
 				
 				lab		var	major_control_mix	"Mixed state control"
+				lab	var	SNAP_index_unweighted	"SNAP policy index (unweighted)"
+				lab	var	SNAP_index_weighted		"SNAP policy index (weighted)"
 				
 				*	For now, generate summ table separately for indvars and fam-level vars, as indvars do not represent full sample if conditiond by !mi(glm) (need to figure out why)
 				local	indvars	ind_female_uniq num_waves_in_FU_uniq FS_ever_used_uniq total_FS_used_uniq	share_FS_used_uniq
 				local	rpvars	rp_female	rp_age	rp_White	rp_married	rp_NoHS rp_HS rp_somecol rp_col		rp_employed rp_disabled
 				local	famvars	famnum	ratio_child		split_off	fam_income_month_pc_real	foodexp_tot_inclFS_pc_real		
 				local	FSvars	FS_rec_wth	FS_rec_amt_real
-				local	IVs		share_welfare_exp_sl	SSI_GDP_sl	major_control_dem major_control_rep major_control_mix
+				local	IVs		/*share_welfare_exp_sl*/	SSI_GDP_sl	SNAP_index_weighted	/*major_control_dem major_control_rep major_control_mix*/
 				local	FSDvars	PFS_glm	SL_5	TFI_HCR	CFI_HCR	TFI_FIG	CFI_FIG	TFI_SFIG	CFI_SFIG	
 				
-				estpost summ	`indvars'		if	!mi(PFS_glm)	/*  num_waves_in_FU_uniq>=2	 &*/	  // Temporary condition. Need to think proper condition.
+				estpost summ	`indvars'		if	!mi(PFS_glm)	&	in_sample==1	/*  num_waves_in_FU_uniq>=2	 &*/	  // Temporary condition. Need to think proper condition.
 				estpost summ	`indvars'		if	in_sample==1	&	income_below_200==1	/*  num_waves_in_FU_uniq>=2	 &*/	  // Temporary condition. Need to think proper condition.
 				
-				local	summvars	/*`indvars'*/	`rpvars'	`famvars'	`FSvars'	`IVs'	`FSDvars'
+				local	summvars	`indvars'	`rpvars'	`famvars'	`FSvars'	`IVs'	//`FSDvars'
 
-				estpost tabstat	`summvars'	 if in_sample==1	&	!mi(PFS_glm)	[aw=wgt_long_fam_adj],	statistics(count	mean	sd	min	median	p95	max) columns(statistics)		// save
+				estpost tabstat	`summvars'	if in_sample==1	&	!mi(PFS_glm)	&	inrange(year,1977,2019)		[aw=wgt_long_fam_adj],	statistics(count	mean	sd	min	median	p95	max) columns(statistics)		// save
 				est	store	sumstat_all
-				estpost tabstat	`summvars' 	if in_sample==1	&	!mi(PFS_glm)	&	income_below_200==1	[aw=wgt_long_fam_adj],	statistics(count	mean	sd	min	median	p95	max) columns(statistics)	// save
+				estpost tabstat	`summvars' 	if in_sample==1	&	!mi(PFS_glm)	&	inrange(year,1977,2019)	&	income_below_200==1		[aw=wgt_long_fam_adj],	statistics(count	mean	sd	min	median	p95	max) columns(statistics)	// save
 				est	store	sumstat_lowinc
 				
 
@@ -7022,13 +7187,26 @@
 					cells("count(fmt(%12.0f)) mean(fmt(%12.2f)) sd(fmt(%12.2f)) min(fmt(%12.2f)) p50(fmt(%12.2f)) p95(fmt(%12.2f)) max(fmt(%12.2f))") label	title("Summary Statistics") noobs 	  replace
 									
 				esttab	sumstat_all	sumstat_lowinc	using	"${SNAP_outRaw}/Tab_1_Sumstats.tex",  ///
-					cells("count(fmt(%12.0f)) mean(fmt(%12.2f)) sd(fmt(%12.2f)) min(fmt(%12.2f)) p50(fmt(%12.2f)) p95(fmt(%12.2f)) max(fmt(%12.2f))") label	title("Summary Statistics") noobs 	  replace
+					cells("mean(fmt(%12.2f)) sd(fmt(%12.2f))  max(fmt(%12.2f))") label	title("Summary Statistics") noobs 	  replace
 					
-				summ	PFS_glm SL_5 TFI_HCR CFI_HCR TFI_FIG CFI_FIG if in_sample==1	&	income_below_200==1 & PFS_FI_glm==1 [aw=wgt_long_fam_adj],d
-				summ	PFS_glm SL_5 TFI_HCR CFI_HCR TFI_FIG CFI_FIG if in_sample==1	&	income_below_200==1	& PFS_FI_glm==1 & FS_rec_wth!=1 [aw=wgt_long_fam_adj],d // didn't receive SNAP
-
+				
+				*	Summary stats of food security variables
+					
+					*	All families income below 200%
+					summ	PFS_glm	PFS_FI_glm SL_5 TFI_HCR CFI_HCR TFI_FIG CFI_FIG if in_sample==1	&	income_below_200==1  [aw=wgt_long_fam_adj]
+					
+					*	Families income below 200% with stamp benefit
+					summ	PFS_glm SL_5 TFI_HCR CFI_HCR TFI_FIG CFI_FIG if in_sample==1	&	income_below_200==1 & FS_rec_wth==1 [aw=wgt_long_fam_adj]
+					
+					*	Families income below 200% without stamp benefit
+					summ	PFS_glm SL_5 TFI_HCR CFI_HCR TFI_FIG CFI_FIG if in_sample==1	&	income_below_200==1 & FS_rec_wth==0 [aw=wgt_long_fam_adj]
+					
+					*	Families income below 200% that are food insecure and do not receive stamp
+					summ	PFS_glm SL_5 TFI_HCR CFI_HCR TFI_FIG CFI_FIG if in_sample==1	&	income_below_200==1 & FS_rec_wth==0 & PFS_FI_glm==1 [aw=wgt_long_fam_adj]
+					
+				
 			
-				 x11101ll 	if in_sample==1	&	income_below_200==1	[aw=wgt_long_fam_adj]
+				
 				/*
 				*estpost summ	`indvars'	if	/*   num_waves_in_FU_uniq>=2	&*/	!mi(PFS_glm)  // Temporary condition. Need to think proper condition.
 				*summ	FS_rec_amt_real	if	!mi(PFS_glm)	&	FS_rec_wth==1 & inrange(rp_age,0,130) // Temporarily add age condition to take care of outlier. Will be taken care of later.
