@@ -2252,14 +2252,14 @@
 		}
 		
 		*	Temporary code observing the number of individuals with different family composition status
-		
+		/*
 		preserve
 			drop *_1968	*_1969	*_1970	*_1971	*_1972	*_1973	*_1974	*_1975	*_1976
 
-			egen	count_seq_7719			=	anycount(xsqnr_1977-xsqnr_2019), values(1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20)
-			egen	count_RP_7719			=	anycount(xsqnr_1977-xsqnr_2019), values(1)
-			egen	count_nochange_7719		=	anycount(change_famcomp1978-change_famcomp2019), values(0)
-			egen	count_sameRP_7719		=	anycount(change_famcomp1978-change_famcomp2019), values(0,1,2)
+			egen	count_seq_7719			=	anycount(xsqnr_1977-xsqnr_2019), values(1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20) //	# of waves an individual in HH (seq b/w 1 to 20)
+			egen	count_RP_7719			=	anycount(xsqnr_1977-xsqnr_2019), values(1)	//	# of waves an indivdiual being RP
+			egen	count_nochange_7719		=	anycount(change_famcomp1978-change_famcomp2019), values(0)	//	# of waves without any family comp change
+			egen	count_sameRP_7719		=	anycount(change_famcomp1978-change_famcomp2019), values(0,1,2) // # of waves with the same RP
 			
 			drop	if	count_seq_7719==0	//	Drop individuals that never appeared during the study period
 			
@@ -2268,7 +2268,7 @@
 			tab count_seq_7719	//	2,726 ppl appeared in all 32 waves (1977 to 2019)
 			count if count_seq_7719==count_sameRP_7719
 		restore
-		
+		*/
 		
 				
 		*	Drop years outside study sample	
@@ -2319,8 +2319,7 @@
 			loc	var	relrp_recode
 			
 			foreach	year	of	global	sample_years_1977	{
-				
-				
+						
 				cap	drop	`var'`year'
 				gen		`var'`year'=0	if	relrp`year'==0	//	Inapp
 				
@@ -2365,10 +2364,6 @@
 				
 			}
 			
-			*	Change in family composition
-			
-			
-			
 			*	Generate residential status variable
 			loc	var	resid_status
 			lab	define	resid_status	0	"Inapp"	1	"Resides"	2	"Institution"	3	"Moved Out"	4	"Died", replace
@@ -2397,7 +2392,7 @@
 				label	var	status_combined`year'	"Combined status in `year'"
 			}
 			
-			*	Keep only the individuals that appear at least once during the study period (1977-2019)
+			*	Tag only the individuals that appear at least once during the study period (1977-2019)
 			*	I do this by counting the number of sequence variables with non-zero values (zero value in sequence number means inappropriate (not surveyed)
 			*	This code is updated as of 2022-3-21. Previously I used the number of missing household IDs, as below.
 			loc	var	zero_seq_7719
@@ -2556,7 +2551,7 @@
 	
 		*	Now we keep only relevant observations.
 			
-		*	Drop Latino sample
+		*	Drop Latino sample and 2017 immigrant refresher
 			drop	if	sample_source==5	//	Latino sample
 			drop	if	sample_source==4	//	2017 refresher
 			
@@ -2568,17 +2563,17 @@
 			cap drop hhid_agg_1st	
 			egen hhid_agg_1st = group(x11102_1977-x11102_2019), missing	
 
-		*	Drop non-Sample individuals
-		*	Note: Previous analysis were done without dropping them. Make sure to drop it carefully.
-			*drop	if	Sample==0
 		
-		*	Tag in-sample	
+		*	Tag in-sample	(18,277 HH as of 2023-1-14)
 			loc	var	in_sample
 			cap	drop	`var'
 			gen		`var'=0
 			replace	`var'=1	if	Sample==1	&	inlist(1,baseline_indiv,splitoff_indiv)
 			label	var	`var'	"=1 if in study sample"
 			
+		*	Keep relevant study dample only (baseline & splitoff invidiuals, PSID-follable individuals)
+			keep	if	in_sample==1
+						
 		*	Overview of sample
 		if	`panel_view'==1	{		
 		
@@ -2615,9 +2610,7 @@
 		
 		}
 		
-			keep	if	in_sample==1
-					
-		
+	
 		*	Third, we adjust family weight by the number of valid individuals in each wave
 		*	If there are multiple Sample individuals who has ever been an RP within a family at certain wave, their family variables will be counted multiple times (duplicate)
 		*	Thus we need to divide the family weight by the number of Sample individuals who were living in a family unit 
@@ -4338,7 +4331,7 @@
 		*	Set globals
 		global	statevars		l2_foodexp_tot_exclFS_pc_1_real l2_foodexp_tot_exclFS_pc_2_real	//	l2_foodexp_tot_exclFS_pc_1_real l2_foodexp_tot_exclFS_pc_2_real  * Need to use real value later
 		global	demovars		rp_age rp_age_sq	rp_nonWhte	rp_married	rp_female	
-		global	econvars		ln_fam_income_pc	ln_fam_income_pc	//	ln_fam_income_pc_real   * Need to use real value later
+		global	econvars		ln_fam_income_pc	//	ln_fam_income_pc_real   * Need to use real value later
 		global	healthvars		rp_disabled
 		global	familyvars		famnum	ratio_child
 		global	empvars			rp_employed
@@ -4368,17 +4361,31 @@
 		global	PFS_sample		in_sample==1	&	inrange(year,1976,2019)
 		
 		*	Declare variables
-		local	depvar		foodexp_tot_inclFS_pc
+		global	depvar		foodexp_tot_inclFS_pc
 		
 			*	Summary state of dep.var
-			summ	`depvar', d
+			summ	${depvar}, d
 			*unique x11101ll if in_sample==1	&	!mi(foodexp_tot_inclFS_pc)
 		
 		*	Step 1
 		*	IMPORTANT: Unlike Lee et al. (2021), I exclude a binary indicator whether HH received SNAP or not (FS_rec_wth), as including it will violate exclusion restriction of IV
+		
+			*	Vanila model (simply Gaussian regression, no weight, no survey structure, etc.)
+			reg	${depvar}	${statevars}
+		
+		*	Panel regression with xtreg, unweighted
+		xtreg	${depvar}	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}*/	${indvars}	/*${regionvars}	${timevars}*/, fe
+		
+		*	Panel regression with xtreg, weighted
+		xtreg	${depvar}	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}*/	${indvars}	/*${regionvars}	${timevars}*/	[aw=wgt_long_fam_adj], fe
+		
+		
+		xtreg	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}*/	${indvars}	/*${regionvars}	${timevars}*/	[aw=wgt_long_fam_adj]
+		
+		glm 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}*/	${indvars}	/*${regionvars}	${timevars}*/	[aw=wgt_long_fam_adj], family(gamma)	link(log)
 		svy, subpop(if ${PFS_sample}): glm 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}*/	${macrovars}	/*${regionvars}	${timevars}*/, family(gamma)	link(log)
 		
-			*glm 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}*/	${indvars}	${regionvars}	${timevars}	[aw=wgt_long_fam_adj], family(gamma)	link(log)
+			
 			*svy: reg 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}*/	${indvars}	${regionvars}	${timevars}	
 		ereturn list
 		est	sto	glm_step1
