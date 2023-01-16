@@ -193,8 +193,8 @@
 									49	"Wyoming"		50	"Alaska"			51	"Hawaii"	99	"DK/NA",	replace
 	}
 	
-	local	ind_agg			1	//	Aggregate individual-level variables across waves
-	local	fam_agg			1	//	Aggregate family-level variables across waves
+	local	ind_agg			0	//	Aggregate individual-level variables across waves
+	local	fam_agg			0	//	Aggregate family-level variables across waves
 	local	ext_data		1	//	Prepare external data (CPI, TFP, etc.)
 	local	cr_panel		1	//	Create panel structure from ID variable
 		local	panel_view	0	//	Create an excel file showing the change of certain clan over time (for internal data-check only)
@@ -203,8 +203,8 @@
 		local	add_clean	1		//	Do additional cleaning and import external data (CPI, TFP)
 		local	import_dta	1		//	Import aggregated variables into ID data. 
 	local	clean_vars		1	//	Clean variables and construct consistent variables
-	local	PFS_const		1	//	Construct PFS
-	local	FSD_construct	1	//	Construct FSD
+	local	PFS_const		0	//	Construct PFS
+	local	FSD_construct	0	//	Construct FSD
 	local	IV_reg			0	//	Run IV-2SLS regression
 	local	summ_stats		0	//	Generate summary statistics (will be moved to another file later)
 
@@ -581,7 +581,7 @@
 			*	Number of people in HH issued food stamp last MONTH
 				*	Note: Although PSID year-by-year index categorized it as "previous year", they are actually asking about "last month" (confirmed by the PSID. Check the email thread I first sent on 2022/3/10)
 				**	Note: These variables are codded differently (ex. different top-coded value) in different years, so should not be "directly" used in analyses across years unless carefully harmonized.
-				**	This variable will only be used to determine whether HH received food stamp (=0) or not (>0), up to 1993 (see pg 42 of 1977 file description)
+				**	This variable will only be used to determine whether HH received food stamp (>0) or not (=0), up to 1993 (see pg 42 of 1977 file description)
 			loc	var	stamp_ppl_month
 			psid use || `var'   	[75]V3843 [76]V4356 [77]V5266 [78]V5765 [79]V6371 [80]V6969 [81]V7561 [82]V8253 [83]V8861 [84]V10232 [85]V11372 [86]V12771 [87]V13873 [90]V17804	///
 									[91]V19104 [92]V20404 [93]V21702 [94]ER3075 [95]ER6074 [96]ER8171 [97]ER11065 [99]ER14284 [01]ER18416 [03]ER21681 [05]ER25683 [07]ER36701 [09]ER42708	///
@@ -1945,7 +1945,8 @@
 			
 		
 		*	CPI data (to convert current to real dollars)
-		import excel	"${clouldfolder}/DataWork/BLS/CPI_seasonally_adj.xls", cellrange(A12) 	clear
+			*	(2023-1-15) Baseline month as Jan 2019 (CPI=100)
+		import excel	"${clouldfolder}/DataWork/BLS/CPI_seasonally_adj_201901.xls", cellrange(A12) 	clear
 
 		rename	B CPI
 		gen		month=month(A)
@@ -2658,7 +2659,7 @@
 			*	Re-shape it into long format and save it
 			use	"${SNAP_dtInt}/Ind_vars/ID_sample_wide.dta", clear
 			reshape long	x11102_	xsqnr_	wgt_long_ind	wgt_long_fam	wgt_long_fam_adj	living_Sample tot_living_Sample	///
-							age_ind relrp_recode resid_status status_combined origfu_id noresp_why 	/*${varlist_ind}	${varlist_fam}*/, i(x11101ll) j(year)
+							age_ind relrp_recode resid_status status_combined origfu_id noresp_why 	change_famcomp splitoff	/*${varlist_ind}	${varlist_fam}*/, i(x11101ll) j(year)
 			order	x11101ll pn sampstat Sample year x11102_ xsqnr_ 
 			*drop	if	inlist(year,1973,1988,1989)	//	These years seem to be re-created during "reshape." Thus drop it again.
 			*drop	if	inrange(year,1968,1974)	//	Drop years which don't have last month food stamp information exist.
@@ -2676,6 +2677,8 @@
 			label	var	living_Sample	"=1 if Sample member living in FU"
 			label	var	tot_living_Sample	"# of Sample members living in FU"
 			label	var	wgt_long_fam_adj	"Longitudianl family weight, adjusted"	
+			label	var	change_famcomp		"Change in family composition"
+			label	var	splitoff		"Splitoff status"
 			
 			save	"${SNAP_dtInt}/Ind_vars/ID_sample_long.dta",	replace
 			use "${SNAP_dtInt}/Ind_vars/ID_sample_long.dta", clear
@@ -2758,7 +2761,8 @@
 			
 			*	Re-shape it into long format	
 			use	"${SNAP_dtInt}/SNAP_RawMerged_wide",	clear
-			reshape long x11102_	xsqnr_	wgt_long_ind	/*wgt_long_fam*/	wgt_long_fam_adj	living_Sample tot_living_Sample	${varlist_ind}	${varlist_fam}, i(x11101ll) j(year)
+			reshape long x11102_	xsqnr_	wgt_long_ind	/*wgt_long_fam*/	wgt_long_fam_adj	living_Sample tot_living_Sample	///
+										${varlist_ind}	${varlist_fam}, i(x11101ll) j(year)
 			order	x11101ll /*pn sampstat Sample*/ year x11102_ xsqnr_ 
 			*drop	if	inlist(year,1973,1988,1989)	//	These years seem to be re-created during "reshape." Thus drop it again.
 			*drop	if	inrange(year,1968,1974)	//	Drop years which don't have last month food stamp information exist.
@@ -2892,6 +2896,13 @@
 				lab	val	`var'	`var'
 				
 				label	var	`var'	"Survey Month"
+				
+				*	Generate survey year+month variable (yyyymm)
+				loc	var	svy_yrmonth
+				cap	drop	`var'
+				gen		`var'	=	year*100	+	(svy_month)
+				replace	`var'	=.	if	svy_month==0	|	mi(svy_month)
+				lab	var	`var'	"Survey year and month (YYYYMM)"
 				
 				*	Previous year+month
 				*	This variable will be used to import CPI, to impute real value (FS amount, food expenditures)
@@ -3070,7 +3081,7 @@
 			*	Survey year dummies
 			tab	year, gen(year_enum)
 			
-			*	Change in RP
+			*	RP changed since the last survey
 				*	No change: No change at all (0), change other than RP/SP (1), SP changed (2)
 				*	I include Other (8) as "change in RP", as they include some major changes including recontact adn recombined families where RP is changed very often.
 				*	I also include "Neither RP nor SP are Sample, and neither of them was RP or SP last year" as "change in RP", since it seems those who were NOT RP (or SP) became RP or SP this year (thus change in RP). A very rough assumption.
@@ -3082,7 +3093,7 @@
 			label	value	`var'	yes1no0
 			lab	var	`var'	"=1 if RP changed"
 			
-			*	Split-off indicator
+			*	Split-off since the last survey
 			*	General rule of treating re-contact family is that, we treat it as "non split-off"
 			loc	var	split_off
 			cap	drop	`var'
@@ -3118,7 +3129,7 @@
 				replace	`var'=1	if	inlist(splitoff,2,4)	&	inrange(year,2001,2019)	//	Split-off, split-off recontact
 				
 			label	value	`var'	yes1no0
-			label	var	`var'	"Split-off FU"
+			label	var	`var'	"Split-off since the last survey"
 		
 		*	Age
 			
@@ -3169,10 +3180,11 @@
 			label	var	rp_age	"Age (RP)"
 			
 			*	Square age to capture non-linear effect
+			*	We also re-scale it to thousands
 			loc	var	rp_age_sq
 			cap	drop	`var'
-			gen	`var'	=	rp_age*rp_age
-			label	var	rp_age	"Age^2 (RP)"
+			gen	`var'	=	(rp_age*rp_age)/1000
+			lab	var	rp_age_sq	"Age(RP)$^2$/1000"
 
 		
 		*	Gender
@@ -3240,8 +3252,11 @@
 			*	If I want to drop all observations of individual who ever lived there once...
 			cap drop	live_in_AL_HA
 			cap	drop	ever_in_AL_HA
-			gen	live_in_AL_HA=1	if	inlist(rp_state,50,51)
+			gen		live_in_AL_HA=1	if	inlist(rp_state,50,51)
+			replace	live_in_AL_HA=0	if	!mi(rp_state) & !inlist(rp_state,50,51)	//	includes NA/DK, inapp
 			bys	x11101ll:	egen	ever_in_AL_HA	=	max(live_in_AL_HA)
+			
+			tab	ever_in_AL_HA
 			drop	if	ever_in_AL_HA==1
 			drop	live_in_AL_HA	ever_in_AL_HA
 			
@@ -3458,7 +3473,6 @@
 				*	1975-1997, 2009-2019 
 				*	Important: These years don't have FS status other than the previous month (ex. HH surveyed in March don't give any information of FS redemption outside Feb)
 				*	Therefore, we need to make sure that only the information of the month right before the survey month should be updated.
-				
 							
 				if	"`month'"=="Dec"	{
 				
@@ -3539,11 +3553,19 @@
 			replace	`var'=`var'/12		if	FS_rec_amt_recall==6	&	inrange(year,1999,2007)	//	If yearly value, divide by 12
 			*replace	`var'=0				if	inlist(FS_rec_amt_recall,2,7)	&	inrange(year,1999,2007)	//	If "inappropriate", then replace with zero
 									
-			*	For Other/DK/NA/refusal (both in amount and recall period), I impute the monthly average from other categories and assign the mean value (Usually less than 2% of obs)
+			*	For Other/DK/NA/refusal (both in amount and recall period), I impute the monthly average from other categories and assign the mean value 
+				
+				*	Share of obs reported outliers
+					tab stamp_useamt_month if inrange(year,1994,1997)	//	1994-1997: Less than 0.3% reported 998/999
+					tab	stamp_useamt_month if inrange(year,1999,2007)	//	1999-2007: Less than 0.5% reported 999998/999999
+					tab	FS_rec_amt_recall	//	1999-2007: Less than 0.5% reported Other/DK/NA/refused.
+					tab	stamp_useamt_month if inrange(year,2009,2019)	//	2009-2019: Less than 0.5% reported 99999/999998/999999
+	
+			*	(2023-1-15) I replace those values as 
 			foreach	year	in	1994	1995	1996	1997	1999	2001	2003	2005	2007	2009	2011	2013	2015	2017	2019	{
 			    
 				if	inrange(`year',1994,1997)	{	//	1994 to 1997
-				
+										
 					summ	`var'			if	year==`year'	&	FS_rec_wth==1	&	!inlist(stamp_useamt_month,998,999)	//	Exclude outliers in imputing mean
 					replace	`var'=r(mean) 	if	year==`year'	&	FS_rec_wth==1	&	inlist(stamp_useamt_month,998,999)
 				
@@ -3625,7 +3647,7 @@
 		
 	
 		*	Food expenditure
-		*	Note that Food expenditures are separated collected b/w FS users and non-FS (nFS) users since 1994, we need make variables which combine them.
+		*	Note that Food expenditures are separately collected b/w FS users and non-FS (nFS) users since 1994, so we need make variables which combine them.
 			
 			*	At-home
 			*	For at-home expenditures, we need to create two combined variables; one that including FS benefit amount, and one that does NOT include that benefit amount
@@ -3739,8 +3761,8 @@
 						
 						
 						*	(1997-2007)	Their recall period is based upon "current year", so some families said "no" to "spent extra amt (this year)" have non-zero values on extra amount spent
-						*	We will recode those extra values as zero if they didn't redeem FS last month even if they spent it this year
-						*	Also, Some raw observations have non-zero values that should not be there (ex. family ID==7231 in 2001 has 999999 amount even if "no amounte extra spent"). We recode them zero.
+						*	We will recode those extra values as zero if they didn't redeem FS "last month" even if they spent it "this year"
+						*	Also, some raw observations have non-zero values that should not be there (ex. family ID==7231 in 2001 has 999999 amount even if "no amounte extra spent"). We recode them zero.
 						replace	`var'	=	0	if	FS_rec_wth==0				&	inrange(year,1994,2019)
 						replace	`var'	=	0	if	foodexp_home_extra_wth==0	&	inrange(year,1994,2019)
 									
@@ -3833,19 +3855,17 @@
 					*	manually imputed data with the imputed data provided in PSID since 1999 
 						*	(Excluding zero in imputing average): Mean diff $7.0, median diff $1.3, 95% of obs diff less than $4.2
 						*	(Including zero in imputing average): Mean diff $6.9, median diff $1.3, 95% of obs diff less than $4.2 <= Current way
+						cap drop diff_home_exclFS
+						cap drop diff_home_inclFS
+						cap drop foodexp_home_imp_month
+						gen foodexp_home_imp_month = foodexp_home_imputed/12
+
+						gen	diff_home=abs(foodexp_home_imp_month-foodexp_home_exclFS)
+
+						*br year foodexp_home_stamp_recall foodexp_home_nostamp_recall FS_rec_wth FS_rec_crtyr_wth foodexp_home_inclFS foodexp_home_exclFS foodexp_home_imp_month foodexp_home_imputed diff_home if inrange(year,1999,2019)
+
+						sum diff_home if inrange(year,1999,2019),d
 						
-					
-					cap drop diff_home_exclFS
-					cap drop diff_home_inclFS
-					cap drop foodexp_home_imp_month
-					gen foodexp_home_imp_month = foodexp_home_imputed/12
-
-					gen	diff_home=abs(foodexp_home_imp_month-foodexp_home_exclFS)
-
-					*br year foodexp_home_stamp_recall foodexp_home_nostamp_recall FS_rec_wth FS_rec_crtyr_wth foodexp_home_inclFS foodexp_home_exclFS foodexp_home_imp_month foodexp_home_imputed diff_home if inrange(year,1999,2019)
-
-					sum diff_home if inrange(year,1999,2019),d
-					
 			
 			*	Eaten out
 			loc	var_eatout	foodexp_out
@@ -4179,7 +4199,8 @@
 			br year foodexp_W_TFP	foodexp_tot_exclFS	foodexp_tot_inclFS	if	inrange(foodexp_W_TFP,foodexp_tot_exclFS,foodexp_tot_inclFS)	
 			
 					
-		*	Winsorize top 1% value of per capita values for every year (except TFP)
+		*	Winsorize top 1% values of per capita values for every year (except TFP)
+		
 		local	pcvars	fam_income_pc ln_fam_income_pc foodexp_tot_exclFS_pc foodexp_tot_exclFS_pc_th foodexp_tot_inclFS_pc foodexp_tot_inclFS_pc_th	// fam_income_pc_real foodexp_tot_exclFS_pc_real foodexp_tot_inclFS_pc_real
 		local	years	1975	${sample_years}
 		foreach	var	of	local	pcvars	{
@@ -4202,8 +4223,8 @@
 			
 		}
 		
-		*	Generate polynomial degree of per capita expenditure up to 5
-		forval	i=1/5	{
+		*	Generate polynomial degree of per capita expenditure up to 3
+		forval	i=1/3	{
 			
 			cap	drop	foodexp_tot_exclFS_pc_`i'
 			gen	double	foodexp_tot_exclFS_pc_`i'=(foodexp_tot_exclFS_pc)^`i'
@@ -4219,7 +4240,7 @@
 		
 		
 		*	Create constant dollars of monetary variables  (ex. food exp, TFP)
-		*	Unit is 1982-1984=100 (1982-1984 chained)
+		*	Baseline CPI is 2019 Jan (100) 
 		qui	ds	fam_income_pc	FS_rec_amt foodexp_home_inclFS foodexp_home_exclFS  foodexp_out foodexp_deliv foodexp_tot_exclFS foodexp_tot_inclFS TFP_monthly_cost foodexp_W_TFP foodexp_W_TFP_pc_th	///
 				foodexp_tot_exclFS_pc foodexp_tot_inclFS_pc	foodexp_tot_exclFS_pc_? foodexp_tot_inclFS_pc_?
 		global	money_vars_current	`r(varlist)'
@@ -4799,13 +4820,8 @@
 			assert	inrange(`var',0,100)	if	!mi(`var')
 		}
 		
-		*	Temporary rescale age^2 and lagged food exp^2
-		replace	rp_age_sq=.n	if	rp_age==999	//	tag as missing if not applicable. (It is done in clean section, but just add it temporarily here
-		replace	rp_age=.n		if	rp_age==999	//	tag as missing if not applicable. (It is done in clean section, but just add it temporarily here
-		replace	rp_age_sq =	rp_age_sq /1000
+		*	Temporary rescale lagged food exp^2
 		replace	l2_foodexp_tot_inclFS_pc_2	=	l2_foodexp_tot_inclFS_pc_2/1000
-		
-		lab	var	rp_age_sq	"Age(RP)$^2$/1000"
 		lab	var	l2_foodexp_tot_inclFS_pc_2		"Food exp in t-2 (K)"
 		
 		*	Temporary generate state control categorical variable
