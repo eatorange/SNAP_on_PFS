@@ -68,6 +68,7 @@
 	****************************************************************/	
 		
 	*	Construct PFS
+	*	Please check "SNAP_PFS_const_test.do" file for the rational behind PFS model selection
 	if	`PFS_const'==1	{
 	 
 		use    "${SNAP_dtInt}/SNAP_cleaned_long",	clear
@@ -75,6 +76,9 @@
 		*	Validate that all observations in the data are in_sample and years b/w 1977 and 2019
 		assert	in_sample==1
 		assert	inrange(year,1977,2019)
+		
+		*	Drop states outside 48 continental states (HA/AK/inapp/etc.), as we do not have their TFP cost information.
+		drop	if	inlist(rp_state,0,50,51,99)
 		
 		*	Set globals
 		global	statevars		l2_foodexp_tot_exclFS_pc_1_real l2_foodexp_tot_exclFS_pc_2_real	//	l2_foodexp_tot_exclFS_pc_1_real l2_foodexp_tot_exclFS_pc_2_real  * Need to use real value later
@@ -86,7 +90,7 @@
 		global	eduvars			rp_NoHS rp_somecol rp_col
 		// global	foodvars		FS_rec_wth	//	Should I use prected FS redemption from 1st-stage IV?, or even drop it for exclusion restriction?
 		global	macrovars		unemp_rate	CPI
-		global	regionvars		rp_state_enum1-rp_state_enum31 rp_state_enum33-rp_state_enum50 	//	Excluding NY (rp_state_enum32) and outside 48 states (1, 52, 53). The latter should be excluded when running regression
+		global	regionvars		rp_state_enum2-rp_state_enum31 rp_state_enum33-rp_state_enum50 	//	Excluding NY (rp_state_enum32) and outside 48 states (1, 52, 53). The latter should be excluded when running regression
 		global	timevars		year_enum4-year_enum11 year_enum14-year_enum30 //	Exclude year_enum3 (1978) as base category. year_enum12 (1990)  and year_enum13 (1991) are excluded due to lack of lagged data.
 				
 			
@@ -94,7 +98,7 @@
 		label	var	foodexp_tot_inclFS_pc	"Food exp (with FS benefit)"
 		label	var	l2_foodexp_tot_inclFS_pc_1	"Food Exp in t-2"
 		label	var	l2_foodexp_tot_inclFS_pc_2	"(Food Exp in t-2)$^2$"
-		label	var	foodexp_tot_inclFS_pc	"Food exp (with FS benefit) (real)"
+		label	var	foodexp_tot_inclFS_pc_real		"Food exp (with FS benefit) (real)"
 		label	var	l2_foodexp_tot_exclFS_pc_1_real	"Food Exp in t-2 (real)"
 		label	var	l2_foodexp_tot_exclFS_pc_2_real	"(Food Exp in t-2)$^2$ (real)"	
 		label	var	rp_age		"Age (RP)"
@@ -105,17 +109,12 @@
 		*label	var	major_control_dem	"Dem state control"
 		*label	var	major_control_rep	"Rep state control"
 		
-		*	Construct lv1 and lv2 weights based on "adjusted longitudinal family weight"
-		*	Should go into "SNAP_clean.do" file. Will move later
-		cap	drop	lv1wgt
-		cap	drop	lv2wgt
-		gen	lv1wgt	=	wgt_
-		
-		
+	
 		
 		*	Sample where PFS will be constructed upon
 		*	They include (i) in_sample family (2) HH from 1978 to 2019
-		global	PFS_sample		in_sample==1	&	inrange(year,1976,2019) 
+		*	(2023-1-18) I don't need this, as all sample are alrady in_sample and b/w 1977 and 2019
+		*	global	PFS_sample		in_sample==1	&	inrange(year,1976,2019) 
 		
 		*	Declare variables (food expenditure per capita, real value)
 		global	depvar		foodexp_tot_inclFS_pc_real
@@ -125,203 +124,25 @@
 			*unique x11101ll if in_sample==1	&	!mi(foodexp_tot_inclFS_pc)
 		
 		*	Step 1
-		*	IMPORTANT: Unlike Lee et al. (2021), I exclude a binary indicator whether HH received SNAP or not (FS_rec_wth), as including it will violate exclusion restriction of IV
-	
-			
-			*	Same model, different regression method
-			*	We start with regression of food expenditure on laggeed expenditure (no controls, no FE, no survey structure, etc.)
-			
-				reg		${depvar}	${statevars}	if	${PFS_sample} // no individual-FE, no weight, etc.
-				reg		${depvar}	${statevars}	if	${PFS_sample}	[aw=wgt_long_ind]	//	weighted by individual weight
-				reg		${depvar}	${statevars}	if	${PFS_sample}	[aw=wgt_long_fam_adj]	//	weighted by adjusted survey weight
-				
-				
-				xtreg	${depvar}	${statevars}	if	${PFS_sample}, fe // individual-FE
-				reghdfe	${depvar}	${statevars}	if	${PFS_sample}, absorb(x11101ll)	//	individual-FE, identical to "xtreg, fe"
-				reghdfe	${depvar}	${statevars}	if	${PFS_sample}	[aw=wgt_long_fam_adj], absorb(x11101ll)	//	individual-FE with weight. Note that "xtreg, fe" does not allow non-constant weight within individuals
-				reghdfe	${depvar}	${statevars}	if	${PFS_sample}	[aw=wgt_long_fam_adj], absorb(x11101ll)	vce(cluster surveyid)
-				svy, subpop(if	${PFS_sample}):	reg	${depvar}	${statevars}	//	survey structure, w/o FE
-				
-				
-				
-				
-				*	mixed model
-				cap	drop	unique_secu
-				egen	unique_secu	=	group(sampstr	sampcls)
-				
-				*	Lv 1 weight should be constant within individuals. We use 
-				
-				mixed ${depvar} ${statevars} ///
-   i.sampstr [pweight = level1wgt_r] ///
-   || newid_num: yrssince06 yrs06sq, ///
-   variance cov(unstruct) ///
-   pweight(level2wgt) pwscale(size) ///
-   vce(cluster unique_secu)
-
-				
-			*	Lagged states only
-			cap	drop	dephat_gau
-			cap	drop	dephat_glm
-			cap	drop	sample_gau
-			cap	drop	sample_glm
-			cap	drop	error_gau
-			cap	drop	error_glm
-			
-			reg		${depvar}	${statevars}	if	${PFS_sample}	//	vanila (Gausiian)
-			gen sample_gau=1 if 	e(sample)==1  & ${PFS_sample}	
-			predict	double	dephat_gau	if	sample_gau==1, xb
-			gen	error_gau = abs(dephat_gau-${depvar})	if	sample_gau==1
-			
-			glm		${depvar}	${statevars}	if	${PFS_sample}, family(gamma)	link(log)
-			gen sample_glm=1 if 	e(sample)==1  & ${PFS_sample}	
-			predict	double	dephat_glm	if	sample_glm==1
-			gen	error_glm = abs(dephat_glm-${depvar})	if	sample_glm==1
-			
-			*	Compare error
-			br	${depvar}	dephat_gau	dephat_glm	error_gau	error_glm	if	sample_gau==1
-			summ	error_gau	error_glm
-			
-			
-			
-			*	Controls (no state and year FE)
-			cap	drop	dephat_gau
-			cap	drop	dephat_glm
-			cap	drop	sample_gau
-			cap	drop	sample_glm
-			cap	drop	error_gau
-			cap	drop	error_glm
-			
-			reg		${depvar}	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	if	${PFS_sample}	//	vanila (Gausiian)
-			gen sample_gau=1 if 	e(sample)==1  & ${PFS_sample}	
-			predict	double	dephat_gau	if	sample_gau==1, xb
-			gen	error_gau = abs(dephat_gau-${depvar})	if	sample_gau==1
-			
-			glm		${depvar}	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	if	${PFS_sample}, family(gamma)	link(log)
-			gen sample_glm=1 if 	e(sample)==1  & ${PFS_sample}	
-			predict	double	dephat_glm	if	sample_glm==1
-			gen	error_glm = abs(dephat_glm-${depvar})	if	sample_glm==1
-			
-			*	Compare error
-			br	${depvar}	dephat_gau	dephat_glm	error_gau	error_glm	if	sample_gau==1
-			summ	error_gau	error_glm
-			
-			
-			
-			*	Controls, with state and year FE
-			cap	drop	dephat_gau
-			cap	drop	dephat_glm
-			cap	drop	sample_gau
-			cap	drop	sample_glm
-			cap	drop	error_gau
-			cap	drop	error_glm
-			
-			reg		${depvar}	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	${regionvars}	${timevars}	if	${PFS_sample}	//	vanila (Gausiian)
-			gen sample_gau=1 if 	e(sample)==1  & ${PFS_sample}	
-			predict	double	dephat_gau	if	sample_gau==1, xb
-			gen	error_gau = abs(dephat_gau-${depvar})	if	sample_gau==1
-			
-			glm		${depvar}	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	${regionvars}	${timevars}	if	${PFS_sample}, family(gamma)	link(log)
-			gen sample_glm=1 if 	e(sample)==1  & ${PFS_sample}	
-			predict	double	dephat_glm	if	sample_glm==1
-			gen	error_glm = abs(dephat_glm-${depvar})	if	sample_glm==1
-			
-			*	Compare error
-			br	${depvar}	dephat_gau	dephat_glm	error_gau	error_glm	if	sample_gau==1
-			summ	error_gau	error_glm
-			
-			
-			
-			*	Panel structure, states only (no control)
-			cap	drop	dephat_gau
-			cap	drop	dephat_glm
-			cap	drop	sample_gau
-			cap	drop	sample_glm
-			cap	drop	error_gau
-			cap	drop	error_glm
-			
-			xtreg		${depvar}	${statevars}	if	${PFS_sample}, fe	//	vanila (Gausiian)
-			gen sample_gau=1 if 	e(sample)==1  & ${PFS_sample}	
-			predict	double	dephat_gau	if	sample_gau==1, xb
-			gen	error_gau = abs(dephat_gau-${depvar})	if	sample_gau==1
-			
-			xtgee		${depvar}	${statevars}	if	${PFS_sample}, family(gamma)	link(log)
-			gen sample_glm=1 if 	e(sample)==1  & ${PFS_sample}	
-			predict	double	dephat_glm	if	sample_glm==1
-			gen	error_glm = abs(dephat_glm-${depvar})	if	sample_glm==1
-			
-			*	Compare error
-			br	${depvar}	dephat_gau	dephat_glm	error_gau	error_glm	if	sample_gau==1
-			summ	error_gau	error_glm
-			
-			
-			*	Panel structure, with controls (no state and year FE)
-			cap	drop	dephat_gau
-			cap	drop	dephat_glm
-			cap	drop	sample_gau
-			cap	drop	sample_glm
-			cap	drop	error_gau
-			cap	drop	error_glm
-			
-			xtreg	${depvar}	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	if	${PFS_sample}	//	vanila (Gausiian)
-			gen sample_gau=1 if 	e(sample)==1  & ${PFS_sample}	
-			predict	double	dephat_gau	if	sample_gau==1, xb
-			gen	error_gau = abs(dephat_gau-${depvar})	if	sample_gau==1
-			
-			xtgee		${depvar}	${statevars}		${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	if	${PFS_sample}, family(gamma)	link(log)
-			gen sample_glm=1 if 	e(sample)==1  & ${PFS_sample}	
-			predict	double	dephat_glm	if	sample_glm==1
-			gen	error_glm = abs(dephat_glm-${depvar})	if	sample_glm==1
-			
-			*	Compare error
-			br	${depvar}	dephat_gau	dephat_glm	error_gau	error_glm	if	sample_gau==1
-			summ	error_gau	error_glm
-			
-			
-			
-		
-			
-			
-			
-			xtreg	${depvar}	${statevars}	if	${PFS_sample}, fe // panel structure, unweighted
-			
-			
-			
-			
-			*	Vanila model (simple Gaussian regression, no controls, no weight, no survey structure, no panel structure etc.)
-			reg	${depvar}	${statevars}	if	${PFS_sample}
-			
-			*	Vanila + controls
-			reg	${depvar}	${statevars}	${demovars}		if	${PFS_sample}
-			reg	${depvar}	${statevars}	${demovars}	${econvars}		if	${PFS_sample}
-			reg	${depvar}	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	${indvars}	if	${PFS_sample}
-			reg	${depvar}	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	${indvars}	${regionvars}	${timevars}	if	${PFS_sample}
-			
-			*	panel data regresson
-			xtreg	${depvar}	${statevars}	if	${PFS_sample}, fe
-			
-		
-		*	Panel regression with xtreg, unweighted
-		xtreg	${depvar}	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}*/	${indvars}	/*${regionvars}	${timevars}*/, fe
-		
-		*	Panel regression with xtreg, weighted
-		xtreg	${depvar}	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}*/	${indvars}	/*${regionvars}	${timevars}*/	[aw=wgt_long_fam_adj], fe
-		
-		
-		xtreg	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}*/	${indvars}	/*${regionvars}	${timevars}*/	[aw=wgt_long_fam_adj]
-		
+		*	Compared to Lee et al. (2021), I changed as followings
+			*	I exclude a binary indicator whether HH received SNAP or not (FS_rec_wth), as including it will violate exclusion restriction of IV
+			*	I do NOT use survey structure (but still use weight)
+			*	I use Poisson distribution assumption instead of Gamma
+			*	I include individual-FE
+			*	Please refer to "SNAP_PFS_const_test.do" file for more detail.
+		ppmlhdfe	${depvar}	${statevars} ${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	[pweight=wgt_long_fam_adj], absorb(x11101ll ib31.rp_state ib1979.year) d	
+		/*
 		glm 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}*/	${indvars}	/*${regionvars}	${timevars}*/	[aw=wgt_long_fam_adj], family(gamma)	link(log)
 		svy, subpop(if ${PFS_sample}): glm 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}*/	${macrovars}	/*${regionvars}	${timevars}*/, family(gamma)	link(log)
-		
-			
-			*svy: reg 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}*/	${indvars}	${regionvars}	${timevars}	
+		*/		
 		ereturn list
 		est	sto	glm_step1
 			
 		*	Predict fitted value and residual
-		gen	glm_step1_sample=1	if	e(sample)==1  & ${PFS_sample}	// e(sample) includes both subpopulation and non-subpopulation, so we need to include subpop condition here to properly restrict regression sample.
+		gen	glm_step1_sample=1	if	e(sample)==1 // e(sample) includes both subpopulation and non-subpopulation, so we need to include subpop condition here to properly restrict regression sample.
 		predict double mean1_foodexp_glm	if	glm_step1_sample==1
-		predict double e1_foodexp_glm	if	glm_step1_sample==1,r
-		gen e1_foodexp_sq_glm = (e1_foodexp_glm)^2
+		predict double e1_foodexp_glm		if	glm_step1_sample==1,r
+		gen e1_foodexp_sq_glm = (e1_foodexp_glm)^2	if	glm_step1_sample==1
 		
 		/*
 		
@@ -350,11 +171,39 @@
 					cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N_sub, fmt(%8.0fc)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(_cons)*/	///
 					title(Conditional Mean of Food Expenditure per capita (with and w/o FS))		replace	
 		*/
-		
+		br x11101ll year ${depvar} mean1_foodexp_glm e1_foodexp_glm e1_foodexp_sq_glm
 		
 		*	Step 2
+		*	(2023-1-18) Possion with FE now converges, and it does better job compared to Gaussian regression. So we use it.
 		local	depvar	e1_foodexp_sq_glm
 		
+			*	GLM with Poisson
+			ppmlhdfe	`depvar'	${statevars} ${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	[pweight=wgt_long_fam_adj], absorb(x11101ll ib31.rp_state ib1979.year) d	
+			est store glm_step2
+			gen	glm_step2_sample=1	if	e(sample)==1 
+			predict	double	var1_foodexp_glm	if	glm_step2_sample==1	
+			gen	sd_foodexp_glm	=	sqrt(abs(var1_foodexp_glm))	//	Take square root of absolute value, since predicted value can be negative which does not have square root.
+			gen	error_var1_glm	=	abs(var1_foodexp_glm - e1_foodexp_sq_glm)	//	prediction error. 
+			*br	e1_foodexp_sq_glm	var1_foodexp_glm	error_var1_glm
+			
+			
+			/*
+			*	Gaussian 
+			cap	drop	gau_step2_sample
+			local	depvar	e1_foodexp_sq_glm
+			reghdfe		`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	[aw=wgt_long_fam_adj], absorb(x11101ll ib31.rp_state ib1979.year)
+			gen	gau_step2_sample=1	if	e(sample)==1
+			predict	double	var1_foodexp_gau	if	glm_step2_sample==1	
+			*  Replace predicted value with its absolute value. It is because negative predicted value creates huge missing values in constructing PFS. Replacing with absoluste value is fine, since we are estimating conditional variance which should be non-negative.
+			replace	var1_foodexp_gau	=	abs(var1_foodexp_gau)
+			
+			gen	error_var1_gau	=	abs(var1_foodexp_gau-e1_foodexp_sq_glm)
+			
+			summ	e1_foodexp_sq_glm	var1_foodexp_glm	var1_foodexp_gau	error_var1_glm	error_var1_gau
+			*/
+		
+	
+		/* (2023-1-18) Outdated
 		*	For now (2021-11-28) GLM in step 2 does not converge. Will use OLS for now.
 		svy: glm 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	${foodvars}	${macrovars}	/*${regionvars}	${timevars}*/, family(gamma)	link(log)
 		svy: reg 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}*/	${macrovars}	/*${regionvars}	${timevars}*/
@@ -367,8 +216,8 @@
 		replace	var1_foodexp_glm	=	abs(var1_foodexp_glm)
 		
 			*	Shows the list of variables to manually observe issues (ex. too many negative predicted values)
-			br x11101ll year foodexp_tot_inclFS_pc mean1_foodexp_glm e1_foodexp_glm e1_foodexp_sq_glm var1_foodexp_glm
-		
+			br x11101ll year ${depvar} mean1_foodexp_glm e1_foodexp_glm e1_foodexp_sq_glm var1_foodexp_glm
+		*/
 		
 		*	Output
 		**	For AER manuscript, we omit asterisk(*) to display significance as AER requires not to use.
@@ -384,19 +233,31 @@
 		
 		
 		*	Step 3
-		*	Assume the outcome variable follows the Gamma distribution
-		*	(2021-11-28) I temporarily don't use expected residual (var1_foodexp_glm) as it goes crazy. I will temporarily use expected residual from step 1 (e1_foodexp_sq_glm)
-		*	(2021-11-30) It kinda works after additional cleaning (ex. dropping Latino sample), but its distribution is kinda different from what we saw in PFS paper.
-		gen alpha1_foodexp_pc_glm	= (mean1_foodexp_glm)^2 / var1_foodexp_glm	//	shape parameter of Gamma (alpha)
-		gen beta1_foodexp_pc_glm	= var1_foodexp_glm / mean1_foodexp_glm		//	scale parameter of Gamma (beta)
-		
-		*	The  code below is a temporary code to see what is going wrong in the original code. I replaced expected value of residual squared with residual squared
-		*gen alpha1_foodexp_pc_glm	= (mean1_foodexp_glm)^2 / e1_foodexp_sq_glm	//	shape parameter of Gamma (alpha)
-		*gen beta1_foodexp_pc_glm	= e1_foodexp_sq_glm / mean1_foodexp_glm		//	scale parameter of Gamma (beta)
-		
-		*	Generate PFS by constructing CDF
-		gen PFS_glm = gammaptail(alpha1_foodexp_pc_glm, foodexp_W_TFP_pc/beta1_foodexp_pc_glm)	//	gammaptail(a,(x-g)/b)=(1-gammap(a,(x-g)/b)) where g is location parameter (g=0 in this case)
-		label	var	PFS_glm "PFS"
+			
+			*	Gamma
+			*	(2021-11-28) I temporarily don't use expected residual (var1_foodexp_glm) as it goes crazy. I will temporarily use expected residual from step 1 (e1_foodexp_sq_glm)
+			*	(2021-11-30) It kinda works after additional cleaning (ex. dropping Latino sample), but its distribution is kinda different from what we saw in PFS paper.
+			gen alpha1_foodexp_pc_glm	= (mean1_foodexp_glm)^2 / var1_foodexp_glm	//	shape parameter of Gamma (alpha)
+			gen beta1_foodexp_pc_glm	= var1_foodexp_glm / mean1_foodexp_glm		//	scale parameter of Gamma (beta)
+			
+						
+			*	The  code below is a temporary code to see what is going wrong in the original code. I replaced expected value of residual squared with residual squared
+			*gen alpha1_foodexp_pc_glm	= (mean1_foodexp_glm)^2 / e1_foodexp_sq_glm	//	shape parameter of Gamma (alpha)
+			*gen beta1_foodexp_pc_glm	= e1_foodexp_sq_glm / mean1_foodexp_glm		//	scale parameter of Gamma (beta)
+			
+			*	Generate PFS by constructing CDF
+			gen PFS_glm = gammaptail(alpha1_foodexp_pc_glm, foodexp_W_TFP_pc_real/beta1_foodexp_pc_glm)	//	gammaptail(a,(x-g)/b)=(1-gammap(a,(x-g)/b)) where g is location parameter (g=0 in this case)
+			label	var	PFS_glm "PFS"
+			
+					
+			*	Normal (to show the robustness of the distributional assumption)
+			/*
+			gen thresh_foodexp_normal=(foodexp_W_TFP_pc_real-mean1_foodexp_glm)/sd_foodexp_glm	// Let 2 as threshold
+			gen prob_below_TFP=normal(thresh_foodexp_normal)
+			gen PFS_normal		=	1 - prob_below_TFP
+			
+			graph twoway (kdensity PFS_glm) (kdensity PFS_normal)
+			*/
 		
 		*	Construct FI indicator based on PFS
 		*	For now we use threshold probability as 0.55, referred from Lee et al. (2021) where threshold varied from 0.55 to 0.6
@@ -413,10 +274,15 @@
 		
 		
 		*	Regress PFS on characteristics
+		*	(2023-1-18) This one needs to be re-visited, considering what regression method we will use (svy prefix, weight, fixed effects, etc.)
 		use    "${SNAP_dtInt}/SNAP_long_PFS",	clear	
 		
 			*	PFS, without region FE
 			local	depvar	PFS_glm
+			svy, subpop(if !mi(PFS_glm)):	///
+				reg	`depvar'	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}
+			
+			reg	`depvar'	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars} [aweight=wgt_long_fam_adj]
 			
 			svy, subpop(if !mi(PFS_glm)):	///
 				reg	`depvar'	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}	${macrovars}*/
