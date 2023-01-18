@@ -76,7 +76,7 @@ use    "${SNAP_dtInt}/SNAP_cleaned_long",	clear
 			reg		${depvar}	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	[aw=wgt_long_fam_adj]	// no survey structure
 			svy:	reg	${depvar}	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	//	survey structure
 		
-		*	These identicial results impliy that it is OK NOT using survey structure in constructing the PFS
+		*	These identicial  in regression coefficients impliy that it is OK NOT using survey structure in constructing the PFS
 	
 	
 	*	(2) Should we include individual-FE using panel structure? (xtreg, etc.)
