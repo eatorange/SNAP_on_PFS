@@ -316,7 +316,7 @@
 	****************************************************************/	
 	
 	*	Construct dynamics variables
-	if	`FSD_construct'==1	{
+	if	`FSD_const'==1	{
 		
 		use	"${SNAP_dtInt}/SNAP_long_PFS", clear
 		

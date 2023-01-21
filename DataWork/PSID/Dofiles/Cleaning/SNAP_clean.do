@@ -2026,15 +2026,28 @@
 			lab	var	error_under "Underpayment Rate"
 			lab	var	error_total	"Payment Error Rate"
 			
-			*	Merge statecode
+			
+			*	Make national error data
+			preserve
+				keep	if	state=="National Average"
+				rename	(error_over	error_under	error_total)	(error_over_ntl	error_under_ntl	error_total_ntl)
+				lab	var	error_over_ntl	"Overpayment rate (national)"
+				lab	var	error_under_ntl	"Underpayment rate (national)"
+				lab	var	error_total_ntl	"Payment Error rate (national)"
+				drop	state
+				save	"${SNAP_dtInt}/Payment_Error_Rates_ntl", replace
+			restore
+			
+			*	Make state error data
 			drop	if	inlist(state,"National Average","Virgin Islands","Guam")
 			drop	if	mi(state)
-			merge	m:1	state using "${SNAP_dtRaw}/Statecode.dta", assert(3) nogen
-			rename	statecode	rp_state
+				
+				*	Merge statecode
+				merge	m:1	state using "${SNAP_dtRaw}/Statecode.dta", assert(3) nogen
+				rename	statecode	rp_state
 		
-			*	Save
+			*	Save (state-error rate)
 			save	"${SNAP_dtInt}/Payment_Error_Rates", replace
-
 
 		
 		*	Thrifty Food Plan data
@@ -2953,7 +2966,8 @@
 			merge	m:1	year	famnum	using	"${SNAP_dtInt}/Poverty_guideline",	nogen	keep(1 3)
 			
 			*	Import Payment Error Rate
-			merge	m:1	year	rp_state	year	using	 "${SNAP_dtInt}/Payment_Error_Rates", nogen	keep(1 3)
+				merge	m:1	year	rp_state	using	 "${SNAP_dtInt}/Payment_Error_Rates", nogen	keep(1 3)	//	State
+				merge	m:1	year	using	 "${SNAP_dtInt}/Payment_Error_Rates_ntl", nogen	keep(1 3)	//	State
 			
 			*	Import CPI data
 			merge	m:1	prev_yrmonth	using	"${SNAP_dtInt}/CPI_1947_2021", 	keep(1 3) keepusing(CPI)
@@ -2970,7 +2984,7 @@
 			merge	m:1	year famnum	using	"${SNAP_dtInt}/incomePL", nogen keep(1 3)
 						
 			*	Import	state and government ideology data
-			merge	m:1	year	rp_state	using	"${SNAP_dtInt}/citizen_government_ideology", /*gen(merge2)*/ keep(1 3) keepusing(citi6016 inst6017_nom)
+			merge	m:1	year	rp_state	using	"${SNAP_dtInt}/citizen_government_ideology", /*gen(merge2)*/ nogen keep(1 3) keepusing(citi6016 inst6017_nom)
 			
 			
 			compress
