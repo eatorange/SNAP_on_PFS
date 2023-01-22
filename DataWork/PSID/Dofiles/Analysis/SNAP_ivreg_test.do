@@ -1,7 +1,13 @@
 
-*	This do-file includes final analyses after testing various models
-	*	For model testing, please check "SNAP_ivreg_test.do"
 
+*	This do-file tests different IV regression models
+	*	different IV
+	*	different FE
+	*	etc.
+	
+*	After test is done, please update "SNAP_ivreg.do" file which does analyses
+	
+*	Please check 
 	*	IV regression
 	if	`IV_reg'==1	{
 			
@@ -115,10 +121,906 @@
 		lab	var	int_SSI_GDP_sl_01_03	"SSI X {2001_2003}"
 		lab	var	int_share_GDP_sl_01_03	"Social expenditure share X {2001_2003}"
 		
+			
+		*		
+			
+			
+		*	Regression test
+		*	For now we test 4 models
+			*	(1) Political vars and state-level SSI, without FE
+			*	(2) Political vars and state-level SSI, with FE
+			*	(3) Political vars and state&local level SSI, without FE
+			*	(4) Political vars and state&local level SSI, with FE
+			
+			*	(1) P and S-SSI, without FE
+			*	Before we proceed, let's see whether there are big differences between analytical weight without survey structure, and using survey structure
+		
+			
+				/*				
+				* Checking difference in results between different regression methods. Disbled by default.
+				
+				loc	IV		SSI_GDP_sl
+				loc	IVname	SSI_GDP_sl
+			
+				*	1. Manual do 2SLS reg (analytic weight)
+					
+					*	1st-stage
+					reg	`endovar'	`IV'	${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	time	///
+						[aw=wgt_long_fam_adj]	if	in_sample==1 & inrange(year,1977,2019), robust	cluster(x11101ll)
+					
+					*	Predict
+					cap	drop	FS_rec_wth_hat
+					predict FS_rec_wth_hat if e(sample),xb
+					
+					*	2nd stage
+					reg	`depvar'	FS_rec_wth_hat	${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	time	///
+						[aw=wgt_long_fam_adj]	if	in_sample==1 & inrange(year,1977,2019), robust	cluster(x11101ll)
+					
+					drop	FS_rec_wth_hat
+				
+						
+					*	2. Manual 1st-stage reg (survey structure)
+					svy: reg	`endovar'	`IV'	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	///
+						if	in_sample==1 & inrange(year,1977,2019)
+									
+					
+					*	3. IV-reg (with analytic weight)
+					ivregress	2sls 	`depvar'	 ${demovars} ${econvars}	${healthvars}	${empvars}	${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+						if	in_sample==1 & inrange(year,1977,2019), first vce(cluster x11101ll)
+					estat firststage
+					
+					*	4. IV-reg (with survey structure)
+					svy: ivregress	2sls 	`depvar'	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')	///
+						if	in_sample==1 & inrange(year,1977,2019), first
+					*estat firststage
+					
+					
+					*	5. IV-reg (with analytic weight, ivreg2 does not allow survey structure)
+					ivreg2 	`depvar'	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+						if	in_sample==1 & inrange(year,1977,2019),	robust	cluster(x11101ll) first savefirst savefprefix(`IV')
+				*/
+							
+			*	The results show that
+				*	Comparing analytic weight and survey structure (1 vs 2, 3 vs 4
+					*	(1) and (3) give same coefficients and st.errors in the first stage, but slightly different results in both results in 2nd-stage
+					*	(2) and (4) give they give same coefficients with very similar standard errors in the first stage. Second stage?
+				*	Comparing manual 1st-stage and ivregress 1st-stage (1 vs 3, 2 vs 4): Both coefficients and standard errors differ (but why?). Coefficients differ not by significantly but non-trivially either.
+				*	Comparing vreg2 aw (5) with ivregress (aw) (3), svy: ivregress (4) and i: (5) have same coefficients with (3) and (4)
+					*	With individual-level cluster error, (5) and (3) give the same standard error.
+				*	=>	I will use (5) now, arguing that (5) and (4) have same coefficients with different standard error.
+			
+			
+			/*	Comparing results between (1) S&L share with 01/03 interaction and (2) state share only. Disabled by default
+			
+				*	SSI (share of s&l exp as % of GDP), with 2001/2003 interaction
+				loc	IV		SSI_GDP_sl
+				loc	IVname	SSI_GDP_sl
+				ivreg2 	`depvar'	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')	int_SSI_exp_sl_01_03	[aw=wgt_long_fam_adj]	///
+					if	in_sample==1 & inrange(year,1977,2019),	robust	cluster(x11101ll) first savefirst savefprefix(`IV')
+				est	store	`IVname'_2nd
+				scalar	Fstat_`IVname'	=	e(widstat)
+				est	restore	`IVname'`endovar'
+				estadd	scalar	Fstat	=	Fstat_`IVname', replace
+				est	store	`IVname'_1st
+				est	drop	`IVname'`endovar'
+				
+				*	SSI (share of s exp as % of GDP)
+				loc	IV		SSI_GDP_s
+				loc	IVname	SSI_GDP_s
+				ivreg2 	`depvar'	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+					if	in_sample==1 & inrange(year,1977,2019),	robust	cluster(x11101ll) first savefirst savefprefix(`IV')
+				est	store	`IVname'_2nd
+				scalar	Fstat_`IVname'	=	e(widstat)
+				est	restore	`IVname'`endovar'
+				estadd	scalar	Fstat	=	Fstat_`IVname', replace
+				est	store	`IVname'_1st
+				est	drop	`IVname'`endovar'
+					
+				*	Very similar results both in first and second, so we will stick to S&L GDP.
+
+			*/
+			
+			/*
+			*	Benchmark
+			*	All IVs, w/o state FE, w/o time trend
+			loc	IV	SSI_GDP_sl	int_SSI_exp_sl_01_03	major_control_dem major_control_rep	
+			loc	IVname	all_bench
+			ivreg2 	`depvar'	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')		[aw=wgt_long_fam_adj]	///
+				if	in_sample==1 & inrange(year,1977,2019),	robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
+			est	store	`IVname'_2nd
+			scalar	Fstat_`IVname'	=	e(widstat)
+			est	restore	`IVname'`endovar'
+			estadd	scalar	Fstat	=	Fstat_`IVname', replace
+			est	store	`IVname'_1st
+			est	drop	`IVname'`endovar'
+			
+										
+				*	All IVs, w/o state FE, time trend
+				loc	IV	SSI_GDP_sl	int_SSI_exp_sl_01_03	major_control_dem major_control_rep	
+				loc	IVname	all_trend
+				ivreg2 	`depvar'	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	time	(`endovar'	=	`IV')		[aw=wgt_long_fam_adj]	///
+					if	in_sample==1 & inrange(year,1977,2019),	robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
+				est	store	`IVname'_2nd
+				scalar	Fstat_`IVname'	=	e(widstat)
+				est	restore	`IVname'`endovar'
+				estadd	scalar	Fstat	=	Fstat_`IVname', replace
+				est	store	`IVname'_1st
+				est	drop	`IVname'`endovar'
+				
+				*	All IVs, with state FE, no time trend
+				loc	IV	SSI_GDP_sl	int_SSI_exp_sl_01_03	major_control_dem major_control_rep	
+				loc	IVname	all_FE
+				ivreg2 	`depvar'	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	${regionvars}	/*${timevars}*/	(`endovar'	=	`IV')		[aw=wgt_long_fam_adj]	///
+					if	in_sample==1 & inrange(year,1977,2019),	robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
+				est	store	`IVname'_2nd
+				scalar	Fstat_`IVname'	=	e(widstat)
+				est	restore	`IVname'`endovar'
+				estadd	scalar	Fstat	=	Fstat_`IVname', replace
+				est	store	`IVname'_1st
+				est	drop	`IVname'`endovar'
+				
+				*	All IVs, with state FE, with time trend
+				loc	IV	SSI_GDP_sl	int_SSI_exp_sl_01_03	major_control_dem major_control_rep	
+				loc	IVname	all_FE_trend
+				ivreg2 	`depvar'	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	${regionvars}	/*${timevars}*/	time	(`endovar'	=	`IV')	///
+					[aw=wgt_long_fam_adj]		if	in_sample==1 & inrange(year,1977,2019),	robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
+				est	store	`IVname'_2nd
+				scalar	Fstat_`IVname'	=	e(widstat)
+				est	restore	`IVname'`endovar'
+				estadd	scalar	Fstat	=	Fstat_`IVname', replace
+				est	store	`IVname'_1st
+				est	drop	`IVname'`endovar'
+			
+				*	1st-stage
+				esttab	all_bench_1st	all_trend_1st	all_FE_1st	all_FE_trend_1st 	using "${SNAP_outRaw}/WeakIV_1st.csv", ///
+						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(Fstat, fmt(%8.3fc)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(_cons)*/	///
+						title(Weak IV_1st)		replace	
+						
+				*	2nd-stage
+				esttab	all_bench_2nd	all_trend_2nd	all_FE_2nd	all_FE_trend_2nd 	using "${SNAP_outRaw}/WeakIV_2nd.csv", ///
+						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(Fstat, fmt(%8.3fc)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(_cons)*/	///
+						title(Weak IV_2nd)		replace	
+			*/
+			
+			*	Specification test
+			*	Specification Test to see which one has 1) valid 1st-stage F-test and (2) reasonable effect size.
+			*	(2022-9-13). Disable by default Turn it on when needed			
+			
+			local	spec_test	0	//	specification test
+			if	`spec_test'==1'	{
+			
+				*	The following specification/sample will be tested
+				*	Different endogenous variables
+					*	Participation only
+					*	Amount only
+					*	Participation and amount
+				*	Different IVs
+					*	Single IV
+						*	SSI
+						*	State control
+						*	Share of social expenditure only
+						*	Don't forget to interact SSI/expenditure with state control!
+					*	Double IV
+						*	SSI and state control
+						*	Share of social expenditure and state control
+				*	Different fixed effects
+					*	State FE only
+					*	Year FE only
+					*	State and year
+				*	Different samples
+					*	All Households
+					*	Households with monthly income less than 130%/200% of poverty line (SNAP income eligibility)
+		
+			
+			
+			
+						
+			global	depvar	PFS_glm
+			global	endo1	FSdummy
+			global	endo2	FSamt_capita
+			
+			 
+			
+			/*
+			global	IV1		SSI_GDP_sl
+			global	IV2		SSI_GDP_sl	year_01_03	int_SSI_GDP_sl_01_03	
+			global	IV3		share_welfare_GDP_sl
+			global	IV4		i.major_control_cat
+			*/
+			
+			global	IV1		share_welfare_GDP_sl	
+			global	IV2		SNAP_index_uw
+			global	IV3		SNAP_index_w
+			global	IV4		error_total
+			
+			global	st0
+			global	st1		${statevars}
+			global	st2		l2.PFS_glm
+					
+			global	sp1		in_sample==1 & inrange(year,1977,2019)
+			global	sp2		in_sample==1 & inrange(year,1977,2019)  & income_below_200==1
+			*global	sp3		in_sample==1 & inrange(year,1977,2019)	& !inlist(year,2001,2003)
+			*global	sp4		in_sample==1 & inrange(year,1977,2019)  & income_below_200==1	&	!inlist(year,2001,2003)
+			
+			global	FE0
+			global	FE1		${macrovars}
+			global	FE2		${timevars}
+			global	FE3		${regionvars}
+			global	FE4		${regionvars}	${macrovars}
+			global	FE5		${regionvars}	${timevars}
+			
+			
+								
+			global	test_est_1st
+			global	test_est_2nd	
+//_13010_13245
+
+
+			forval	endonum	=	1/1	{				
+				forval	IVnum	=	1/2	{
+					forval	stnum	=0/2	{
+						forval	spnum=1/2	{
+							forval	FEnum=0/5	{
+								
+								loc	IVname	x`endonum'`IVnum'`stnum'`spnum'`FEnum'
+								
+								ivreg2 	${depvar}	${st`stnum'}	///
+								${demovars} ${econvars}	${healthvars}	${empvars}	${familyvars}	${eduvars}	${FE`FEnum'}	///
+										(${endo`endonum'}	=	${IV`IVnum'})	[aw=wgt_long_fam_adj]	///
+								if	${sp`spnum'},	robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
+								
+								
+								est	store	`IVname'_2nd
+								
+								scalar	Fstat_CD_`IVname'	=	 e(cdf)
+								scalar	Fstat_KP_`IVname'	=	e(widstat)
+								
+								est	restore	`IVname'${endo`endonum'}
+								estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
+								estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
+								est	store	`IVname'_1st
+								est	drop	`IVname'${endo`endonum'}
+													
+								global	test_est_1st	${test_est_1st}	`IVname'_1st
+								global	test_est_2nd	${test_est_2nd}	`IVname'_2nd
+								
+									*	Add dynamic effects.
+									*	First, predict FS amount received
+									est restore `IVname'_1st
+									cap	drop	xhat`IVname'
+									predict 	xhat`IVname', xb
+									lab	var		xhat`IVname'	"Predicted depvar"
+								
+									*	Now, regress 2nd stage, including FS across multiple periods
+									reg	PFS_glm xhat`IVname'	l2.xhat`IVname'	///
+										${st`stnum'}	${demovars} ${econvars}	${healthvars}	///
+										${empvars}	${familyvars}	${eduvars}	${FE`FEnum'}	[aw=wgt_long_fam_adj]	///
+												if	${sp`spnum'},	robust	cluster(x11101ll) 
+										est	store	`IVname'_dyn_2nd
+									
+										global	test_est_2nd	${test_est_2nd}	`IVname'_dyn_2nd							
+						
+							}
+						}
+					}	//	st(state)
+				}		//	IV			
+			}	//	endo
+			
+
+			
+			*	1st-stage
+			esttab	${test_est_1st}	using "${SNAP_outRaw}/test_1st.csv", ///
+					cells(b(star fmt(%8.4f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) ///
+					incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	///
+					/*drop(rp_state_enum*)*/	title(test specification 1st)		replace	
+			
+			*	2nd-stage
+			esttab	${test_est_2nd}	using "${SNAP_outRaw}/test_2nd.csv", ///
+					cells(b(star fmt(%8.4f)) & se(fmt(2) par)) stats(N r2, fmt(0 2)) incelldelimiter() ///
+					label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+					title(test specification 2nd)		replace		
+			
+			} // specification test
+			
+			 
 	
+						
+			
+			
+			*	Set up global			
+			global	FSD_on_FS_X			${statevars}	${demovars} ${econvars}	${healthvars}	${empvars}	${familyvars}	${eduvars} 	${macrovars}
+			global	FSD_on_FS_X_nomacro	${statevars}	${demovars} ${econvars}	${healthvars}	${empvars}	${familyvars}	${eduvars}
 	
+			global	PFS_est_1st
+			global	PFS_est_2nd
+			
+				
+			
+			*	(2023-1-20) Checking with individual fixed effects.
+			*	I tested different IVs (social spending, SNAP index, overpayment rate (national & state), political ideology (government and citizen)), with and without individual FE
+			*	After testing, I found the following specifications give some credible results
+				*	(1)	SSI, state- and individual- FE, entire study period(1978-2019): relevant(17.8), 1st-stage negative and insignificant (-0.0017), 2nd-stage OK (0.17)
+					*** 1st-stage result is negative, dunno why....
+				*	(2) State citizen ideology, state- and indiviudal-FE, 1977-2015: relevant (20.84), 1st-stage negative (-0.0013) -> negative relation b/w being liberal and FS redemption, 2nd stage OK (0.07)
+				*	(3) State citizen & and govt ideology, state- and indiv-FE, 1977-2015: relevant (10.8), 1st-stage: govt insignificant, citizen negatively associated (-0.001), 2nd-stage OK(0.09), overidentification test OK (p-val: 0.85), 2nd-stage: 0.07
+				*	(4) SNAP policy index (weighted, standardized), state- and individual-FE, 1996-2015: F-stat (19.8) and 2nd-stage (0.29) same as unstandardized, 1st-stage 0.014
+				
+				*** Problem: When I restrict study sample to the periods when SNAP policy index is available, both SSI and citizen ideology goes crazy (weak IV and/or negative 2nd-stage effect)
+		
+				
+				
+				*	SNAP index (weighted)
+				*	Data available: 1996, 1997-2015 (every 2 year)
+				
+					
+					*	(O) State FE, no individual FE: relevant (F-stat: 19.8), 1st-stage positively significant (0.007), 2nd-stage bit high (0.29)
+						loc	IV	SNAP_index_w
+						ivreghdfe	PFS_glm	${FSD_on_FS_X}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(`IV'),	absorb(ib31.rp_state) robust	first savefirst 
+					
+					*	(X) State FE, no individual FE, year FE (no macro variables)
+					*	Very weak (F-stat less than 1), 2nd stage less sensible
+						*ivreghdfe	PFS_glm	${FSD_on_FS_X_nomacro}	(FSdummy = SNAP_index_w)	[aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(SNAP_index_w),	absorb(ib31.rp_state ib1979.year) robust	first savefirst 
+					
+					*	(O) State FE, individual FE: relevant (13.0), 1st-stage positively sig (0.005), 2nd-stage bit too high (0.31)
+						loc	IV	SNAP_index_w
+						ivreghdfe	PFS_glm	${FSD_on_FS_X}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(`IV'),	absorb(x11101ll ib31.rp_state) robust	first savefirst 
+					
+					*	(X) State FE, individual FE, no year FE (macro vars), SE clustered at family: weak IV (9.8)
+						*loc	IV	SNAP_index_w
+						*ivreghdfe	PFS_glm	${FSD_on_FS_X}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(`IV'),	absorb(x11101ll ib31.rp_state) robust cluster(surveyid)	first savefirst 
+				
+				*	SNAP index (weighted, standardized)
+				cap drop SNAP_index_w_std
+				summ	SNAP_index_w
+				gen	SNAP_index_w_std = (SNAP_index_w - r(mean)) / r(sd)
+				lab	var	SNAP_index_w_std	"SNAP policy index (weighted \& standardized)"
+				
+					*	(O) State FE, no individual FE: F-stat (19.8) and 2nd-stage (0.29) same as unstandardized, 1st-stage 0.018
+						loc	IV	SNAP_index_w_std
+						ivreghdfe	PFS_glm	${FSD_on_FS_X}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(`IV'),	absorb(ib31.rp_state) robust	first savefirst 
+						
+					*	(O) State and individual FE: F-stat (19.8) and 2nd-stage (0.29) same as unstandardized, 1st-stage 0.014
+						loc	IV	SNAP_index_w_std
+						ivreghdfe	PFS_glm	${FSD_on_FS_X}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(`IV'),	absorb(x11101ll ib31.rp_state) robust	first savefirst 
+				
+					
+				*	(X) SNAP policy index (unweighted)
+				
+					*	(X) State FE, no individual FE: weak IV (1.8)
+						loc	IV	SNAP_index_uw
+						ivreghdfe	PFS_glm	${FSD_on_FS_X}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(`IV'),	absorb(ib31.rp_state) robust	first savefirst 
+						
+					*	(X) State and individual FE: Weak IV (1.08)
+						loc	IV	SNAP_index_uw
+						ivreghdfe	PFS_glm	${FSD_on_FS_X}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(`IV'),	absorb(x11101ll ib31.rp_state) robust	first savefirst 
+						
+				
+				*	SSI
+					
+					
+					*	(X) No FE at all
+						
+						*	OLS, period (1977-2019)
+						reghdfe	PFS_glm	 FSdummy ${FSD_on_FS_X}	 [aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(SSI_GDP_sl),	noabsorb
+						
+						*	(X) Period: 1977-2019: relevant (41.4), 1st-stage positive (0.004), but 2nd-stage negative (-0.057)
+						loc	IV	SSI_GDP_sl	 year_01_03 int_SSI_GDP_sl_01_03
+						ivreghdfe	PFS_glm	 ${FSD_on_FS_X}	 (FSdummy = `IV')	[aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(SSI_GDP_sl),	/*absorb(ib31.rp_state)*/ robust	first savefirst 	
+						
+						*	(X) Period: 1996-2015: negative 2nd stage
+						loc	IV	SSI_GDP_sl	 year_01_03 int_SSI_GDP_sl_01_03
+						ivreghdfe	PFS_glm	 ${FSD_on_FS_X}	 (FSdummy = `IV')	[aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(SSI_GDP_sl) &  !mi(SNAP_index_w),	/*absorb(ib31.rp_state)*/ robust	first savefirst 	
+					
+					*	state FE, no individual FE
+					
+						*	OLS, period 1977-2019
+						reghdfe	PFS_glm	 FSdummy ${FSD_on_FS_X}	 [aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(SSI_GDP_sl),	absorb(ib31.rp_state)
+						
+						*	(O) Period: 1977-2019: relevance OK(36), 1st-stage negative (-0.008), 2nd-stage OK (0.06)
+						loc	IV	SSI_GDP_sl	year_01_03 int_SSI_GDP_sl_01_03
+						ivreghdfe	PFS_glm	${FSD_on_FS_X}	 (FSdummy = `IV')	[aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(SSI_GDP_sl),	absorb(ib31.rp_state) robust	first savefirst 		
+					
+						*	(X) Period: 1996-2015 (to be consistent with SNAP index): IV OK (10.8) 2nd-stage negative (-0.26)
+						loc	IV	SSI_GDP_sl	year_01_03	int_SSI_GDP_sl_01_03
+						ivreghdfe	PFS_glm	${FSD_on_FS_X}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(SSI_GDP_sl) &  !mi(SNAP_index_w),	absorb(ib31.rp_state) robust	first savefirst 
+						
+					
+					*	State FE, individual FE
+					
+						*	OLS
+						reghdfe	PFS_glm	 FSdummy ${FSD_on_FS_X}	 [aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(SSI_GDP_sl),	absorb(x11101ll ib31.rp_state)
+						
+						*	(O) Period: 1977-2019: relevant(17.8), 1st-stage negative and insignificant (-0.0017), 2nd-stage OK (0.17)
+						loc	IV	SSI_GDP_sl	year_01_03	int_SSI_GDP_sl_01_03
+						ivreghdfe	PFS_glm	${FSD_on_FS_X}	 (FSdummy = `IV')	[aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(SSI_GDP_sl),	absorb(x11101ll ib31.rp_state) robust	first savefirst 
+					
+						*	(X) Period: 1996-2015 (to be consistent with SNAP index): weak IV (5.5), 1st-stage neg and insig, 2nd-stage negative (-0.27).
+						loc	IV	SSI_GDP_sl	year_01_03	int_SSI_GDP_sl_01_03
+						ivreghdfe	PFS_glm	${FSD_on_FS_X}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(SSI_GDP_sl) & !mi(SNAP_index_w),	absorb(x11101ll ib31.rp_state) robust	first savefirst 
+			
+				
+		
+				
+				*	(X) "Natinoal" SNAP overpayment error rate
+						
+					*	(X) State FE, no individual FE
+						
+						* (X) Period: 1980-2019: weak IV(4.5), 2nd-stage too large (2.4)
+						loc	IV	error_over_ntl
+						ivreghdfe	PFS_glm	${FSD_on_FS_X}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(`IV'),	absorb(ib31.rp_state) robust	first savefirst 
+						
+						* (X) Period: 1996-2015: weak IV(5.7)
+						loc	IV	error_over_ntl
+						ivreghdfe	PFS_glm	${FSD_on_FS_X}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(`IV') & !mi(SNAP_index_w), absorb(ib31.rp_state) robust	first savefirst 
+				
+		
+					*	(X) State FE, individual FE
+						*	(X) Period: 1980-2019 (excluding 2015): weak IV (1.15), 2nd-stage too high (6.1)
+						loc	IV	error_over_ntl
+						ivreghdfe	PFS_glm	${FSD_on_FS_X}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(`IV'),	absorb(x11101ll	ib31.rp_state) robust	first savefirst 
+						
+						*	(X) Period: 1996-2015: weak IV (1.3), 2nd-stage OK(0.29)
+						loc	IV	error_over_ntl
+						ivreghdfe	PFS_glm	${FSD_on_FS_X}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(`IV') & !mi(SNAP_index_w),	absorb(x11101ll	ib31.rp_state) robust	first savefirst 
+			
+				*	(X) "State"	 SNAP payment error rate
+				
+					*	State FE, no individual FE
+					
+						*	(X) Period: 1991-2019: weak IV(3.4), 2nd-stage too high(1.80)
+						loc	IV	error_total
+						ivreghdfe	PFS_glm	${FSD_on_FS_X}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(`IV') & inrange(year,1991,2019),	absorb(ib31.rp_state) robust	first savefirst 
+					
+						*	(X) Period: 1996-2015 (to be consistent with SNAP index): very weak IV(0.4)
+						loc	IV	error_total
+						ivreghdfe	PFS_glm	${FSD_on_FS_X}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(`IV') & !mi(SNAP_index_w),	absorb(ib31.rp_state) robust	first savefirst 
+					
+					
+					*	State FE, individual FE
+					
+						*	(X) Period: 1991-2019: weak IV(3.0), 2nd-stage too high(1.7)
+						loc	IV	error_total
+						ivreghdfe	PFS_glm	${FSD_on_FS_X}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(`IV') & inrange(year,1991,2019),	absorb(x11101ll	ib31.rp_state) robust	first savefirst 
+					
+						*	(X) Period: 1996-2015 (to be consistent with SNAP index): very weak IV(0.02), 2nd stage too high(1.38)
+						loc	IV	error_total
+						ivreghdfe	PFS_glm	${FSD_on_FS_X}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(`IV') & !mi(SNAP_index_w),	absorb(x11101ll	ib31.rp_state) robust	first savefirst 
+				
+				
+				*	State governmental ideology 
+					
+					*	state FE, no individual FE
+					
+						*	(X) Period: 1977-2017: IV weak (8.5), 2nd-stage negative and insignificant
+						loc	IV	inst6017_nom
+						ivreghdfe	PFS_glm	${FSD_on_FS_X}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(`IV') ,	absorb(ib31.rp_state) robust	first savefirst 
+					
+						*	(X) Period: 1996-2015 (to be consistent with SNAP index): strong (21.3), 1st-stage  negative, but second stage negative and insignificant.
+						loc	IV	inst6017_nom
+						ivreghdfe	PFS_glm	${FSD_on_FS_X}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(`IV') & !mi(SNAP_index_w), absorb(ib31.rp_state)	robust	first savefirst 
+					
+					
+					*	State FE, individual FE
+					
+						*	(X) Period: 1977-2017: VERY weak (0.17), 2nd-stage too high (0.75)
+						loc	IV	inst6017_nom
+						ivreghdfe	PFS_glm	${FSD_on_FS_X}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(`IV'),	absorb(x11101ll	ib31.rp_state) robust	first savefirst 
+					
+						*	(?) Period: 1996-2015 (to be consistent with SNAP index): F-stat OK (12.3), 1st stage negative (-0.001) -> negative relation b/w being liberal and FS redemption, but 2nd stage too low (0.01)
+						loc	IV	inst6017_nom
+						ivreghdfe	PFS_glm	${FSD_on_FS_X}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(`IV') & !mi(SNAP_index_w),	absorb(x11101ll	ib31.rp_state) robust	first savefirst 
+					
+				*	State citizen ideology
+				
+					*	state FE, no individual FE
+					
+						*	OLS
+						reghdfe	PFS_glm	FSdummy ${FSD_on_FS_X}	[aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(citi6016) ,	absorb(ib31.rp_state)
+						
+						*	(X) Period: 1977-2017: strong(29), 2nd-stage negative and significant (-0.2)
+						loc	IV	citi6016
+						ivreghdfe	PFS_glm	${FSD_on_FS_X}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(`IV') ,	absorb(ib31.rp_state) robust	first savefirst 
+					
+						*	(X) Period: 1996-2015 (to be consistent with SNAP index): weak IV(3.7), 2nd-stage OK (0.13)
+						loc	IV	citi6016
+						ivreghdfe	PFS_glm	${FSD_on_FS_X}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(`IV') & !mi(SNAP_index_w), absorb(ib31.rp_state)	robust	first savefirst 
+					
+					
+					*	State FE, individual FE
+					
+						*	OLS
+						reghdfe	PFS_glm	FSdummy ${FSD_on_FS_X}	[aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(citi6016) ,	absorb(x11101ll ib31.rp_state)
+						
+						*	(O) Period: 1977-2015: relevance OK(20.84), 1st-stage negative (-0.0013) -> negative relation b/w being liberal and FS redemption, 2nd stage OK (0.07)
+						loc	IV	citi6016
+						ivreghdfe	PFS_glm	${FSD_on_FS_X}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(`IV'),	absorb(x11101ll	ib31.rp_state) robust	first savefirst 
+					
+						*	(X) Period: 1996-2015 (to be consistent with SNAP index): weak IV (4.1), 2nd-stage high (0.40)
+						loc	IV	citi6016
+						ivreghdfe	PFS_glm	${FSD_on_FS_X}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(`IV') & !mi(SNAP_index_w),	absorb(x11101ll	ib31.rp_state) robust	first savefirst 
+					
+				
+				*	State and citizen ideology
+				
+					*	state FE, no individual FE
+					
+						*	(X) Period: 1977-2015: relevance OK(15), but 2nd-stage negative and significant (-0.23)
+						loc	IV	inst6017_nom citi6016 
+						ivreghdfe	PFS_glm	${FSD_on_FS_X}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(inst6017_nom) & !mi(citi6016),	absorb(ib31.rp_state) robust	first savefirst 
+					
+						*	(X) Period: 1996-2015 (to be consistent with SNAP index): relevant(10.9), but 2nd-stage negative and insignificant
+						loc	IV	inst6017_nom citi6016 
+						ivreghdfe	PFS_glm	${FSD_on_FS_X}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(inst6017_nom) & !mi(citi6016) & !mi(SNAP_index_w),	absorb(ib31.rp_state) robust	first savefirst 
+					
+					
+					*	State FE, individual FE
+					
+						*	(O) Period: 1977-2015: relevant (10.8), 1st-stage: govt insignificant, citizen negatively associated, 2nd-stage OK(0.09), overidentification test OK (p-val: 0.85), 2nd-stage: 0.07
+						loc	IV	inst6017_nom citi6016 
+						ivreghdfe	PFS_glm	${FSD_on_FS_X}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(inst6017_nom) & !mi(citi6016),	absorb(x11101ll ib31.rp_state) robust	first savefirst 
+					
+						*	(X) Period: 1996-2015 (to be consistent with SNAP index): weak IV (6.5)
+						loc	IV	inst6017_nom citi6016 
+						ivreghdfe	PFS_glm	${FSD_on_FS_X}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(inst6017_nom) & !mi(citi6016) & !mi(SNAP_index_w),	absorb(x11101ll ib31.rp_state) robust	first savefirst 
+
+				
+				
+				
+			
+			*	(2022-11-14) Test with SNAP index (using available data)
+			loc	IV						SNAP_index_uw	
+			loc	IVname					SNAP_index_uw
+			*loc	FS_rec_wth_name			FSdummy
+			*loc	FS_rec_amt_real_name	FSamt
+			
+			
+				foreach	endovar	in	FSdummy	/*FSamt*/	{
+					
+					loc	IV						SNAP_index_uw	
+					loc	IVname					SNAP_index_uw
+					loc	depvar	PFS_glm
+					*loc	endovar			FSdummy		//	FS_amt_realK	FS_rec_wth	//
+					ivreg2 	`depvar'	${FSD_on_FS_X}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+						if	income_below_200==1,	///
+						robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
+					est	store	`IVname'`endovar'_2nd
+					scalar	Fstat_CD	=	 e(cdf)
+					scalar	Fstat_KP	=	e(widstat)
+					
+					est	restore	`IVname'`endovar'
+					estadd	scalar	Fstat_CD	=	Fstat_CD, replace
+					estadd	scalar	Fstat_KP	=	Fstat_KP, replace
+					est	store	`IVname'`endovar'_1st
+					est	drop	`IVname'`endovar'
+										
+					global	PFS_est_1st	${PFS_est_1st}	`IVname'`endovar'_1st
+					global	PFS_est_2nd	${PFS_est_2nd}	`IVname'`endovar'_2nd
+				
+				}				
+				
+				*	1st-stage
+				esttab	${PFS_est_1st}	using "${SNAP_outRaw}/PFS_IV_SNAPindex_1st.csv", ///
+						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+						title(PFS on FS amt)		replace	
+
+				*	2nd-stage
+				esttab	${PFS_est_2nd}	using "${SNAP_outRaw}/PFS_IV_SNAPindex_2nd.csv", ///
+						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+						title(PFS on FS amt)		replace		
+						
+				
+			
+
+			*	SNAP error rate
+				loc	depvar	PFS_glm
+				loc	endovar		FS_rec_wth	//	FS_rec_amt_real		//	FS_amt_realK	//
+				loc	IV		error_total	
+				loc	IVname	error_total
+				ivreg2 	`depvar'	${FSD_on_FS_X}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+					if	in_sample==1 & inrange(year,1977,2019)  & income_below_200==1,	///
+					robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
+				est	store	`IVname'_2nd
+				scalar	Fstat_CD_`IVname'	=	 e(cdf)
+				scalar	Fstat_KP_`IVname'	=	e(widstat)
+				
+				est	restore	`IVname'`endovar'
+				estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
+				estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
+
+				est	store	`IVname'_1st
+				est	drop	`IVname'`endovar'
+									
+				global	PFS_est_1st	${PFS_est_1st}	`IVname'_1st
+				global	PFS_est_2nd	${PFS_est_2nd}	`IVname'_2nd
+			
+			
+			/*
+			*	(2022-10-13) Test with political ideology
+				*	Citizen ideology only 
+				*	Weak IV result shows 
+					*	participation dummy: 11.9 (CD), 1.3(KP), very weak
+					*	amount redeemed: 17.9 (CD), 4.4 (KP), still weak
+				loc	depvar	PFS_glm
+				loc	endovar		FS_rec_wth	//	FS_rec_amt_real		//	FS_amt_realK	//
+				loc	IV		citi6016	
+				loc	IVname	citizen_ideo
+				ivreg2 	`depvar'	${FSD_on_FS_X}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+					if	in_sample==1 & inrange(year,1977,2019)  & income_below_200==1,	///
+					robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
+				est	store	`IVname'_2nd
+				scalar	Fstat_CD_`IVname'	=	 e(cdf)
+				scalar	Fstat_KP_`IVname'	=	e(widstat)
+				
+				est	restore	`IVname'`endovar'
+				estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
+				estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
+
+				est	store	`IVname'_1st
+				est	drop	`IVname'`endovar'
+									
+				global	PFS_est_1st	${PFS_est_1st}	`IVname'_1st
+				global	PFS_est_2nd	${PFS_est_2nd}	`IVname'_2nd
+				
+				*	Government ideology only 
+				*	Weak IV result shows
+					*	Participation dummy: 22.7 (CD), 3.4(KP), slightly stronger than the citizen ideology but still weak.
+					*	Amount redeemed: 18/8 (CD), 4.0 (KP), still weak.
+				loc	depvar	PFS_glm
+				loc	endovar	FS_rec_amt_real		//	FS_rec_wth	//		FS_amt_realK	//	
+				loc	IV		inst6017_nom	
+				loc	IVname	govt_ideo
+				ivreg2 	`depvar'	${FSD_on_FS_X}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+					if	in_sample==1 & inrange(year,1977,2019)  & income_below_200==1,	///
+					robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
+				est	store	`IVname'_2nd
+				scalar	Fstat_CD_`IVname'	=	 e(cdf)
+				scalar	Fstat_KP_`IVname'	=	e(widstat)
+				
+				est	restore	`IVname'`endovar'
+				estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
+				estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
+
+				est	store	`IVname'_1st
+				est	drop	`IVname'`endovar'
+									
+				global	PFS_est_1st	${PFS_est_1st}	`IVname'_1st
+				global	PFS_est_2nd	${PFS_est_2nd}	`IVname'_2nd
+			
+				
+				*	Both citizen and state ideology
+				*	Weak IV test is 11.9 (CD), 1.8 (KP), still weak
+				loc	depvar	PFS_glm
+				loc	endovar	FS_rec_wth	//	FS_rec_amt_real		//	FS_amt_realK	//	
+				loc	IV		citi6016	inst6017_nom	
+				loc	IVname	citiz_govt_ideo
+				ivreg2 	`depvar'	${FSD_on_FS_X}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+					if	in_sample==1 & inrange(year,1977,2019)  & income_below_200==1,	///
+					robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
+				est	store	`IVname'_2nd
+				scalar	Fstat_CD_`IVname'	=	 e(cdf)
+				scalar	Fstat_KP_`IVname'	=	e(widstat)
+				
+				est	restore	`IVname'`endovar'
+				estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
+				estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
+
+				est	store	`IVname'_1st
+				est	drop	`IVname'`endovar'
+									
+				global	PFS_est_1st	${PFS_est_1st}	`IVname'_1st
+				global	PFS_est_2nd	${PFS_est_2nd}	`IVname'_2nd
+			*/		
+			
+			/*
+			
+			*	SSI (share of s&l exp as % of GDP), with 2001/2003 interaction, w/o FE
+			loc	IV		SSI_GDP_sl	int_SSI_exp_sl_01_03
+
+			loc	IVname	SSI_nomacro
+			ivreg2 	`depvar'	${statevars}	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	${regionvars}	/*${timevars}	${macrovars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+				if	in_sample==1 & inrange(year,1977,2019),	robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
+			est	store	`IVname'_2nd
+			scalar	Fstat_`IVname'	=	e(widstat)
+			est	restore	`IVname'`endovar'
+			estadd	scalar	Fstat	=	Fstat_`IVname', replace
+			est	store	`IVname'_1st
+			est	drop	`IVname'`endovar'
+								
+			global	est_1st	${est_1st}	`IVname'_1st
+			global	est_2nd	${est_2nd}	`IVname'_2nd
+			
+				*	SSI (share of s&l exp as % of GDP), with 2001/2003 interaction, macro
+				loc	IV		SSI_GDP_sl	int_SSI_exp_sl_01_03
+				loc	IVname	SSI_macro
+				ivreg2 	`depvar'	${statevars}	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	${macrovars}	${regionvars}	/*${timevars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+					if	in_sample==1 & inrange(year,1977,2019),	robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
+				est	store	`IVname'_2nd
+				scalar	Fstat_`IVname'	=	e(widstat)
+				est	restore	`IVname'`endovar'
+				estadd	scalar	Fstat	=	Fstat_`IVname', replace
+				est	store	`IVname'_1st
+				est	drop	`IVname'`endovar'
+									
+				global	est_1st	${est_1st}	`IVname'_1st
+				global	est_2nd	${est_2nd}	`IVname'_2nd
+			
+			*	State control ("mixed" is omitted as base category), no macro
+			loc	IV	major_control_dem major_control_rep
+			loc	IVname	politics_nomacro
+			ivreg2 	`depvar'	${statevars}	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}		/*${macrovars}*/	${regionvars}	/*${timevars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+				if	in_sample==1 & inrange(year,1977,2019),	robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
+			est	store	`IVname'_2nd
+			scalar	Fstat_`IVname'	=	e(widstat)
+			est	restore	`IVname'`endovar'
+			estadd	scalar	Fstat	=	Fstat_`IVname', replace
+			est	store	`IVname'_1st
+			est	drop	`IVname'`endovar'
+						
+			global	est_1st	${est_1st}	`IVname'_1st
+			global	est_2nd	${est_2nd}	`IVname'_2nd
+			
+				*	State control ("mixed" is omitted as base category), no macro
+				loc	IV	major_control_dem major_control_rep
+				loc	IVname	politics_macro
+				ivreg2 	`depvar'	${statevars}	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	${macrovars}	${regionvars}	/*${timevars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+					if	in_sample==1 & inrange(year,1977,2019),	robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
+				est	store	`IVname'_2nd
+				scalar	Fstat_`IVname'	=	e(widstat)
+				est	restore	`IVname'`endovar'
+				estadd	scalar	Fstat	=	Fstat_`IVname', replace
+				est	store	`IVname'_1st
+				est	drop	`IVname'`endovar'
+							
+				global	est_1st	${est_1st}	`IVname'_1st
+				global	est_2nd	${est_2nd}	`IVname'_2nd
+			
+			*	All IVs, no macro
+			loc	IV	SSI_GDP_sl	int_SSI_exp_sl_01_03	major_control_dem major_control_rep	
+			loc	IVname	all_nomacro
+			ivreg2 	`depvar'	${statevars}	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}		/*${macrovars}*/	${regionvars}	/*${timevars}*/	(`endovar'	=	`IV')		[aw=wgt_long_fam_adj]	///
+				if	in_sample==1 & inrange(year,1977,2019),	robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
+			est	store	`IVname'_2nd
+			scalar	Fstat_`IVname'	=	e(widstat)
+			est	restore	`IVname'`endovar'
+			estadd	scalar	Fstat	=	Fstat_`IVname', replace
+			est	store	`IVname'_1st
+			est	drop	`IVname'`endovar'
+			
+			global	est_1st	${est_1st}	`IVname'_1st
+			global	est_2nd	${est_2nd}	`IVname'_2nd
+			
+			
+				*	All IVs, macro
+				loc	IV	SSI_GDP_sl	int_SSI_exp_sl_01_03	major_control_dem major_control_rep	
+				loc	IVname	all_macro
+				ivreg2 	`depvar'	${statevars}	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	${macrovars}	${regionvars}	/*${timevars}*/	(`endovar'	=	`IV')		[aw=wgt_long_fam_adj]	///
+					if	in_sample==1 & inrange(year,1977,2019),	robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
+				est	store	`IVname'_2nd
+				scalar	Fstat_`IVname'	=	e(widstat)
+				est	restore	`IVname'`endovar'
+				estadd	scalar	Fstat	=	Fstat_`IVname', replace
+				est	store	`IVname'_1st
+				est	drop	`IVname'`endovar'
+				
+				global	est_1st	${est_1st}	`IVname'_1st
+				global	est_2nd	${est_2nd}	`IVname'_2nd
+			
+			
+			*	SSI (share of s&l exp as % of GDP), with 2001/2003 interaction, with FE
+			loc	IV		SSI_GDP_sl
+			loc	IVname	SSI_FE
+			ivreg2 	`depvar'	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	${regionvars}	${timevars}	(`endovar'	=	`IV')	int_SSI_exp_sl_01_03	[aw=wgt_long_fam_adj]	///
+				if	in_sample==1 & inrange(year,1977,2019),	robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
+			est	store	`IVname'_2nd
+			scalar	Fstat_`IVname'	=	e(widstat)
+			est	restore	`IVname'`endovar'
+			estadd	scalar	Fstat	=	Fstat_`IVname', replace
+			est	store	`IVname'_1st
+			est	drop	`IVname'`endovar'
+			
 	
-	
+				*	State control ("mixed" is omitted as base category), with FE
+			loc	IV	major_control_dem major_control_rep
+			loc	IVname	politics_FE
+			ivreg2 	`depvar'	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	${regionvars}	${timevars}	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+				if	in_sample==1 & inrange(year,1977,2019),	robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
+			est	store	`IVname'_2nd
+			scalar	Fstat_`IVname'	=	e(widstat)
+			est	restore	`IVname'`endovar'
+			estadd	scalar	Fstat	=	Fstat_`IVname', replace
+			est	store	`IVname'_1st
+			est	drop	`IVname'`endovar'
+			
+			
+			
+			*	SNAP index (unweighted)
+			loc	IV	SNAP_index_uw
+			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/		(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	if	!mi(PFS_glm),	///
+								robust	cluster(x11101ll) first savefirst savefprefix(`IV')
+			est	store	`IV'_2nd
+			scalar	Fstat_`IV'	=	e(widstat)
+			est	restore	`IV'`endovar'
+			estadd	scalar	Fstat	=	Fstat_`IV', replace
+			est	store	`IV'_1st
+			est	drop	`IV'`endovar'
+			
+			*	SNAP index (weighted)
+			loc	IV	SNAP_index_w
+			ivreg2 	`depvar'	${indvars} ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/		(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	if	!mi(PFS_glm),	///
+								robust	cluster(x11101ll) first savefirst savefprefix(`IV')
+			est	store	`IV'_2nd
+			scalar	Fstat_`IV'	=	e(widstat)
+			est	restore	`IV'`endovar'
+			estadd	scalar	Fstat	=	Fstat_`IV', replace
+			est	store	`IV'_1st
+			est	drop	`IV'`endovar'
+			*/
+												
+			/*
+				*	IVs without CPI, lagged food expenditure (up to 2nd order)
+				loc	IVname	all_lagW2
+				ivreg2 	`depvar'	l2_foodexp_tot_inclFS_pc_1 l2_foodexp_tot_inclFS_pc_2 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+					if	in_sample==1 & inrange(year,1977,2019),	robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
+				est	store	`IVname'_2nd
+				scalar	Fstat_`IVname'	=	e(widstat)
+				est	restore	`IVname'`endovar'
+				estadd	scalar	Fstat	=	Fstat_`IVname', replace
+				est	store	`IVname'_1st
+				est	drop	`IVname'`endovar'
+				
+				local	est_1st	`est_1st'	`IVname'_1st
+				local	est_2nd	`est_2nd'	`IVname'_2nd
+				
+				
+				*	IVs with CPI, w/o lagged food exp
+				loc	IVname	all_CPI
+				ivreg2 	`depvar' ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	CPI	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+					if	in_sample==1 & inrange(year,1977,2019),	robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
+				est	store	`IVname'_2nd
+				scalar	Fstat_`IVname'	=	e(widstat)
+				est	restore	`IVname'`endovar'
+				estadd	scalar	Fstat	=	Fstat_`IVname', replace
+				est	store	`IVname'_1st
+				est	drop	`IVname'`endovar'
+				
+				local	est_1st	`est_1st'	`IVname'_1st
+				local	est_2nd	`est_2nd'	`IVname'_2nd
+				
+				*	IVs with CPI with lagged food exp (up to 2rd)
+				loc	IVname	all_lagW3_CPI
+				ivreg2 	`depvar'	l2_foodexp_tot_inclFS_pc_1 l2_foodexp_tot_inclFS_pc_2	 ${demovars} ${econvars}	${healthvars}	${empvars}		${familyvars}	${eduvars}	/*${regionvars}	${timevars}*/	CPI	(`endovar'	=	`IV')	[aw=wgt_long_fam_adj]	///
+					if	in_sample==1 & inrange(year,1977,2019),	robust	cluster(x11101ll) first savefirst savefprefix(`IVname')
+				est	store	`IVname'_2nd
+				scalar	Fstat_`IVname'	=	e(widstat)
+				est	restore	`IVname'`endovar'
+				estadd	scalar	Fstat	=	Fstat_`IVname', replace
+				est	store	`IVname'_1st
+				est	drop	`IVname'`endovar'
+				
+				local	est_1st	`est_1st'	`IVname'_1st
+				local	est_2nd	`est_2nd'	`IVname'_2nd
+				*/
+
+			/*
+				*	1st-stage
+				esttab	${est_1st}	using "${SNAP_outRaw}/WeakIV_1st.csv", ///
+						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(rp_state_enum*)	///
+						title(Weak IV_1st)		replace	
+						
+				esttab	${est_1st}	using "${SNAP_outRaw}/WeakIV_1st.tex", ///
+						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(rp_state_enum*)	///
+						title(Weak IV_1st)		replace	
+						
+				*	2nd-stage
+				esttab	${est_2nd}	using "${SNAP_outRaw}/WeakIV_2nd.csv", ///
+						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(rp_state_enum*)///
+						title(Weak IV_2nd)		replace		
+						
+				esttab	${est_2nd}	using "${SNAP_outRaw}/WeakIV_2nd.tex", ///
+						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(rp_state_enum*)///
+						title(Weak IV_2nd)		replace	
+
+		*/
 		
 						
 			*	Set the benchmark specification based on the test above.	

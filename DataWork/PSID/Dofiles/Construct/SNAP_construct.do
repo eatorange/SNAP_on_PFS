@@ -130,7 +130,7 @@
 			*	I use Poisson distribution assumption instead of Gamma
 			*	I include individual-FE
 			*	Please refer to "SNAP_PFS_const_test.do" file for more detail.
-		ppmlhdfe	${depvar}	${statevars} ${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	[pweight=wgt_long_fam_adj], absorb(x11101ll ib31.rp_state ib1979.year) d	
+		ppmlhdfe	${depvar}	${statevars} ${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars} 	 [pweight=wgt_long_fam_adj], absorb(x11101ll ib31.rp_state ib1979.year) d	
 		/*
 		glm 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}*/	${indvars}	/*${regionvars}	${timevars}*/	[aw=wgt_long_fam_adj], family(gamma)	link(log)
 		svy, subpop(if ${PFS_sample}): glm 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}*/	${macrovars}	/*${regionvars}	${timevars}*/, family(gamma)	link(log)
@@ -308,7 +308,7 @@
 					title(Effect of Correlates on Food Security Status) replace
 		
 		
-		*	
+
 	}
 	
 	/****************************************************************
