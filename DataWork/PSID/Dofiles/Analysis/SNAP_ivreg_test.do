@@ -475,11 +475,18 @@
 				gen	SNAP_index_w_std = (SNAP_index_w - r(mean)) / r(sd)
 				lab	var	SNAP_index_w_std	"SNAP policy index (weighted \& standardized)"
 				
+					
 					*	(O) State FE, no individual FE: F-stat (19.8) and 2nd-stage (0.29) same as unstandardized, 1st-stage 0.018
 						loc	IV	SNAP_index_w_std
 						ivreghdfe	PFS_glm	${FSD_on_FS_X}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(`IV'),	absorb(ib31.rp_state) robust	first savefirst 
 						
 					*	(O) State and individual FE: F-stat (19.8) and 2nd-stage (0.29) same as unstandardized, 1st-stage 0.014
+						
+						*	OLS
+						loc	IV	SNAP_index_w_std
+						reghdfe	PFS_glm	FSdummy	${FSD_on_FS_X}	[aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(`IV'),	absorb(x11101ll	ib31.rp_state) vce(robust)
+						
+						*	iV
 						loc	IV	SNAP_index_w_std
 						ivreghdfe	PFS_glm	${FSD_on_FS_X}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(`IV'),	absorb(x11101ll ib31.rp_state) robust	first savefirst 
 				
@@ -631,7 +638,7 @@
 						*	OLS
 						reghdfe	PFS_glm	FSdummy ${FSD_on_FS_X}	[aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(citi6016) ,	absorb(x11101ll ib31.rp_state)
 						
-						*	(O) Period: 1977-2015: relevance OK(20.84), 1st-stage negative (-0.0013) -> negative relation b/w being liberal and FS redemption, 2nd stage OK (0.07)
+						*	(?) Period: 1977-2015: relevance OK(20.84), 1st-stage negative (-0.0013) -> negative relation b/w being liberal and FS redemption, 2nd stage insignificant (0.07 with SE 0.05)
 						loc	IV	citi6016
 						ivreghdfe	PFS_glm	${FSD_on_FS_X}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(`IV'),	absorb(x11101ll	ib31.rp_state) robust	first savefirst 
 					
