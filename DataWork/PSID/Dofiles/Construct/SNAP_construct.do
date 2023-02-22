@@ -60,7 +60,7 @@
 	di "Git branch `r(branch)'; commit `r(sha)'."
 	
 	*	Determine which part of the code to be run
-	local	PFS_const	1	//	Construct PFS from cleaned data
+	local	PFS_const	0	//	Construct PFS from cleaned data
 	local	FSD_const	1	//	Construct FSD from PFS
 	
 	/****************************************************************

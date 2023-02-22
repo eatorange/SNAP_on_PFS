@@ -938,25 +938,31 @@
 				
 				*	By most & least conservative 
 				use	"${SNAP_dtInt}/citizen_government_ideology", clear
-				twoway	(line citi6016	year		if state=="Mississippi",	yaxis(1) lc(green) lp(solid) lwidth(medium) graphregion(fcolor(white)) legend(label(1 "Citizen (MI)")))		///
+				replace	citi6016	=	citi6016/100
+				twoway	(line citi6016	year		if state=="Mississippi",	yaxis(1) lc(green) lp(solid) lwidth(medium) graphregion(fcolor(white)) legend(label(1 "Citizen (MS)")))		///
 						(line citi6016	year		if state=="Massachusetts", 	yaxis(1)  lc(blue) lp(dash) lwidth(medium) graphregion(fcolor(white)) legend(label(2 "Citizen (MA)")))		///
-						(line inst6017_nom	year	if state=="Idaho", 	yaxis(2) lc(purple) lp(dot) lwidth(medium) graphregion(fcolor(white)) legend(label(3 "Government (ID)")))	///
-						(line inst6017_nom	year	if state=="Hawaii", yaxis(2)	lc(red) lp(dashdot) lwidth(medium) graphregion(fcolor(white)) legend(label(4 "Government (ID)"))),	///
-						title("Citizen and state ideology") ytitle("Citizen score", axis(1)) ytitle("Govt score.rate", axis(2)) xtitle("year")
+						/*(line inst6017_nom	year	if state=="Idaho", 	yaxis(2) lc(purple) lp(dot) lwidth(medium) graphregion(fcolor(white)) legend(label(3 "Government (ID)")))	///
+						(line inst6017_nom	year	if state=="Hawaii", yaxis(2)	lc(red) lp(dashdot) lwidth(medium) graphregion(fcolor(white)) legend(label(4 "Government (ID)")))*/,	///
+						title("Citizen ideology") ytitle("Citizen score", axis(1)) /*ytitle("Govt score.rate", axis(2))*/ xtitle("year") name(CIM_bystate, replace) 
 				graph	export	"${SNAP_outRaw}/ideology_by_state.png", as(png) replace
 				graph	close
 				
 				
 				*	By year
 				use	"${SNAP_dtInt}/citizen_government_ideology", clear
+				replace	citi6016	=	citi6016/100
 				collapse	citi6016 inst6017_nom, by(year)
 				merge	1:1	year	using	"${SNAP_dtInt}/Unemployment Rate_nation"
 				graph	twoway	(line citi6016	year, 	 yaxis(1) lc(green) lp(solid) lwidth(medium) graphregion(fcolor(white)) legend(label(1 "Citizen ideology")))		///
-								(line inst6017_nom	year, yaxis(1) 	 lc(blue) lp(dash) lwidth(medium) graphregion(fcolor(white)) legend(label(2 "Government ideology")))	///
-								(line unemp_rate	year, yaxis(2) lc(purple) lp(dot) lwidth(medium) graphregion(fcolor(white)) legend(label(3 "Uemployment Rate"))),	///
-								title("Times series of state/government ideology") ytitle("score", axis(1)) ytitle("Unemp.rate", axis(2)) xtitle("year") note(0 most conservative - 100 most liberal)
+								/*(line inst6017_nom	year, yaxis(1) 	 lc(blue) lp(dash) lwidth(medium) graphregion(fcolor(white)) legend(label(2 "Government ideology")))*/	///
+								(line unemp_rate	year, yaxis(2) lc(purple) lp(dot) lwidth(medium) graphregion(fcolor(white)) legend(label(2 "Uemployment Rate"))),	///
+								title("Citizen Ideology and Unemployment Rate by Year") ytitle("score", axis(1)) ytitle("Unemp.rate", axis(2)) xtitle("year") note(0 most conservative - 100 most liberal)	///
+								name(CIM_byyear, replace) 
 				graph	export	"${SNAP_outRaw}/ideology_by_year.png", as(png) replace
 				graph	close	
+				
+				graph	combine	CIM_bystate	CIM_byyear, graphregion(color(white) fcolor(white)) 
+				graph	export	"${SNAP_outRaw}/CIM_combined.png", replace
 				
 				*	Correlation by specific PSID wave
 					
@@ -4167,7 +4173,7 @@
 		
 		*	Create constant dollars of monetary variables  (ex. food exp, TFP)
 		*	Baseline CPI is 2019 Jan (100) 
-		qui	ds	fam_income_pc	FS_rec_amt foodexp_home_inclFS foodexp_home_exclFS  foodexp_out foodexp_deliv foodexp_tot_exclFS foodexp_tot_inclFS ///
+		qui	ds	fam_income_pc	FS_rec_amt	FS_rec_amt_capita foodexp_home_inclFS foodexp_home_exclFS  foodexp_out foodexp_deliv foodexp_tot_exclFS foodexp_tot_inclFS ///
 				TFP_monthly_cost foodexp_W_TFP foodexp_W_TFP_pc	foodexp_W_TFP_pc_th	///
 				foodexp_tot_exclFS_pc foodexp_tot_inclFS_pc	foodexp_tot_exclFS_pc_? foodexp_tot_inclFS_pc_?
 		global	money_vars_current	`r(varlist)'
