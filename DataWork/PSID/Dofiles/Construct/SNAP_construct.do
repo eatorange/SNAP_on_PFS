@@ -60,7 +60,7 @@
 	di "Git branch `r(branch)'; commit `r(sha)'."
 	
 	*	Determine which part of the code to be run
-	local	PFS_const	0	//	Construct PFS from cleaned data
+	local	PFS_const	1	//	Construct PFS from cleaned data
 	local	FSD_const	1	//	Construct FSD from PFS
 	
 	/****************************************************************
@@ -109,7 +109,13 @@
 		*label	var	major_control_dem	"Dem state control"
 		*label	var	major_control_rep	"Rep state control"
 		
-	
+		*	Transformation of the outcome and thresholds
+		*	(note: ln doesnt work under ppmlhdfe as the command does not accept zero values, and IHS-based IV estimates become less sensible, so we stick to the original food expenditure variable.)
+		cap	drop	ln_foodexp	IHS_foodexp	ln_TFP	IHS_TFP
+		gen	ln_foodexp	=	ln(foodexp_tot_inclFS_pc_real)
+		gen	IHS_foodexp	=	asinh(foodexp_tot_inclFS_pc_real)
+		gen	ln_TFP		=	ln(foodexp_W_TFP_pc_real)
+		gen	IHS_TFP		=	asinh(foodexp_W_TFP_pc_real)
 		
 		*	Sample where PFS will be constructed upon
 		*	They include (i) in_sample family (2) HH from 1978 to 2019
@@ -117,7 +123,7 @@
 		*	global	PFS_sample		in_sample==1	&	inrange(year,1976,2019) 
 		
 		*	Declare variables (food expenditure per capita, real value)
-		global	depvar		foodexp_tot_inclFS_pc_real
+		global	depvar		foodexp_tot_inclFS_pc_real	/*IHS_foodexp*/
 		
 			*	Summary state of dep.var
 			summ	${depvar}, d
@@ -246,7 +252,8 @@
 			*gen beta1_foodexp_pc_glm	= e1_foodexp_sq_glm / mean1_foodexp_glm		//	scale parameter of Gamma (beta)
 			
 			*	Generate PFS by constructing CDF
-			gen PFS_glm = gammaptail(alpha1_foodexp_pc_glm, foodexp_W_TFP_pc_real/beta1_foodexp_pc_glm)	//	gammaptail(a,(x-g)/b)=(1-gammap(a,(x-g)/b)) where g is location parameter (g=0 in this case)
+			global	TFP_threshold	foodexp_W_TFP_pc_real	/*IHS_TFP*/
+			gen PFS_glm = gammaptail(alpha1_foodexp_pc_glm, ${TFP_threshold}/beta1_foodexp_pc_glm)	//	gammaptail(a,(x-g)/b)=(1-gammap(a,(x-g)/b)) where g is location parameter (g=0 in this case)
 			label	var	PFS_glm "PFS"
 			
 					
