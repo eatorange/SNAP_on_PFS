@@ -77,13 +77,16 @@
 		assert	in_sample==1
 		assert	inrange(year,1977,2019)
 		
+		*	(2023-05-21) Now keep only 1997-2015 data which I have SNAP policy index
+		keep	if	inrange(year,1997,2015)
+		
 		*	Drop states outside 48 continental states (HA/AK/inapp/etc.), as we do not have their TFP cost information.
 		drop	if	inlist(rp_state,0,50,51,99)
 		
 		*	Set globals
 		global	statevars		l2_foodexp_tot_exclFS_pc_1_real l2_foodexp_tot_exclFS_pc_2_real	//	l2_foodexp_tot_exclFS_pc_1_real l2_foodexp_tot_exclFS_pc_2_real  * Need to use real value later
 		global	demovars		rp_age rp_age_sq	rp_nonWhte	rp_married	rp_female	
-		global	econvars		ln_fam_income_pc_real	//	ln_fam_income_pc_real   * Need to use real value later
+		global	econvars		ln_fam_income_pc_real	// Need to use real value later
 		global	healthvars		rp_disabled
 		global	familyvars		famnum	ratio_child
 		global	empvars			rp_employed
