@@ -25,7 +25,7 @@
 		summ	citi6016	[aw=wgt_long_fam_adj] if income_below_200==1 
 		
 		*	(Corrlation and bivariate regression of stamp redemption with state/govt ideology)
-		pwcorr	FS_rec_wth	citi6016 inst6017_nom 	if	in_sample==1 & inrange(year,1977,2019)  & income_below_200==1,	sig
+		pwcorr	FS_rec_wth	citi6016 inst6017_nom 	if	in_sample==1 & inrange(year,1997,2015)  & income_below_200==1,	sig
 		reg	FS_rec_wth	citi6016	[aw=wgt_long_fam_adj]	///
 					if	in_sample==1 & inrange(year,1977,2019)  & income_below_200==1,	///
 					robust	cluster(x11101ll) 
@@ -78,11 +78,19 @@
 		lab	var	SNAP_index_w_std	"SNAP policy index (weighted \& standardized)"
 		
 		*	Re-scaled weighted SNAP index (to vary from 0 to 1)
-		cap	drop	SNAP_index_w_0to1
-		summ	SNAP_index_w  [aw=wgt_long_fam_adj]
-		gen		SNAP_index_w_0to1	=	(SNAP_index_w-r(min)) / (r(max) - r(min))
-		lab	var	SNAP_index_w_0to1	"SNAP Policy Index (weighted \& rescaled)"
 		
+			*	Manual
+			cap	drop	SNAP_index_w_0to1
+			summ	SNAP_index_w  [aw=wgt_long_fam_adj]
+			gen		SNAP_index_w_0to1	=	(SNAP_index_w-r(min)) / (r(max) - r(min))
+			lab	var	SNAP_index_w_0to1	"SNAP Policy Index (weighted \& rescaled)"
+			
+			*	Official
+			cap	drop	SNAP_index_off_w_0to1
+			summ	SNAP_index_off_w  [aw=wgt_long_fam_adj]
+			gen		SNAP_index_off_w_0to1	=	(SNAP_index_off_w-r(min)) / (r(max) - r(min))
+			lab	var	SNAP_index_off_w_0to1	"SNAP Policy Index (official &\ weighted \& rescaled)"
+			
 		*	Re-scale citizen ideology variable (from 0-100 to 0-1 : for better interpretation)
 		cap	drop	citi6016_0to1
 		gen	citi6016_0to1	=	citi6016/100
@@ -174,11 +182,10 @@
 			
 			
 			*	First we run main IV regression, to find the samples in the regression
-			*	State citizen ideology (1977-2015)
 			loc	depvar		PFS_glm
 			loc	endovar		FSdummy	//	FSamt_capita
-			loc	IV			citi6016_0to1	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
-			loc	IVname		citi
+			loc	IV			SNAP_index_w_0to1	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
+			loc	IVname		index
 				
 				cap	drop reg_sample	
 				ivreghdfe	`depvar'	 ${FSD_on_FS_X}	 (`endovar' = `IV')	[aw=wgt_long_fam_adj] if	income_below_200==1 &	!mi(`IV'),	///
@@ -216,276 +223,7 @@
 						est	store	fesub_ols
 					
 				*	IV		
-				
-					*	Social spending	(SSI)			
-					loc	depvar		PFS_glm
-					loc	endovar		FSdummy	//	FSamt_capita
-					loc	IV			SSI_GDP_sl		int_SSI_GDP_sl_01_03	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
-					loc	IVname		SSI
-						
-				
-						*	No FE
-						ivreghdfe	`depvar'	year_01_03	 ${FSD_on_FS_X}	 (`endovar' = `IV')	[aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(SSI_GDP_sl),	///
-							absorb(ib31.rp_state x11101ll) robust first savefirst savefprefix(`IVname')	 
-						est	store	`IVname'_IV_nofe_2nd
-						scalar	Fstat_CD_`IVname'	=	 e(cdf)
-						scalar	Fstat_KP_`IVname'	=	e(widstat)
-					
-						est	restore	`IVname'`endovar'
-						estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
-						estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
-
-						est	store	`IVname'_nofe_IV_1st
-						est	drop	`IVname'`endovar'
-											
-						*global	PFS_est_1st	${PFS_est_1st}	`IVname'_1st
-						*global	PFS_est_2nd	${PFS_est_2nd}	`IVname'_2nd
-					
-					
-						*	Add dynamic effects.
-						*	First, predict FS amount received
-						est restore `IVname'_nofe_IV_1st
-						cap	drop	FS_wth_PFS_hat
-						predict 	FS_wth_PFS_hat, xb
-						lab	var		FS_wth_PFS_hat	"Predicted FS dummy received last month"
-				
-						*	Now, regress 2nd stage, including FS across multiple periods
-						reghdfe	PFS_glm FS_wth_PFS_hat	l2.FS_wth_PFS_hat	${FSD_on_FS_X}	[aw=wgt_long_fam_adj]	if	income_below_200==1 & !inlist(year,2001,2003) &  !mi(SSI_GDP_sl), vce(robust)	noabsorb	 
-						est	store	`IVname'_dyn_X_nofe_2nd
-					
-						*global	PFS_est_2nd	${PFS_est_2nd}	PFS_dyn_X_2nd
-				
-				
-					*	SSI, with state FE							
-						ivreghdfe	`depvar'	 ${FSD_on_FS_X}	 (`endovar' = `IV')	[aw=wgt_long_fam_adj] if	income_below_200==1 & !inlist(year,2001,2003) &	!mi(SSI_GDP_sl),	///
-							absorb(ib31.rp_state) robust first savefirst savefprefix(`IVname')	 
-						est	store	`IVname'_IV_stfe_2nd
-						scalar	Fstat_CD_`IVname'	=	 e(cdf)
-						scalar	Fstat_KP_`IVname'	=	e(widstat)
-					
-						est	restore	`IVname'`endovar'
-						estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
-						estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
-
-						est	store	`IVname'_stfe_IV_1st
-						est	drop	`IVname'`endovar'
-											
-						*global	PFS_est_1st	${PFS_est_1st}	`IVname'_1st
-						*global	PFS_est_2nd	${PFS_est_2nd}	`IVname'_2nd
-					
-					
-						*	Add dynamic effects.
-						*	First, predict FS amount received
-						est restore `IVname'_stfe_IV_1st
-						cap	drop	FS_wth_PFS_hat
-						predict 	FS_wth_PFS_hat, xb
-						lab	var		FS_wth_PFS_hat	"Predicted FS dummy received last month"
-				
-						*	Now, regress 2nd stage, including FS across multiple periods
-						reghdfe	PFS_glm FS_wth_PFS_hat	l2.FS_wth_PFS_hat	${FSD_on_FS_X}	[aw=wgt_long_fam_adj]	if	income_below_200==1	& !mi(SSI_GDP_sl),	vce(robust)	absorb(ib31.rp_state)
-						est	store	`IVname'_dyn_X_stfe_2nd
-						
-					*	state and year FE							
-					
-					*	Social spending	(SSI)			
-					loc	depvar		PFS_glm
-					loc	endovar		FSdummy	//	FSamt_capita
-					loc	IV			SSI_GDP_sl		int_SSI_GDP_sl_01_03	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
-					loc	IVname		SSI
-					
-					
-						ivreghdfe	`depvar'	year_01_03 ${FSD_on_FS_X}	 (`endovar' = `IV')	[aw=wgt_long_fam_adj] if	income_below_200==1 &	!mi(SSI_GDP_sl),	///
-							absorb(ib31.rp_state x11101ll) robust first savefirst savefprefix(`IVname')	 
-						est	store	`IVname'_IV_fe_2nd
-						scalar	Fstat_CD_`IVname'	=	 e(cdf)
-						scalar	Fstat_KP_`IVname'	=	e(widstat)
-					
-						est	restore	`IVname'`endovar'
-						estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
-						estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
-
-						est	store	`IVname'_fe_IV_1st
-						est	drop	`IVname'`endovar'
-											
-						*global	PFS_est_1st	${PFS_est_1st}	`IVname'_1st
-						*global	PFS_est_2nd	${PFS_est_2nd}	`IVname'_2nd
-					
-					
-						*	Add dynamic effects.
-						*	First, predict FS amount received
-						est restore `IVname'_fe_IV_1st
-						cap	drop	FS_wth_PFS_hat
-						predict 	FS_wth_PFS_hat, xb
-						lab	var		FS_wth_PFS_hat	"Predicted FS dummy received last month"
-				
-						*	Now, regress 2nd stage, including FS across multiple periods
-						reghdfe	PFS_glm FS_wth_PFS_hat	l2.FS_wth_PFS_hat	${FSD_on_FS_X}	[aw=wgt_long_fam_adj]	if	income_below_200==1	& !mi(SSI_GDP_sl),	vce(robust)	absorb(ib31.rp_state x11101ll)	
-						est	store	`IVname'_dyn_X_fe_2nd
-						
-						
-						*	State and year FE, only on subsample with non-missing index
-						ivreghdfe	PFS_glm	${FSD_on_FS_X}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(SSI_GDP_sl) &  !mi(SNAP_index_w),	///
-							absorb(ib31.rp_state x11101ll) robust	first savefirst savefprefix(`IVname')	 
-						est	store	`IVname'_IV_fesub_2nd
-						scalar	Fstat_CD_`IVname'	=	 e(cdf)
-						scalar	Fstat_KP_`IVname'	=	e(widstat)
-					
-						est	restore	`IVname'`endovar'
-						estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
-						estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
-
-						est	store	`IVname'_fesub_IV_1st
-						est	drop	`IVname'`endovar'
-						
-						
-				*	State citizen ideology (1977-2015)
-				loc	depvar		PFS_glm
-				loc	endovar		FSdummy	//	FSamt_capita
-				loc	IV			citi6016_0to1	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
-				loc	IVname		citi
-				
-				keep	if	inrange(year,1977,2015)
-				summ	FS_rec_wth 	FSamtcp	PFS_glm	[aw=wgt_long_fam_adj] if reg_sample==1
-				summ	FS_rec_wth	FSamtcp	PFS_glm [aw=wgt_long_fam_adj] if reg_sample==1 & PFS_FI_glm==1
-				summ	FS_rec_wth	FSamtcp	PFS_glm [aw=wgt_long_fam_adj] if reg_sample==1 & FS_rec_wth==1
-				
-				summ	FS_rec_wth	PFS_glm [aw=wgt_long_fam_adj] if reg_sample==1 & !mi(SNAP_index_w)
-				summ	FS_rec_wth	PFS_glm [aw=wgt_long_fam_adj] if reg_sample==1 & !mi(SNAP_index_w) & FS_rec_wth==1
-				
-					*	No FE
-						ivreghdfe	`depvar'	 ${FSD_on_FS_X}	 (`endovar' = `IV')	[aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(`IV') & reg_sample==1,	/*absorb(ib31.rp_state)*/ robust first savefirst savefprefix(`IVname')	 
-						est	store	`IVname'_IV_nofe_2nd
-						scalar	Fstat_CD_`IVname'	=	 e(cdf)
-						scalar	Fstat_KP_`IVname'	=	e(widstat)
-					
-						est	restore	`IVname'`endovar'
-						estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
-						estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
-
-						est	store	`IVname'_nofe_IV_1st
-						est	drop	`IVname'`endovar'
-											
-						*global	PFS_est_1st	${PFS_est_1st}	`IVname'_1st
-						*global	PFS_est_2nd	${PFS_est_2nd}	`IVname'_2nd
-					
-					
-						*	Add dynamic effects.
-						*	First, predict FS amount received
-						est restore `IVname'_nofe_IV_1st
-						cap	drop	FS_wth_PFS_hat
-						predict 	FS_wth_PFS_hat, xb
-						lab	var		FS_wth_PFS_hat	"Predicted FS dummy received last month"
-				
-						*	Now, regress 2nd stage, including FS across multiple periods
-						reghdfe	PFS_glm FS_wth_PFS_hat	l2.FS_wth_PFS_hat	${FSD_on_FS_X}	[aw=wgt_long_fam_adj]	if	income_below_200==1	& !mi(`IV'), vce(robust)	noabsorb	 
-						est	store	`IVname'_dyn_X_nofe_2nd
-					
-						*global	PFS_est_2nd	${PFS_est_2nd}	PFS_dyn_X_2nd
-				
-				
-					*	state FE							
-						ivreghdfe	`depvar'	 ${FSD_on_FS_X}	 (`endovar' = `IV')	[aw=wgt_long_fam_adj] if	income_below_200==1 &	!mi(`IV') & reg_sample==1,	///
-							absorb(ib31.rp_state) robust first savefirst savefprefix(`IVname')	 
-						est	store	`IVname'_IV_stfe_2nd
-						scalar	Fstat_CD_`IVname'	=	 e(cdf)
-						scalar	Fstat_KP_`IVname'	=	e(widstat)
-					
-						est	restore	`IVname'`endovar'
-						estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
-						estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
-
-						est	store	`IVname'_stfe_IV_1st
-						est	drop	`IVname'`endovar'
-											
-						*global	PFS_est_1st	${PFS_est_1st}	`IVname'_1st
-						*global	PFS_est_2nd	${PFS_est_2nd}	`IVname'_2nd
-					
-					
-						*	Add dynamic effects.
-						*	First, predict FS amount received
-						est restore `IVname'_stfe_IV_1st
-						cap	drop	FS_wth_PFS_hat
-						predict 	FS_wth_PFS_hat, xb
-						lab	var		FS_wth_PFS_hat	"Predicted FS dummy received last month"
-				
-						*	Now, regress 2nd stage, including FS across multiple periods
-						reghdfe	PFS_glm FS_wth_PFS_hat	l2.FS_wth_PFS_hat	${FSD_on_FS_X}	[aw=wgt_long_fam_adj]	if	income_below_200==1	& !mi(`IV'),	vce(robust)	absorb(ib31.rp_state)
-						est	store	`IVname'_dyn_X_stfe_2nd
-						
-					*	state and individual FE							
-						*	State citizen ideology (1977-2015)
-						loc	depvar		PFS_glm
-						loc	endovar		 FSdummy	//	 FSamtcp // 
-						loc	IV			citi6016_0to1	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
-						loc	IVname		citi
-						
-
-						
-						ivreghdfe	`depvar'	 ${FSD_on_FS_X}	 (`endovar' = `IV')	[aw=wgt_long_fam_adj] if	income_below_200==1 & reg_sample==1 & !mi(`IV'),	///
-							absorb(ib31.rp_state x11101ll) robust first savefirst savefprefix(`IVname')	 
-		
-						est	store	`IVname'_IV_fe_2nd
-						scalar	Fstat_CD_`IVname'	=	 e(cdf)
-						scalar	Fstat_KP_`IVname'	=	e(widstat)
-					
-						est	restore	`IVname'`endovar'
-						estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
-						estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
-
-						est	store	`IVname'_fe_IV_1st
-						est	drop	`IVname'`endovar'
-											
-						*global	PFS_est_1st	${PFS_est_1st}	`IVname'_1st
-						*global	PFS_est_2nd	${PFS_est_2nd}	`IVname'_2nd
-					
-					
-						*	Add dynamic effects.
-						*	First, predict FS amount received
-						est restore `IVname'_fe_IV_1st
-						cap	drop	FS_wth_PFS_hat
-						predict 	FS_wth_PFS_hat, xb
-						lab	var		FS_wth_PFS_hat	"Predicted FS dummy received last month"
-				
-						*	Now, regress 2nd stage, including FS across multiple periods
-						reghdfe	PFS_glm FS_wth_PFS_hat	l2.FS_wth_PFS_hat	${FSD_on_FS_X}	[aw=wgt_long_fam_adj]	if	income_below_200==1	& !mi(`IV'),	///
-							vce(robust)	absorb(ib31.rp_state x11101ll)	
-						est	store	`IVname'_dyn_X_fe_2nd
-				
-						
-					*	State and year FE, only on subsample with non-missing index						
-						ivreghdfe	PFS_glm	${FSD_on_FS_X}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(`IV') & reg_sample==1 &  !mi(SNAP_index_w),	///
-							absorb(ib31.rp_state x11101ll) robust	first savefirst savefprefix(`IVname')	 
-						est	store	`IVname'_IV_fesub_2nd
-						scalar	Fstat_CD_`IVname'	=	 e(cdf)
-						scalar	Fstat_KP_`IVname'	=	e(widstat)
-					
-						est	restore	`IVname'`endovar'
-						estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
-						estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
-
-						est	store	`IVname'_fesub_IV_1st
-						est	drop	`IVname'`endovar'
-						
-						
-						*	Add dynamic effects.
-						*	First, predict FS amount received
-						est restore `IVname'_fesub_IV_1st
-						cap	drop	FS_wth_PFS_hat
-						predict 	FS_wth_PFS_hat, xb
-						lab	var		FS_wth_PFS_hat	"Predicted FS dummy received last month"
-				
-						*	Now, regress 2nd stage, including FS across multiple periods
-						reghdfe	PFS_glm FS_wth_PFS_hat	l2.FS_wth_PFS_hat	${FSD_on_FS_X}	[aw=wgt_long_fam_adj]	if	income_below_200==1	& !mi(`IV')	& reg_sample==1 &	!mi(SNAP_index_w),	///
-							vce(robust)	absorb(ib31.rp_state x11101ll)	
-						est	store	`IVname'_dyn_X_fesub_2nd
-				
-					*	SNAP index (weighted) (rescaled) (1996-2015)	
-					loc	depvar	PFS_glm
-					loc	endovar	FSdummy	//	FSamt_capita	//	
-					loc	IV		SNAP_index_w_0to1
-					loc	IVname	index
-				
-			
+							
 						*	w/o FE						
 							ivreghdfe	PFS_glm	${FSD_on_FS_X}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(`IV') & reg_sample==1, robust	first savefirst savefprefix(`IVname')	 
 							est	store	`IVname'_IV_nofe_2nd
@@ -545,13 +283,7 @@
 							reghdfe	PFS_glm FS_wth_PFS_hat	l2.FS_wth_PFS_hat	${FSD_on_FS_X}	[aw=wgt_long_fam_adj]	if	income_below_200==1	&	!mi(`IV') & reg_sample==1,	vce(robust) absorb(ib31.rp_state)
 							est	store	`IVname'_dyn_X_stfe_2nd
 							
-						*	state and individual FE							
-							loc	depvar		PFS_glm
-							loc	endovar		 FSdummy	//	 FSamtcp // 
-							loc	IV			SNAP_index_w_0to1	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
-							loc	IVname		index
-							
-							
+						*	state and individual FE														
 							ivreghdfe	PFS_glm	${FSD_on_FS_X}	(`endovar' = `IV')	[aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(`IV') & reg_sample==1,	absorb(ib31.rp_state x11101ll) robust	first savefirst savefprefix(`IVname')	 
 							est	store	`IVname'_IV_fe_2nd
 							scalar	Fstat_CD_`IVname'	=	 e(cdf)
@@ -583,46 +315,16 @@
 					
 						*	Tabulate results comparing OLS and IV
 						
-							
-							*	1st stage (no FE, state FE, and state & individual FE)
-							
-								*	Full sample used for each IV (SSI(1977-2019), state citizen ideology(1977-2015))
-								esttab	/*SSI_nofe_IV_1st	SSI_stfe_IV_1st	SSI_fe_IV_1st*/	citi_nofe_IV_1st	citi_stfe_IV_1st	citi_fe_IV_1st	using "${SNAP_outRaw}/PFS_SSI_citi_full_IV_1st.csv", ///
-								cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
-								title(PFS on FS dummy)		replace	
-								
-								esttab	/*SSI_nofe_IV_1st	SSI_stfe_IV_1st	SSI_fe_IV_1st*/	citi_nofe_IV_1st	citi_stfe_IV_1st	citi_fe_IV_1st	using "${SNAP_outRaw}/PFS_SSI_citi_full_IV_1st.tex", ///
-								cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
-								title(PFS on FS dummy)		replace	
-								
+														
 								*	Subsample (1996-2015) - for all IV (SSI, state citizen ideology and SNAP weighted index)
-								esttab	/*SSI_fesub_IV_1st*/	citi_fesub_IV_1st	index_fe_IV_1st	using "${SNAP_outRaw}/PFS_SSI_citi_index_sub_IV_1st.csv", ///
+								esttab	index_nofe_IV_1st	index_stfe_IV_1st	index_fe_IV_1st	using "${SNAP_outRaw}/PFS_index_sub_IV_1st.csv", ///
 								cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
 								title(PFS on FS dummy)		replace	
 															
 							
 							*	2nd stage (OLS with and w/o FE, IV with and w/o FE)
 								
-								/*
-								*	SSI 
-								esttab	nofe_ols	stfe_ols	fe_ols	SSI_IV_nofe_2nd	SSI_IV_stfe_2nd	SSI_IV_fe_2nd	using "${SNAP_outRaw}/PFS_SSI_ols_IV.csv", ///
-								cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
-								title(PFS on FS dummy)		replace	
-								
-								esttab	nofe_ols	stfe_ols	fe_ols	SSI_IV_nofe_2nd	SSI_IV_stfe_2nd	SSI_IV_fe_2nd	using "${SNAP_outRaw}/PFS_SSI_ols_IV.tex", ///
-								cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
-								title(PFS on FS dummy)		replace	
-								*/
-				
-								*	Citizen ideology
-								esttab	nofe_ols	citi_IV_nofe_2nd	stfe_ols	citi_IV_stfe_2nd	fe_ols	citi_IV_fe_2nd	citi_dyn_X_fe_2nd	using "${SNAP_outRaw}/PFS_citi_ols_IV.csv", ///
-								cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
-								title(PFS on FS dummy)		replace	
-								
-								esttab	nofe_ols	citi_IV_nofe_2nd	stfe_ols	citi_IV_stfe_2nd	fe_ols	citi_IV_fe_2nd	citi_dyn_X_fe_2nd	using "${SNAP_outRaw}/PFS_citi_ols_IV.tex", ///
-								cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
-								title(PFS on FS dummy)		replace	
-								
+															
 								*	SNAP index
 								esttab	nofesub_ols	index_IV_nofe_2nd	stfesub_ols	index_IV_stfe_2nd	fesub_ols	index_IV_fe_2nd	index_dyn_X_fe_2nd	using "${SNAP_outRaw}/PFS_index_ols_IV.csv", ///
 								cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
@@ -632,10 +334,7 @@
 								cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
 								title(PFS on FS dummy)		replace	
 												
-								*	SSI, political ideology and SNAP index, using 1996-2015 data only (state and individual FE only)
-								esttab	/*SSI_IV_fesub_2nd*/	citi_IV_fesub_2nd	citi_dyn_X_fesub_2nd	index_IV_fe_2nd	index_dyn_X_fe_2nd	using "${SNAP_outRaw}/PFS_SSI_index_sub.csv", ///
-								cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
-								title(PFS on FS dummy)		replace	
+							
 								
 
 			*	Regressing FSD on predicted FS, using the model we find above

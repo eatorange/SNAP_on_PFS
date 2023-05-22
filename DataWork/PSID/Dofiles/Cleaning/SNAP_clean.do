@@ -1584,7 +1584,8 @@
 				save	"${SNAP_dtInt}/State_politics",	replace
 				use 	"${SNAP_dtInt}/State_politics",	clear
 				
-		*	SNAP policy dataset
+				
+		*	SNAP policy dataset (raw) (199601-201612)
 		*import excel	"${dataWorkFolder}/USDA/SNAP_Policy_Database.xlsx", firstrow 	clear
 		import excel	"${clouldfolder}/DataWork/USDA/DataSets/Raw/SNAP_Policy_Database.xlsx", firstrow 	clear
 				
@@ -1618,6 +1619,8 @@
 			label	var	year	"Year"
 			label	var	month	"Month"
 			*/
+			
+			lab	define	yes1no0	1	"Yes"	0	"No"
 			
 			*	Policy variables
 			label	var	bbce	"Broad-based categorical eligibility (BBCE)"
@@ -1826,7 +1829,7 @@
 				replace	`var_uw'	=	`var_uw'	-	1	if	noncitadultfull==0	//	Legal non-citizen eligibility
 				replace	`var_w'		=	`var_w'	-	4.8	if	noncitadultfull==0	//	Legal non-citizen eligibility
 				
-				replace	`var_uw'	=	`var_uw'	-	certearn0103	//	Short recertification period (1-3 months)
+				replace	`var_uw'	=	`var_uw'	-	(certearn0103)		//	Short recertification period (1-3 months)
 				replace	`var_w'		=	`var_w'		-	(certearn0103*3.180)	//	Short recertification period (1-3 months)
 				
 				replace	`var_uw'	=	`var_uw'	-	1	if	fingerprint==1	//	Statewide fingerprint requirement
@@ -1837,7 +1840,34 @@
 				
 			*	Save
 			save	"${SNAP_dtInt}/SNAP_policy_data",	replace
+		
+		
+		*	SNAP policy index data file (1997-2014)
+		*	(2023-05-22) This file includes the indices matching to the working paper, but different from manually computed index
+			import excel	"${clouldfolder}/DataWork/USDA/DataSets/Raw/snappolicyindexdata.xls", firstrow cellrange(A2:X971) clear
+				
+				*	Clean data
+			loc	var	rp_state
+			cap	drop	`var'
+			gen	`var'	=	StateFIPSCode
+			recode	`var'	(2=50)	(4=2)	(5=3)	(6=4)	(8=5)	(9=6)	(10=7)	(11=8)	(12=9)	(13=10)	(15=51)	(16=11)	(17=12)	(18=13)	///
+								(19=14)	(20=15)	(21=16)	(22=17)	(23=18)	(24=19)	(25=20)	(26=21)	(27=22)	(28=23)	(29=24)	(30=25)	(31=26)	(32=27)	///
+								(33=28)	(34=29)	(35=30)	(36=31)	(37=32)	(38=33)	(39=34)	(40=35)	(41=36)	(42=37)	(44=38)	(45=39)	(46=40)	(47=41)	///
+								(48=42)	(49=43)	(50=44)	(51=45)	(53=46)	(54=47)	(55=48)	(56=49)
+			label	value	`var'	statecode
+			label	var	`var'	"State"
+			order	`var'
+			drop	Statename StatePostalCode StateFIPSCode
 			
+			rename	Year	year
+			rename	(UnweightedSNAPpolicyindex WeightedSNAPpolicyindex)	(SNAP_index_off_uw	SNAP_index_off_w)
+			rename	(UnweightedEligibilityindex UnweightedTransactionCostinde UnweightedStigmaindex UnweightedOutreachindex)	(Elig_index_uw Transact_index_uw Stigma_index_uw Outreach_index_uw)
+			rename	(WeightedEligibilityindex WeightedTransactionCostindex WeightedStigmaindex WeightedOutreachindex)			(Elig_index_w Transact_index_w Stigma_index_w Outreach_index_w)
+			
+			rename	(Exemptonevehiclebutnotall-FederallyfundedradioorTVad)	(exempt_one	exempt_all	BBCE	elig_rest	short_recert	simp_report	online_app	EBT_share	fingerprint	outreach)
+			
+			*	Save
+			save	"${SNAP_dtInt}/SNAP_policy_data_official",	replace
 		
 		*	CPI data (to convert current to real dollars)
 			*	(2023-1-15) Baseline month as Jan 2019 (CPI=100)
@@ -2964,6 +2994,7 @@
 			
 			*	Import SNAP policy data
 			merge m:1 rp_state prev_yrmonth using "${SNAP_dtInt}/SNAP_policy_data", nogen keep(1 3)
+			merge m:1 rp_state year using "${SNAP_dtInt}/SNAP_policy_data_official", nogen keep(1 3) keepusing(SNAP_index_off_uw	SNAP_index_off_w)
 			
 			*	Import state-wide monthly unemployment data
 			merge m:1 rp_state prev_yrmonth using "${SNAP_dtInt}/Unemployment Rate_state_month", nogen keep(1 3) keepusing(unemp_rate)

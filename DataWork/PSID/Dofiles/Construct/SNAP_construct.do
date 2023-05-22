@@ -78,7 +78,7 @@
 		assert	inrange(year,1977,2019)
 		
 		*	(2023-05-21) Now keep only 1997-2015 data which I have SNAP policy index
-		keep	if	inrange(year,1997,2015)
+		keep	if	inrange(year,1997,2013)
 		
 		*	Drop states outside 48 continental states (HA/AK/inapp/etc.), as we do not have their TFP cost information.
 		drop	if	inlist(rp_state,0,50,51,99)
@@ -94,7 +94,7 @@
 		// global	foodvars		FS_rec_wth	//	Should I use prected FS redemption from 1st-stage IV?, or even drop it for exclusion restriction?
 		global	macrovars		unemp_rate	CPI
 		global	regionvars		rp_state_enum2-rp_state_enum31 rp_state_enum33-rp_state_enum50 	//	Excluding NY (rp_state_enum32) and outside 48 states (1, 52, 53). The latter should be excluded when running regression
-		global	timevars		year_enum4-year_enum11 year_enum14-year_enum30 //	Exclude year_enum3 (1978) as base category. year_enum12 (1990)  and year_enum13 (1991) are excluded due to lack of lagged data.
+		global	timevars		year_enum20-year_enum28 //	Exclude year_enum19 (1997) as base category. year_enum12 (1990)  and year_enum13 (1991) are excluded due to lack of lagged data.
 				
 			
 		label	var	FS_rec_wth	"FS last month"
@@ -139,7 +139,7 @@
 			*	I use Poisson distribution assumption instead of Gamma
 			*	I include individual-FE
 			*	Please refer to "SNAP_PFS_const_test.do" file for more detail.
-		ppmlhdfe	${depvar}	${statevars} ${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars} 	 [pweight=wgt_long_fam_adj], absorb(x11101ll ib31.rp_state ib1979.year) d	
+		ppmlhdfe	${depvar}	${statevars} ${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars} 	 [pweight=wgt_long_fam_adj], absorb(x11101ll ib31.rp_state ib1997.year) d	
 		/*
 		glm 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}*/	${indvars}	/*${regionvars}	${timevars}*/	[aw=wgt_long_fam_adj], family(gamma)	link(log)
 		svy, subpop(if ${PFS_sample}): glm 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}*/	${macrovars}	/*${regionvars}	${timevars}*/, family(gamma)	link(log)
@@ -187,7 +187,7 @@
 		local	depvar	e1_foodexp_sq_glm
 		
 			*	GLM with Poisson
-			ppmlhdfe	`depvar'	${statevars} ${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	[pweight=wgt_long_fam_adj], absorb(x11101ll ib31.rp_state ib1979.year) d	
+			ppmlhdfe	`depvar'	${statevars} ${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	[pweight=wgt_long_fam_adj], absorb(x11101ll ib31.rp_state ib1997.year) d	
 			est store glm_step2
 			gen	glm_step2_sample=1	if	e(sample)==1 
 			predict	double	var1_foodexp_glm	if	glm_step2_sample==1	
