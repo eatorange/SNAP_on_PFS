@@ -1586,6 +1586,9 @@
 				
 				
 		*	SNAP policy dataset (raw) (199601-201612)
+		*	(2023-06-12) We found an issue with this data, so we no longer use this data. Instead, we will use the official aggregated data below.
+		/*
+		{
 		*import excel	"${dataWorkFolder}/USDA/SNAP_Policy_Database.xlsx", firstrow 	clear
 		import excel	"${clouldfolder}/DataWork/USDA/DataSets/Raw/SNAP_Policy_Database.xlsx", firstrow 	clear
 				
@@ -1840,10 +1843,14 @@
 				
 			*	Save
 			save	"${SNAP_dtInt}/SNAP_policy_data",	replace
+		}
+		*/
 		
 		
 		*	SNAP policy index data file (1997-2014)
-		*	(2023-05-22) This file includes the indices matching to the working paper, but different from manually computed index
+		*	(2023-05-22) This file includes the indices matching to the working paper, but different from manually computed index.
+		*	(2023-06-12) We found an issue with the manually imported data, so we use the official data
+		
 			import excel	"${clouldfolder}/DataWork/USDA/DataSets/Raw/snappolicyindexdata.xls", firstrow cellrange(A2:X971) clear
 				
 				*	Clean data
@@ -1860,7 +1867,7 @@
 			drop	Statename StatePostalCode StateFIPSCode
 			
 			rename	Year	year
-			rename	(UnweightedSNAPpolicyindex WeightedSNAPpolicyindex)	(SNAP_index_off_uw	SNAP_index_off_w)
+			rename	(UnweightedSNAPpolicyindex WeightedSNAPpolicyindex)	(SNAP_index_uw	SNAP_index_w)
 			rename	(UnweightedEligibilityindex UnweightedTransactionCostinde UnweightedStigmaindex UnweightedOutreachindex)	(Elig_index_uw Transact_index_uw Stigma_index_uw Outreach_index_uw)
 			rename	(WeightedEligibilityindex WeightedTransactionCostindex WeightedStigmaindex WeightedOutreachindex)			(Elig_index_w Transact_index_w Stigma_index_w Outreach_index_w)
 			
