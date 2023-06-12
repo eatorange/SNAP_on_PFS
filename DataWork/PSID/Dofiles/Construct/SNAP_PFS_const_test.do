@@ -10,9 +10,16 @@
 		*	(2023-01-18) I do not answer this question for now, since I don't know how to construct level1 and level2 weight in our analyses
 		*	For now I only test with different wights, and conclude that different weights give neither non-significant nor non-trivial changes in regression coeffiicients.
 	
+	
+local	survey_prefix=0
+local	fixed_effects=0
+local	distribution_test=1	
 		
 *	Prepare data
 use    "${SNAP_dtInt}/SNAP_cleaned_long",	clear
+assert	in_sample==1
+assert	inrange(year,1977,2019)
+		
 		
 		*	Validate that all observations in the data are in_sample and years b/w 1977 and 2019
 		assert	in_sample==1
@@ -67,6 +74,7 @@ use    "${SNAP_dtInt}/SNAP_cleaned_long",	clear
 		
 		
 	*	(1) Should we apply survey structure with "svy:" previx?
+	if	`survey_prefix'==1	{	
 		
 		*	No controls, lagged states only
 			reg		${depvar}	${statevars}	[aw=wgt_long_fam_adj]	// no survey structure
@@ -77,11 +85,12 @@ use    "${SNAP_dtInt}/SNAP_cleaned_long",	clear
 			svy:	reg	${depvar}	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	//	survey structure
 		
 		*	These identicial  in regression coefficients impliy that it is OK NOT using survey structure in constructing the PFS
-	
+	}
 	
 	*	(2) Should we include individual-FE using panel structure? (xtreg, etc.)
 		*	Answer: I think I should, which is different from what I did in the original PFS paper.
 	
+		if	`fixed_effects'==1	{
 		*	No controls, lagged states only
 		*	It seems including individual-FE makes a huge change in regression coefficient
 			reg		${depvar}	${statevars}	[aw=wgt_long_fam_adj]	// no individual FE
@@ -131,13 +140,16 @@ use    "${SNAP_dtInt}/SNAP_cleaned_long",	clear
 				xtreg		${depvar}	${statevars} ${regionvars} ib1979.year, fe	
 				reghdfe		${depvar}	${statevars}, absorb(x11101ll ib31.rp_state ib1979.year)
 			*/
-			
+		}
+		
+		
 	*	(3) Should I use Gaussian- or GLM with Poisson distribution
 			*	I previously use the GLM with Gamma distribution, but Wooldridge wrote that the Poisson quasi-MLE is consistent for ANY kind of non-negative response variables
 				*	Source: https://www.statalist.org/forums/forum/general-stata-discussion/general/1578206-log-gamma-model-for-panel-data-glm-with-individual-fixed-effects
 				*	Wooldridge, Jeffrey M. 1999. “Distribution-Free Estimation of Some Nonlinear Panel Data Models.” Journal of Econometrics 90 (1): 77–97. https://doi.org/10.1016/S0304-4076(98)00033-5.
 			*	Since Stata built-in commands for GLM (xtpoission, xtgee, etc.) requires weight to be constatnt within individual, which is NOT our case, I use "ppmlhdfe"
 				*	Source: Correia, Sergio, Paulo Guimarães, and Tom Zylkin. 2020. “Fast Poisson Estimation with High-Dimensional Fixed Effects.” The Stata Journal 20 (1): 95–115. https://doi.org/10.1177/1536867X20909691.
+		if	`distribution_test'==1	{
 		
 		*	No controls, with all FE (individual-, region- and year-)
 		cap	drop	dephat_gau
@@ -160,7 +172,7 @@ use    "${SNAP_dtInt}/SNAP_cleaned_long",	clear
 			ppmlhdfe	${depvar}	${statevars} [pweight=wgt_long_fam_adj], absorb(x11101ll ib31.rp_state ib1979.year) d
 			gen sample_glm=1 if 	e(sample)==1
 			predict	double	dephat_glm	if	 sample_glm==1, mu
-			gen	error_glm	=	abs(dephat_gam-${depvar})	if	sample_glm==1
+			gen	error_glm	=	abs(dephat_glm-${depvar})	if	sample_glm==1
 	
 			*	Check the summary stats of the predicted values and RMSE
 			*	GLM is non-trivially better, while Gaussian is less susceptable to outliers
@@ -188,14 +200,14 @@ use    "${SNAP_dtInt}/SNAP_cleaned_long",	clear
 			ppmlhdfe	${depvar}	${statevars} ${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	[pweight=wgt_long_fam_adj], absorb(x11101ll ib31.rp_state ib1979.year) d
 			gen sample_glm=1 if 	e(sample)==1
 			predict	double	dephat_glm	if	 sample_glm==1, mu
-			gen	error_glm	=	abs(dephat_gam-${depvar})	if	sample_glm==1
+			gen	error_glm	=	abs(dephat_glm-${depvar})	if	sample_glm==1
 	
 			*	Check the summary stats of the predicted values and RMSE
 			*	GLM is slightly better, and no negative values in predicted variable. Also the outlier in GLM still exists but less severe
 			summ	${depvar}	dephat_gau	dephat_glm	error_gau	error_glm	if	sample_gau==1	&	sample_glm==1
 			
 			*	Based on the tests above, I conclude that using GLM with Poisson is better (and should use GLM to avoide negative predicted value).
-	
+		}
 	
 	
 	*	(4) Should we apply mixed model which Steve suggested?

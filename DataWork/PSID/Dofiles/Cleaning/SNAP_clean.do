@@ -75,14 +75,14 @@
 		local	cr_panel		0	//	Create panel structure from ID variable
 			local	panel_view	0	//	Create an excel file showing the change of certain clan over time (for internal data-check only)
 		local	merge_data		0	//	Merge ind- and family- variables and import it into ID variable
-			local	raw_reshape	0		//	Merge raw variables and reshape into long data (takes time)
-			local	add_clean	0		//	Do additional cleaning and import external data (CPI, TFP)
-			local	import_dta	0		//	Import aggregated variables into ID data. 
+			local	raw_reshape	1		//	Merge raw variables and reshape into long data (takes time)
+			local	add_clean	1		//	Do additional cleaning and import external data (CPI, TFP)
+			local	import_dta	1		//	Import aggregated variables and external data into ID data. 
 		
 		*	SECTION 4: Clean data and save it
 		local	clean_vars		1	//	Clean variables and save it
 		
-		
+		*	(These parts were moved into "SNAP_const.do")
 		local	PFS_const		0	//	Construct PFS
 		local	FSD_construct	0	//	Construct FSD
 		local	IV_reg			0	//	Run IV-2SLS regression
@@ -2621,7 +2621,7 @@
 		
 			*	Re-shape it into long format and save it
 			use	"${SNAP_dtInt}/Ind_vars/ID_sample_wide.dta", clear
-			reshape long	x11102_	xsqnr_	wgt_long_ind	wgt_long_fam	wgt_long_fam_adj	living_Sample tot_living_Sample	///
+			reshape long	x11102_	xsqnr_	wgt_long_ind	wgt_long_fam	wgt_long_fam_adj	wgt_long_ind_adj	living_Sample tot_living_Sample	///
 							age_ind relrp_recode resid_status status_combined origfu_id noresp_why 	change_famcomp splitoff	/*${varlist_ind}	${varlist_fam}*/, i(x11101ll) j(year)
 			order	x11101ll pn sampstat Sample year x11102_ xsqnr_ 
 			*drop	if	inlist(year,1973,1988,1989)	//	These years seem to be re-created during "reshape." Thus drop it again.
@@ -2644,8 +2644,6 @@
 			label	var	splitoff		"Splitoff status"
 			
 			save	"${SNAP_dtInt}/Ind_vars/ID_sample_long.dta",	replace
-			use "${SNAP_dtInt}/Ind_vars/ID_sample_long.dta", clear
-			
 	}
 	
 	*	Merge variables
@@ -2724,7 +2722,7 @@
 			
 			*	Re-shape it into long format	
 			use	"${SNAP_dtInt}/SNAP_RawMerged_wide",	clear
-			reshape long x11102_	xsqnr_	wgt_long_ind	/*wgt_long_fam*/	wgt_long_fam_adj	living_Sample tot_living_Sample	///
+			reshape long x11102_	xsqnr_	wgt_long_ind	/*wgt_long_fam*/	wgt_long_ind_adj	wgt_long_fam_adj	living_Sample tot_living_Sample	///
 										${varlist_ind}	${varlist_fam}, i(x11101ll) j(year)
 			order	x11101ll /*pn sampstat Sample*/ year x11102_ xsqnr_ 
 			*drop	if	inlist(year,1973,1988,1989)	//	These years seem to be re-created during "reshape." Thus drop it again.
@@ -2754,7 +2752,7 @@
 			label	var	rp_gender	"Gender of RP"
 
 			save	"${SNAP_dtInt}/SNAP_RawMerged_long",	replace
-			
+	
 			*	Appending extra variables 
 			**	Disabled by default. Run this code only when you have extra variable to append from the raw PSID data.
 			/*
@@ -3000,8 +2998,8 @@
 			merge m:1 rp_state year using "${SNAP_dtInt}/State_politics", nogen keep(1 3) keepusing(major_control_dem major_control_rep major_control_mix)
 			
 			*	Import SNAP policy data
-			merge m:1 rp_state prev_yrmonth using "${SNAP_dtInt}/SNAP_policy_data", nogen keep(1 3)
-			merge m:1 rp_state year using "${SNAP_dtInt}/SNAP_policy_data_official", nogen keep(1 3) keepusing(SNAP_index_off_uw	SNAP_index_off_w)
+			*merge m:1 rp_state prev_yrmonth using "${SNAP_dtInt}/SNAP_policy_data", nogen keep(1 3)
+			merge m:1 rp_state year using "${SNAP_dtInt}/SNAP_policy_data_official", nogen keep(1 3) // keepusing(SNAP_index_off_uw	SNAP_index_off_w)
 			
 			*	Import state-wide monthly unemployment data
 			merge m:1 rp_state prev_yrmonth using "${SNAP_dtInt}/Unemployment Rate_state_month", nogen keep(1 3) keepusing(unemp_rate)
@@ -4223,10 +4221,12 @@
 			
 		}
 		
-		*	Generate log of family income per capita (real)
+		*	Generate log and IHS of family income per capita (real)
 		*	NOTE: I can later use inverse hyperbolic transformation instead.
 		cap	drop	ln_fam_income_pc_real
 		gen			ln_fam_income_pc_real	=	ln(fam_income_pc_real)
+		cap	drop	IHS_fam_income_pc_real
+		gen			IHS_fam_income_pc_real	=	asinh(fam_income_pc_real)
 			
 		ds	*_real
 		global	money_vars_real	`r(varlist)'
