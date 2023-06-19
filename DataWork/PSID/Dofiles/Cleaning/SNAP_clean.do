@@ -65,16 +65,16 @@
 	
 	*	Codes to be executed
 		*	SECTION 1: Import individual- and family-level PSID variables
-		local	ind_agg			0	//	Aggregate individual-level variables across waves
-		local	fam_agg			0	//	Aggregate family-level variables across waves
+		local	ind_agg			1	//	Aggregate individual-level variables across waves
+		local	fam_agg			1	//	Aggregate family-level variables across waves
 		
 		*	SECTION 2: Prepare external data
-		local	ext_data		0	//	Prepare external data (CPI, TFP, etc.)
+		local	ext_data		1	//	Prepare external data (CPI, TFP, etc.)
 		
 		*	SECTION 3: Construct PSID panel data and import external data
-		local	cr_panel		0	//	Create panel structure from ID variable
+		local	cr_panel		1	//	Create panel structure from ID variable
 			local	panel_view	0	//	Create an excel file showing the change of certain clan over time (for internal data-check only)
-		local	merge_data		0	//	Merge ind- and family- variables and import it into ID variable
+		local	merge_data		1	//	Merge ind- and family- variables and import it into ID variable
 			local	raw_reshape	1		//	Merge raw variables and reshape into long data (takes time)
 			local	add_clean	1		//	Do additional cleaning and import external data (CPI, TFP)
 			local	import_dta	1		//	Import aggregated variables and external data into ID data. 
