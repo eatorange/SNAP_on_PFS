@@ -65,16 +65,16 @@
 	
 	*	Codes to be executed
 		*	SECTION 1: Import individual- and family-level PSID variables
-		local	ind_agg			1	//	Aggregate individual-level variables across waves
-		local	fam_agg			1	//	Aggregate family-level variables across waves
+		local	ind_agg			0	//	Aggregate individual-level variables across waves
+		local	fam_agg			0	//	Aggregate family-level variables across waves
 		
 		*	SECTION 2: Prepare external data
-		local	ext_data		1	//	Prepare external data (CPI, TFP, etc.)
+		local	ext_data		0	//	Prepare external data (CPI, TFP, etc.)
 		
 		*	SECTION 3: Construct PSID panel data and import external data
-		local	cr_panel		1	//	Create panel structure from ID variable
+		local	cr_panel		0	//	Create panel structure from ID variable
 			local	panel_view	0	//	Create an excel file showing the change of certain clan over time (for internal data-check only)
-		local	merge_data		1	//	Merge ind- and family- variables and import it into ID variable
+		local	merge_data		0	//	Merge ind- and family- variables and import it into ID variable
 			local	raw_reshape	1		//	Merge raw variables and reshape into long data (takes time)
 			local	add_clean	1		//	Do additional cleaning and import external data (CPI, TFP)
 			local	import_dta	1		//	Import aggregated variables and external data into ID data. 
@@ -3240,6 +3240,35 @@
 			replace	`var'=1	if	!mi(rp_state)	&	!inlist(rp_state,0,50,51,59)
 			label	value	`var'	yes1no0
 			label var	`var'	"FU in 48 states"
+			
+			*	Greater region (Northeast, Mid-Atlantic, South, Midwest, West)
+			cap	drop	rp_region
+			gen		rp_region=.
+			replace	rp_region=0	if	inlist(rp_state,0,50,51,59)	// Others: Inapp, AL, HA, DK/NA/DK
+			replace	rp_region=1	if	inlist(rp_state,18,28,44,31,20,6,38) //	Northeast: ME, NH, VT, NY, MA, CT, RI
+			replace	rp_region=2	if	inlist(rp_state,37,29,8,7,19,45) //	Mid-Atlantic: PA, NJ, DC, DE, MD, VA
+			replace	rp_region=3	if	inlist(rp_state,32,39,10,16,41,47,9,1,3,23,17,42) //	South: NC, SC, GA, TN, WV, FL, AL, AR, MS, LS, TX
+			replace	rp_region=4	if	inlist(rp_state,34,13,21,12,22,48,14,24) //	MidWest:	OH, IN, MI, IL, MN, WI, IA, MO
+			replace	rp_region=5	if	inlist(rp_state,15,26,33,40,35,2,5,11,25,27,30,43,49,36,46,4) //	West: KS, NE, ND, SD, OK, AZ, CO, ID, MT, NV, NM, UT, WY, OR, WA, CA
+			
+			lab	define	rp_region	0	"Others (Inapp, AL, HA, DK/NA)"	1	"Northeast"	2	"Mid-Atlantic"	3	"South"	4	"Midwest"	5	"West", replace	
+			lab	value	rp_region	rp_region
+			
+				*	Dummies for each region
+				tab	rp_region,	gen(rp_region)
+				rename	(rp_region?)	(rp_region_Oth	rp_region_NE	rp_region_MidAt	rp_region_South	rp_region_MidWest	rp_region_West)
+				clonevar	rp_region_NE_noNY	=	rp_region_NE
+				replace		rp_region_NE_noNY	=	0	if	rp_state==31	//	Exclude NY
+				
+				lab	var	rp_region_Oth	"Other regions (AL, HA, DK/NA, Inapp)"
+				lab	var	rp_region_NE	"Northeast"
+				lab	var	rp_region_NE_noNY	"Northeast (excluding NY)"
+				lab	var	rp_region_MidAt	"Mid-Atlantic"
+				lab	var	rp_region_South	"South"
+				lab	var	rp_region_MidWest	"Mid-West"
+				lab	var	rp_region_West	"West"
+				
+				
 		
 		*	Employment Status
 		*	Two different variables over time, and even single series changes variable over waves. Need to harmonize them.
