@@ -1,7 +1,8 @@
 *	This do-file tests which regression model which we should use in constructing the PFS
 *	Tests answers the following
-	*	(1) Should we apply survey structure with "svy:" prefix?
-		*	(2023-01-18) The answer is NO, as it has nothing to do with regression coefficient
+	*	(1) Should we apply survey structure with "svy:" prefix? Also, which survey weight should we use?
+		*	(2023-01-18) The answer to the first Q is NO, as it has nothing to do with regression coefficient
+		*	(2023-06-20) The answer to the second Q is "doesn't matter", as it does not change regression coefficient
 	*	(2) Should we include individual-FE using panel command (xt-, reghdfe, etc.)
 		*	Yes, it seems
 	*	(3) Should we use Gaussian or GLM with Poisson?
@@ -11,7 +12,7 @@
 		*	For now I only test with different wights, and conclude that different weights give neither non-significant nor non-trivial changes in regression coeffiicients.
 	
 	
-local	survey_prefix=0
+local	survey_prefix=1
 local	fixed_effects=0
 local	distribution_test=1	
 		
@@ -29,18 +30,20 @@ assert	inrange(year,1977,2019)
 		drop	if	inlist(rp_state,0,50,51,99)
 		
 		*	Set globals
-		global	statevars		l2_foodexp_tot_exclFS_pc_1_real l2_foodexp_tot_exclFS_pc_2_real	//	l2_foodexp_tot_exclFS_pc_1_real l2_foodexp_tot_exclFS_pc_2_real  * Need to use real value later
+		
+		*	Set globals
+		global	statevars		l2_foodexp_tot_inclFS_pc_1_real l2_foodexp_tot_inclFS_pc_2_real
 		global	demovars		rp_age rp_age_sq	rp_nonWhte	rp_married	rp_female	
-		global	econvars		ln_fam_income_pc_real	//	ln_fam_income_pc_real   * Need to use real value later
-		global	healthvars		rp_disabled
-		global	familyvars		famnum	ratio_child
-		global	empvars			rp_employed
 		global	eduvars			rp_NoHS rp_somecol rp_col
+		global	healthvars		rp_disabled
+		global	empvars			rp_employed
+		global	familyvars		famnum	ratio_child
+		global	econvars		ln_fam_income_pc_real	
 		// global	foodvars		FS_rec_wth	//	Should I use prected FS redemption from 1st-stage IV?, or even drop it for exclusion restriction?
 		global	macrovars		unemp_rate	CPI
 		global	regionvars		rp_state_enum2-rp_state_enum31 rp_state_enum33-rp_state_enum50 	//	Excluding NY (rp_state_enum32) and outside 48 states (1, 52, 53). The latter should be excluded when running regression
 		global	timevars		year_enum4-year_enum11 year_enum14-year_enum30 //	Exclude year_enum3 (1979) as base category. year_enum12 (1990)  and year_enum13 (1991) are excluded due to lack of lagged data.
-				
+		
 			
 		label	var	FS_rec_wth	"FS last month"
 		label	var	foodexp_tot_inclFS_pc	"Food exp (with FS benefit)"
@@ -54,15 +57,6 @@ assert	inrange(year,1977,2019)
 		label	var	change_RP	"RP changed"
 		label	var	ln_fam_income_pc_real "ln(per capita income)"
 		label	var	unemp_rate	"State Unemp Rate"
-		*label	var	major_control_dem	"Dem state control"
-		*label	var	major_control_rep	"Rep state control"
-		
-		*	Construct lv1 and lv2 weights based on "adjusted longitudinal family weight"
-		*	Should go into "SNAP_clean.do" file. Will move later
-		*cap	drop	lv1wgt
-		*cap	drop	lv2wgt
-		*gen	lv1wgt	=	wgt_
-		
 		
 		*	Declare variables (food expenditure per capita, real value)
 		global	depvar		foodexp_tot_inclFS_pc_real
@@ -77,20 +71,24 @@ assert	inrange(year,1977,2019)
 	if	`survey_prefix'==1	{	
 		
 		*	No controls, lagged states only
-			reg		${depvar}	${statevars}	[aw=wgt_long_fam_adj]	// no survey structure
+			reg		${depvar}	${statevars}	[aw=wgt_long_fam_adj]	// no survey structure, aweight
+			reg		${depvar}	${statevars}	[pw=wgt_long_fam_adj]	// no survey structure, pweight
 			svy:	reg	${depvar}	${statevars}	//	survey structure
 						
 		*	Controls
-			reg		${depvar}	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	[aw=wgt_long_fam_adj]	// no survey structure
-			svy:	reg	${depvar}	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	//	survey structure
+			reg		${depvar}	${statevars}	${demovars}	${eduvars}	${healthvars}	${empvars}	${familyvars}	${econvars}	[aw=wgt_long_fam_adj]	// no survey structure, aweight
+			reg		${depvar}	${statevars}	${demovars}	${eduvars}	${healthvars}	${empvars}	${familyvars}	${econvars}	[pw=wgt_long_fam_adj]	// no survey structure, pweight
+			svy:	reg	${depvar}	${statevars}	${demovars}	${eduvars}	${healthvars}	${empvars}	${familyvars}	${econvars}	//	survey structure
 		
 		*	These identicial  in regression coefficients impliy that it is OK NOT using survey structure in constructing the PFS
+		*	Also using different weights doesn't affect regression coefficients.
 	}
 	
 	*	(2) Should we include individual-FE using panel structure? (xtreg, etc.)
 		*	Answer: I think I should, which is different from what I did in the original PFS paper.
 	
 		if	`fixed_effects'==1	{
+		
 		*	No controls, lagged states only
 		*	It seems including individual-FE makes a huge change in regression coefficient
 			reg		${depvar}	${statevars}	[aw=wgt_long_fam_adj]	// no individual FE
@@ -108,11 +106,11 @@ assert	inrange(year,1977,2019)
 		cap	drop	sample_fe
 		
 			*	Testing prediction accuracy
-			reg			${depvar}	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	[aw=wgt_long_fam_adj]	// no survey structure
+			reg			${depvar}	${statevars}	${demovars}	${eduvars}	${healthvars}	${empvars}	${familyvars}	${econvars}	[aw=wgt_long_fam_adj]	// no FE
 			gen sample_nofe=1 if 	e(sample)==1
 			predict	double	dephat_nofe	if	 sample_nofe==1
 			gen	error_nofe = abs(dephat_nofe-${depvar})	if	sample_nofe==1
-			reghdfe		${depvar}	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	[aw=wgt_long_fam_adj], absorb(x11101ll)	//	Individual FE	// no survey structure	
+			reghdfe		${depvar}	${statevars}	${demovars}	${eduvars}	${healthvars}	${empvars}	${familyvars}	${econvars}	[aw=wgt_long_fam_adj], absorb(x11101ll)	//	Individual FE	// no survey structure	
 			gen sample_fe=1 if 	e(sample)==1
 			predict	double	dephat_fe	if	 sample_fe==1
 			gen	error_fe = abs(dephat_fe-${depvar})	if	sample_fe==1
@@ -143,11 +141,11 @@ assert	inrange(year,1977,2019)
 		}
 		
 		
-	*	(3) Should I use Gaussian- or GLM with Poisson distribution
+	*	(3)	Distribution check
 			*	I previously use the GLM with Gamma distribution, but Wooldridge wrote that the Poisson quasi-MLE is consistent for ANY kind of non-negative response variables
 				*	Source: https://www.statalist.org/forums/forum/general-stata-discussion/general/1578206-log-gamma-model-for-panel-data-glm-with-individual-fixed-effects
 				*	Wooldridge, Jeffrey M. 1999. “Distribution-Free Estimation of Some Nonlinear Panel Data Models.” Journal of Econometrics 90 (1): 77–97. https://doi.org/10.1016/S0304-4076(98)00033-5.
-			*	Since Stata built-in commands for GLM (xtpoission, xtgee, etc.) requires weight to be constatnt within individual, which is NOT our case, I use "ppmlhdfe"
+			*	Since Stata built-in commands for GLM (xtpoission, xtgee, etc.) requires weight to be constatnt within individual, which is NOT our case, I use "ppmlhdfe" which allows non-constant weight.
 				*	Source: Correia, Sergio, Paulo Guimarães, and Tom Zylkin. 2020. “Fast Poisson Estimation with High-Dimensional Fixed Effects.” The Stata Journal 20 (1): 95–115. https://doi.org/10.1177/1536867X20909691.
 		if	`distribution_test'==1	{
 		
@@ -159,13 +157,57 @@ assert	inrange(year,1977,2019)
 		cap	drop	error_gau
 		cap	drop	error_glm
 		
+			
+			*	Testing different Stata commands
+				
+				*	Gaussian distribution, clustered at individual-level
+				
+					*	Regression with neither survey weights nor fixed effects
+					*	The following commands generate the same results
+					reg		${depvar}	${statevars}, cluster(x11101ll)
+					glm		${depvar}	${statevars}, family(gaussian) vce(cluster x11101ll)
+							
+					*	Regression without survey weight but state- and year-fixed effects only
+					*	The following commands generate the same coefficients and nearly-identical standard error
+					reg		${depvar}	${statevars}	${regionvars}	${timevars}, cluster(x11101ll)
+					glm		${depvar}	${statevars}	${regionvars}	${timevars}	, family(gaussian) vce(cluster x11101ll)
+					reghdfe		${depvar}	${statevars}, absorb(rp_state year) vce(cluster x11101ll)
+				
+					*	Regression with survey weight and state- and year- fixed effects (no individual-FE)
+					*	The following 2 lines give the same coefficients and nearly-identical standard error (constant is different)
+					reghdfe		${depvar}	${statevars}	[aw=wgt_long_fam_adj], absorb(ib31.rp_state ib1979.year) 
+					glm 	${depvar}	${statevars}	${regionvars}	${timevars}		[aw=wgt_long_fam_adj], family(gaussian)
+				
+			
+					
+				
+				*	Individual FE
+				*	Regression with individual-FE only, no survey weight
+				reg 	${depvar}	${statevars}, vce(cluster x11101ll)
+				glm		${depvar}	${statevars}, family(gaussian)	vce(cluster x11101ll)
+				xtgee	${depvar}	${statevars}, family(gaussian) link(identity) corr(exchangeable) robust
+
+			
+				
+					*	Fixed-effects poisson
+				*	The following line generates the same coefficients, but very different standard errors
+				ppmlhdfe	${depvar}	${empvars}, absorb(x11101ll)  vce(cluster x11101ll)
+				xtpqml		${depvar}	${empvars}, i(x11101ll) cluster(x11101ll)	//	Note: xtpqml does NOT allow survey weight, so cannot be used for this study
+				
+				* 		xtgee depvar [indepvars] [if] [in] [weight] [, options]
+				//			reghdfe		${depvar}	${statevars}	[aw=wgt_long_fam_adj], absorb(rp_state year)			
+				//	glm 	${depvar}	${statevars}	${regionvars}	${timevars}		[aw=wgt_long_fam_adj], family(gamma)	link(log)
+	
+			
+			
+	
 			*	Gaussian
 			reghdfe		${depvar}	${statevars}	[aw=wgt_long_fam_adj], absorb(x11101ll ib31.rp_state ib1979.year)
 			gen sample_gau=1 if 	e(sample)==1
 			predict	double	dephat_gau	if	 sample_gau==1
 			gen	error_gau	=	abs(dephat_gau-${depvar})	if	sample_gau==1
 			
-			*	GLM with Poisson
+			*	Poisson fixed effects estimator
 			*	Note that I use "pweight" instead of "aweight", since "aweight" is NOT allowed for this command. However, they both generate the same regression coefficient which is our interest
 				*	They generate different SE, but we don't use SE in our case
 				*	Source: Dupraz, Yannick. 2013. “Using Weights in Stata.” https://www.parisschoolofeconomics.eu/docs/dupraz-yannick/using-weights-in-stata(1).pdf.
@@ -173,10 +215,15 @@ assert	inrange(year,1977,2019)
 			gen sample_glm=1 if 	e(sample)==1
 			predict	double	dephat_glm	if	 sample_glm==1, mu
 			gen	error_glm	=	abs(dephat_glm-${depvar})	if	sample_glm==1
+			
+			*	GLM with Gamma
+			glm 	${depvar}	${statevars}	${demovars}	${eduvars}	${healthvars}	${empvars}	${familyvars}	${econvars}	regionvars	[aw=wgt_long_fam_adj], family(gamma)	link(log)
 	
 			*	Check the summary stats of the predicted values and RMSE
 			*	GLM is non-trivially better, while Gaussian is less susceptable to outliers
 			summ	${depvar}	dephat_gau	dephat_glm	error_gau	error_glm	if	sample_gau==1	&	sample_glm==1
+			
+			*	GLM with Gamma
 			
 
 		*	Controls (Note: takes some time for GLM), with all FE (individual-, region- and year-)
