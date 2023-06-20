@@ -85,19 +85,19 @@
 		drop	if	inlist(rp_state,0,50,51,99)
 		
 		*	Set globals
-		global	statevars		l2_foodexp_tot_exclFS_pc_1_real l2_foodexp_tot_exclFS_pc_2_real	//	l2_foodexp_tot_exclFS_pc_1_real l2_foodexp_tot_exclFS_pc_2_real  * Need to use real value later
+		global	statevars		l2_foodexp_tot_inclFS_pc_1_real l2_foodexp_tot_inclFS_pc_2_real
 		global	demovars		rp_age rp_age_sq	rp_nonWhte	rp_married	rp_female	
-		global	econvars		ln_fam_income_pc_real	// Need to use real value later
+		global	eduvars			rp_NoHS rp_somecol rp_col
+		global	empvars			rp_employed
 		global	healthvars		rp_disabled
 		global	familyvars		famnum	ratio_child
-		global	empvars			rp_employed
-		global	eduvars			rp_NoHS rp_somecol rp_col
+		global	econvars		ln_fam_income_pc_real	
 		// global	foodvars		FS_rec_wth	//	Should I use prected FS redemption from 1st-stage IV?, or even drop it for exclusion restriction?
 		global	macrovars		unemp_rate	CPI
 		global	regionvars		rp_state_enum2-rp_state_enum31 rp_state_enum33-rp_state_enum50 	//	Excluding NY (rp_state_enum32) and outside 48 states (1, 52, 53). The latter should be excluded when running regression
-		global	timevars		year_enum20-year_enum28 //	Exclude year_enum19 (1997) as base category. year_enum12 (1990)  and year_enum13 (1991) are excluded due to lack of lagged data.
-				
-			
+		global	timevars		year_enum4-year_enum11 year_enum14-year_enum30 //	Exclude year_enum3 (1979) as base category. year_enum12 (1990)  and year_enum13 (1991) are excluded due to lack of lagged data.
+					
+					
 		label	var	FS_rec_wth	"FS last month"
 		label	var	foodexp_tot_inclFS_pc	"Food exp (with FS benefit)"
 		label	var	l2_foodexp_tot_inclFS_pc_1	"Food Exp in t-2"
@@ -140,7 +140,7 @@
 			*	I use Poisson distribution assumption instead of Gamma
 			*	I include individual-FE
 			*	Please refer to "SNAP_PFS_const_test.do" file for more detail.
-		ppmlhdfe	${depvar}	${statevars} ${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars} 	 [pweight=wgt_long_fam_adj], absorb(x11101ll ib31.rp_state ib1997.year) d	
+		ppmlhdfe	${depvar}	${statevars} ${demovars}	${eduvars} 	${empvars}	${healthvars}	${familyvars}	${econvars}		[pweight=wgt_long_fam_adj], absorb(x11101ll ib31.rp_state ib1979.year) d	
 		/*
 		glm 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}*/	${indvars}	/*${regionvars}	${timevars}*/	[aw=wgt_long_fam_adj], family(gamma)	link(log)
 		svy, subpop(if ${PFS_sample}): glm 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}*/	${macrovars}	/*${regionvars}	${timevars}*/, family(gamma)	link(log)
