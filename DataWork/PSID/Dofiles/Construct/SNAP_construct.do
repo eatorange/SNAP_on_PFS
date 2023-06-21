@@ -60,7 +60,7 @@
 	di "Git branch `r(branch)'; commit `r(sha)'."
 	
 	*	Determine which part of the code to be run
-	local	PFS_const	1	//	Construct PFS from cleaned data
+	local	PFS_const	0	//	Construct PFS from cleaned data
 	local	FSD_const	1	//	Construct FSD from PFS
 	
 	/****************************************************************
@@ -84,8 +84,12 @@
 		*	Drop states outside 48 continental states (HA/AK/inapp/etc.), as we do not have their TFP cost information.
 		drop	if	inlist(rp_state,0,50,51,99)
 		
+		*	Rescale large variable
+		cap	drop	l2_foodexp_tot_inclFS_pc_2_real_K
+		gen			l2_foodexp_inclFS_pc_2_real_K	=	l2_foodexp_tot_inclFS_pc_2_real / 1000
+		
 		*	Set globals
-		global	statevars		l2_foodexp_tot_inclFS_pc_1_real l2_foodexp_tot_inclFS_pc_2_real
+		global	statevars		l2_foodexp_tot_inclFS_pc_1_real l2_foodexp_inclFS_pc_2_real_K
 		global	demovars		rp_age rp_age_sq	rp_nonWhte	rp_married	rp_female	
 		global	eduvars			rp_NoHS rp_somecol rp_col
 		global	empvars			rp_employed
@@ -99,9 +103,9 @@
 					
 					
 		label	var	FS_rec_wth	"FS last month"
-		label	var	foodexp_tot_inclFS_pc	"Food exp (with FS benefit)"
-		label	var	l2_foodexp_tot_inclFS_pc_1	"Food Exp in t-2"
-		label	var	l2_foodexp_tot_inclFS_pc_2	"(Food Exp in t-2)$^2$"
+		label	var	foodexp_tot_inclFS_pc			"Food exp (with FS benefit)"
+		label	var	l2_foodexp_tot_inclFS_pc_1_real		"Food Exp in t-2"
+		label	var	l2_foodexp_inclFS_pc_2_real_K		"(Food Exp in t-2)$^2$ (K)"
 		label	var	foodexp_tot_inclFS_pc_real		"Food exp (with FS benefit) (real)"
 		label	var	l2_foodexp_tot_exclFS_pc_1_real	"Food Exp in t-2 (real)"
 		label	var	l2_foodexp_tot_exclFS_pc_2_real	"(Food Exp in t-2)$^2$ (real)"	
@@ -137,7 +141,7 @@
 		*	Compared to Lee et al. (2021), I changed as followings
 			*	I exclude a binary indicator whether HH received SNAP or not (FS_rec_wth), as including it will violate exclusion restriction of IV
 			*	I do NOT use survey structure (but still use weight)
-			*	I use Poisson distribution assumption instead of Gamma
+			*	I use Poisson quasi-MLE estimation, instead of GLM with Gamma in the original PFS paper
 			*	I include individual-FE
 			*	Please refer to "SNAP_PFS_const_test.do" file for more detail.
 		ppmlhdfe	${depvar}	${statevars} ${demovars}	${eduvars} 	${empvars}	${healthvars}	${familyvars}	${econvars}		[pweight=wgt_long_fam_adj], absorb(x11101ll ib31.rp_state ib1979.year) d	
@@ -188,10 +192,10 @@
 		local	depvar	e1_foodexp_sq_glm
 		
 			*	GLM with Poisson
-			ppmlhdfe	`depvar'	${statevars} ${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	[pweight=wgt_long_fam_adj], absorb(x11101ll ib31.rp_state ib1997.year) d	
+			ppmlhdfe	`depvar'	${statevars} ${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	[pweight=wgt_long_fam_adj], absorb(x11101ll ib31.rp_state ib1979.year) d	
 			est store glm_step2
 			gen	glm_step2_sample=1	if	e(sample)==1 
-			predict	double	var1_foodexp_glm	if	glm_step2_sample==1	
+			predict	double	var1_foodexp_glm	if	glm_step2_sample==1	// (2023-06-21) Poisson quasi-MLE does not seem to generate negative predicted value, which is good (no need to square them)
 			gen	sd_foodexp_glm	=	sqrt(abs(var1_foodexp_glm))	//	Take square root of absolute value, since predicted value can be negative which does not have square root.
 			gen	error_var1_glm	=	abs(var1_foodexp_glm - e1_foodexp_sq_glm)	//	prediction error. 
 			*br	e1_foodexp_sq_glm	var1_foodexp_glm	error_var1_glm
@@ -258,6 +262,7 @@
 			*	Generate PFS by constructing CDF
 			global	TFP_threshold	foodexp_W_TFP_pc_real	/*IHS_TFP*/
 			gen PFS_glm = gammaptail(alpha1_foodexp_pc_glm, ${TFP_threshold}/beta1_foodexp_pc_glm)	//	gammaptail(a,(x-g)/b)=(1-gammap(a,(x-g)/b)) where g is location parameter (g=0 in this case)
+		
 			label	var	PFS_glm "PFS"
 			
 					
