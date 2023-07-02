@@ -65,16 +65,16 @@
 	
 	*	Codes to be executed
 		*	SECTION 1: Import individual- and family-level PSID variables
-		local	ind_agg			0	//	Aggregate individual-level variables across waves
-		local	fam_agg			0	//	Aggregate family-level variables across waves
+		local	ind_agg			1	//	Aggregate individual-level variables across waves
+		local	fam_agg			1	//	Aggregate family-level variables across waves
 		
 		*	SECTION 2: Prepare external data
 		local	ext_data		0	//	Prepare external data (CPI, TFP, etc.)
 		
 		*	SECTION 3: Construct PSID panel data and import external data
-		local	cr_panel		0	//	Create panel structure from ID variable
+		local	cr_panel		1	//	Create panel structure from ID variable
 			local	panel_view	0	//	Create an excel file showing the change of certain clan over time (for internal data-check only)
-		local	merge_data		0	//	Merge ind- and family- variables and import it into ID variable
+		local	merge_data		1	//	Merge ind- and family- variables and import it into ID variable
 			local	raw_reshape	1		//	Merge raw variables and reshape into long data (takes time)
 			local	add_clean	1		//	Do additional cleaning and import external data (CPI, TFP)
 			local	import_dta	1		//	Import aggregated variables and external data into ID data. 
@@ -2421,7 +2421,7 @@
 			cap	drop	count_relrp7719
 			egen	count_relrp7719	=	anycount(relrp_recode1977-relrp_recode2019), values(0 1 2)
 			gen		`var'=0
-			replace	`var'=1	if	count_relrp7719==30	//	Those who satisfy relation condition; RP or SP (residing) or inapp (not residing) across all 32 waves
+			replace	`var'=1	if	count_relrp7719==30	//	Those who satisfy relation condition; RP or SP (residing) or inapp (not residing) across all waves
 			lab	var	`var'	"=1 if RP/SP over study period"
 			drop	count_relrp7719	
 			
@@ -3315,25 +3315,27 @@
 			replace	`var'=4	if	inrange(year,1991,2019)	&	inrange(rp_gradecomp,16,17)	//	College, but no degree
 			replace	`var'=4	if	inrange(year,1991,2019)	&	rp_coldeg==1	//	Answered "yes" to "has college degree"
 			
-			*	NA/DK (excluding "cannot read/write in early years")
-			replace	`var'=99	if	inrange(year,1968,1990)	&	inrange(rp_gradecomp,9,9)
-			replace	`var'=99	if	inrange(year,1991,2019)	&	inrange(rp_gradecomp,99,99)
+			*	NA/DK
+				*	Usually when it is unknown whether RP has high school diploma or how many years of college education completed.
+				*	Excluding "cannot read/write in early years"
+			replace	`var'=.n	if	inrange(year,1968,1990)	&	inrange(rp_gradecomp,9,9)
+			replace	`var'=.n	if	inrange(year,1991,2019)	&	inrange(rp_gradecomp,99,99)
 			
-			label	define	`var'	1	"Less than HS"	2	"High School/GED"	3	"Some college"	4	"College"	99	"NA/DK",	replace
+			label	define	`var'	1	"Less than HS"	2	"High School/GED"	3	"Some college"	4	"College"	/*99	"NA/DK"*/,	replace
 			label	value	`var'	`var'
 			label 	variable	`var'	"Education category (RP)"
 			
 			cap	drop	rp_edu?		rp_NoHS	rp_HS	rp_somecol	rp_col
 			tab `var', gen(rp_edu)
-			rename	(rp_edu1	rp_edu2	rp_edu3	rp_edu4	rp_edu5)	(rp_NoHS	rp_HS	rp_somecol	rp_col	rp_NADK)
+			rename	(rp_edu1	rp_edu2	rp_edu3	rp_edu4	/*rp_edu5*/)	(rp_NoHS	rp_HS	rp_somecol	rp_col	/*rp_NADK*/)
 			
-			lab	value	rp_NoHS	rp_HS	rp_somecol	rp_col	rp_NADK	yes1no0
+			lab	value	rp_NoHS	rp_HS	rp_somecol	rp_col	/*rp_NADK*/	yes1no0
 			
 			label	var	rp_NoHS	"Less than High School"
 			label	var	rp_HS	"High School"
 			label	var	rp_somecol	"College (w/o degree)"
 			label	var	rp_col	"College Degree"
-			label	var	rp_NADK	"Education (NA/DK)"
+			*label	var	rp_NADK	"Education (NA/DK)"
 			
 		*	Disability
 		*	I categorize RP as disabled if RP has either "amount" OR "type" of work limitation
@@ -3382,6 +3384,12 @@
 			label	value	`var'	yes1no0
 			
 			label	var	`var'	"HFSM FI"
+			
+			*	FSSS-rescaled
+			cap	drop	FSSS_rescale
+			gen	FSSS_rescale = (9.3-HFSM_scale)/9.3
+			label	var	FSSS_rescale "FSSS (re-scaled)"
+			
 		
 		*	Family income
 		lab	var	fam_income	"Total family income"
@@ -3951,7 +3959,7 @@
 							*	One difference between here and "at-home" is that I disabled "FS_rec_wth==0" condition, in order to assign average value to those who did use FS last month but didn't used this year
 							*	Theoretically they shouldn't exist, but there is 1 family in 2001.
 							replace	`var'=r(mean) 	if	year==`year'	&	/*FS_rec_wth==0	&*/	(inrange(`rawvar',80001,100000)	|	inlist(`rawvar_recall',8,9))	//	if amount OR recall period has NA/DK
-						
+							
 					
 						}	//	year	
 						
@@ -4083,13 +4091,14 @@
 						replace	`var'=0	if	foodexp_deliv_wth_nFS==0	
 												
 						*	For DK/NA/refusal (both in amount and recall period), I impute the monthly average from other categories and assign the mean value
+						*	(2023-06-22): There is 1 obs (year==2007, ID=1988030) whose "weekly" eaten out expenditure was 80,000. I think it is mistake, but it was somehow not properly winsorized later. Need to fix it.
 						foreach	year	in	1994	1995	1996	1997	1999	2001	2003	2005	2007	2009	2011	2013	2015	2017	2019	{
 																	
 							summ	`var'			if	year==`year'	&	/*FS_rec_wth==0	&*/	foodexp_deliv_wth_nFS==1	&	!mi(`rawvar')	&	!mi(`rawvar_recall')	&	///			//	I use raw variable's category 
 														!inrange(`rawvar',99998,100000)	&	!inlist(`rawvar_recall',8,9)	//	Both recall period AND amount should be valid
 							
 							replace	`var'=r(mean) 	if	year==`year'	&	/*FS_rec_wth==0	&*/	foodexp_deliv_wth_nFS==1	&	(inrange(`rawvar',99998,100000)	|	inlist(`rawvar_recall',8,9))	//	if amount OR recall period has NA/DK
-						
+							
 					
 						}	//	year	
 						
@@ -4195,6 +4204,7 @@
 			
 			br year foodexp_W_TFP	foodexp_tot_exclFS	foodexp_tot_inclFS	if	inrange(foodexp_W_TFP,foodexp_tot_exclFS,foodexp_tot_inclFS)	
 			
+			
 					
 		*	Winsorize top 1% values of per capita values for every year (except TFP)
 		
@@ -4210,7 +4220,7 @@
 				
 				di "var is `var', year is `year'"
 				qui	summarize	`var' 				if	year==`year' & seqnum!=0,d
-				replace 	`var'_wins=r(p99)	if	year==`year' & seqnum!=0	& `var'>=r(p99)
+				replace 	`var'_wins=r(p99)	if	year==`year' & seqnum!=0	&	!mi(`var')	& `var'>=r(p99)
 				
 			}
 			
@@ -4234,7 +4244,6 @@
 			
 		}
 			
-		
 		
 		*	Create constant dollars of monetary variables  (ex. food exp, TFP)
 		*	Baseline CPI is 2019 Jan (100) 
@@ -4261,7 +4270,21 @@
 		global	money_vars_real	`r(varlist)'
 		global	money_vars	${money_vars_current}	${money_vars_real}
 		
-
+		*	Normalized Money Expenditure (NME) - ratio of food expenditure to TFP cost
+		*	(2023-06-22) For some reason, HH-level food expenditure is NOT properly winsorized above. So we use "per capita" expenditure which is technically identical but somehow generates more reasonable values (thus I assue properly winsorized)
+		loc	var	NME
+		cap	drop	`var'
+		gen	`var'	=	foodexp_tot_inclFS_pc	/ foodexp_W_TFP_pc
+		lab	var	`var'	"Normalized Money Expenditure"
+		
+			*	Dummy if NME<1 (i.e. spend less than TFP cost)
+			loc	var	NME_below_1
+			cap	drop	`var'
+			gen		`var'=.
+			replace	`var'=0	if	!mi(NME)	&	NME>=1
+			replace	`var'=1	if	!mi(NME)	&	NME<1
+			lab	var	`var'	"=1 if NME<1 (spend less than TFP cost)"
+		
 		
 		di "${money_vars_real}"
 		*	Create lagged variables needed
