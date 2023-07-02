@@ -240,10 +240,15 @@ assert	inrange(year,1977,2019)
 			gen	error_glm_gam	=	abs(dephat_glm_gam-${depvar})	if	sample_glm_gam==1
 			
 			*	Check the summary stats of the predicted values and RMSE
-			*	Errors are the smallest with Gaussian (128), followed by Gamma (129) and Poisson (131). Differences are trivial
-			*	Median differences are the smallest with Gaussian (100), followed by Gamma (101) and Poisson (105)
-			summ	${depvar}	dephat_gau	dephat_glm_pos	dephat_glm_gam	error_gau	error_glm_pos	error_glm_gam	if	sample_gau==1	&	sample_glm_pos==1	&	sample_glm_gam==1
-		
+				
+				*	Errors are the smallest with Gaussian (117), followed by Gamma (119) and Poisson (119). Differences are trivial
+				summ	${depvar}	dephat_gau	dephat_glm_pos	dephat_glm_gam	error_gau	error_glm_pos	error_glm_gam	///
+				[aweight=wgt_long_fam_adj]	if	sample_gau==1	&	sample_glm_pos==1	&	sample_glm_gam==1
+				
+				*	Median differences are the smallest with Gaussian (84), followed by Gamma (85) and Poisson (88)
+				summ	${depvar}	error_gau	error_glm_pos	error_glm_gam	///
+				[aweight=wgt_long_fam_adj]	if	sample_gau==1	&	sample_glm_pos==1	&	sample_glm_gam==1, d
+			
 		*	No controls, with all FE (individual-, region- and year-)
 		*	Since we could not find including individual-FE with GLM-Gamma, we only compare Gaussian and Poisson quasi-MLE
 		cap	drop	dephat_gau
@@ -270,8 +275,8 @@ assert	inrange(year,1977,2019)
 			gen	error_glm	=	abs(dephat_glm-${depvar})	if	sample_glm==1
 			
 			*	Check the summary stats of the predicted values and RMSE
-			*	Poisson quasi-MLE non-trivially better (116 vs 148), while Gaussian is less susceptable to outliers
-			summ	${depvar}	dephat_gau	dephat_glm	error_gau	error_glm	if	sample_gau==1	&	sample_glm==1
+			*	Poisson quasi-MLE non-trivially better (102 vs 131), while Gaussian is less susceptable to outliers (1089 vs 1235)
+			summ	${depvar}	dephat_gau	dephat_glm	error_gau	error_glm	[aw=wgt_long_fam_adj]	if	sample_gau==1	&	sample_glm==1
 			
 
 		*	Controls (Note: takes some time for GLM), with all FE (individual-, region- and year-)
@@ -298,8 +303,8 @@ assert	inrange(year,1977,2019)
 			gen	error_glm	=	abs(dephat_glm-${depvar})	if	sample_glm==1
 	
 			*	Check the summary stats of the predicted values and RMSE
-			*	GLM is non-trivially better (98 vs 128), and no negative values in predicted variable. Also the outlier in GLM still exists but less severe
-			summ	${depvar}	dephat_gau	dephat_glm	error_gau	error_glm	if	sample_gau==1	&	sample_glm==1
+			*	GLM is non-trivially better (91 vs 120), and no negative values in predicted variable. Also the outlier in GLM still exists but less severe
+			summ	${depvar}	dephat_gau	dephat_glm	error_gau	error_glm	[aw=wgt_long_fam_adj]	if	sample_gau==1	&	sample_glm==1
 			
 			*	Based on the tests above, I conclude that using GLM with Poisson is better (and should use GLM to avoide negative predicted value).
 		}
@@ -357,7 +362,8 @@ assert	inrange(year,1977,2019)
 			gen	sd_foodexp_pos	=	sqrt(abs(var1_foodexp_pos))	if	sample_pos_step2==1	//	Take square root of absolute value, since predicted value can be negative which does not have square root.
 			gen	error_var1_pos	=	abs(var1_foodexp_pos - e1_foodexp_sq_pos)	if	sample_pos_step2==1	//	prediction error. 
 			
-			summ	e1_foodexp_sq_gau	e1_foodexp_sq_pos	error_var1_gau	error_var1_pos	if	sample_gau_step2==1	&	sample_pos_step2==1	//	Poisson quasi ML is better
+			*	Error in step 2: Poisson is better (11,859 vs 15,449)
+			summ	e1_foodexp_sq_gau	e1_foodexp_sq_pos	error_var1_gau	error_var1_pos	if	sample_gau_step2==1	&	sample_pos_step2==1	
 			
 		*	Construct PFS under distributional assumptions
 		
