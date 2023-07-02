@@ -60,7 +60,7 @@
 	di "Git branch `r(branch)'; commit `r(sha)'."
 	
 	*	Determine which part of the code to be run
-	local	PFS_const	0	//	Construct PFS from cleaned data
+	local	PFS_const	1	//	Construct PFS from cleaned data
 	local	FSD_const	1	//	Construct FSD from PFS
 	
 	/****************************************************************
@@ -144,7 +144,8 @@
 			*	I use Poisson quasi-MLE estimation, instead of GLM with Gamma in the original PFS paper
 			*	I include individual-FE
 			*	Please refer to "SNAP_PFS_const_test.do" file for more detail.
-		ppmlhdfe	${depvar}	${statevars} ${demovars}	${eduvars} 	${empvars}	${healthvars}	${familyvars}	${econvars}		[pweight=wgt_long_fam_adj], absorb(x11101ll ib31.rp_state ib1979.year) d	
+		ppmlhdfe	${depvar}	${statevars} ${demovars}	${eduvars} 	${empvars}	${healthvars}	${familyvars}	${econvars}		[pweight=wgt_long_fam_adj], ///
+			absorb(x11101ll ib31.rp_state ib1979.year) vce(cluster x11101ll) d	
 		/*
 		glm 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}*/	${indvars}	/*${regionvars}	${timevars}*/	[aw=wgt_long_fam_adj], family(gamma)	link(log)
 		svy, subpop(if ${PFS_sample}): glm 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}*/	${macrovars}	/*${regionvars}	${timevars}*/, family(gamma)	link(log)
@@ -192,7 +193,8 @@
 		local	depvar	e1_foodexp_sq_glm
 		
 			*	GLM with Poisson
-			ppmlhdfe	`depvar'	${statevars} ${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	[pweight=wgt_long_fam_adj], absorb(x11101ll ib31.rp_state ib1979.year) d	
+			ppmlhdfe	`depvar'	${statevars} ${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	[pweight=wgt_long_fam_adj], ///
+				absorb(x11101ll ib31.rp_state ib1979.year) vce(cluster x11101ll) d	
 			est store glm_step2
 			gen	glm_step2_sample=1	if	e(sample)==1 
 			predict	double	var1_foodexp_glm	if	glm_step2_sample==1	// (2023-06-21) Poisson quasi-MLE does not seem to generate negative predicted value, which is good (no need to square them)
