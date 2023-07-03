@@ -17,10 +17,16 @@
 		*keep	if	inrange(year,1977,2015) & !mi(citi6016)
 		
 		
-		
+		*	Outcome variables
 		summ	PFS_glm	PFS_FI_glm
 		summ	PFS_glm PFS_FI_glm	[aw=wgt_long_fam_adj]
 		summ	PFS_glm PFS_FI_glm	[aw=wgt_long_fam_adj] if income_below_200==1 
+		
+		*	IV: Official SNAP index (unweighted and weighted)	
+		summ	SNAP_index_uw SNAP_index_w
+		summ	SNAP_index_uw SNAP_index_w	[aw=wgt_long_fam_adj]
+		summ	SNAP_index_uw SNAP_index_w	[aw=wgt_long_fam_adj] if income_below_200==1 
+		
 		
 		summ	citi6016	[aw=wgt_long_fam_adj] if income_below_200==1 
 		
@@ -65,31 +71,26 @@
 		label	var	year_01_03	"2001 or 2003"
 		label	var	citi6016	"State citizen ideology (1960-2015)"
 		
-		*	Temporary renaming	
-		rename	(SNAP_index_unweighted	SNAP_index_weighted)	(SNAP_index_uw	SNAP_index_w)
-		lab	var	SNAP_index_uw 	"Unweighted SNAP index"
-		lab	var	SNAP_index_w 	"Weighted SNAP index"
 		
-		*	Standardized SNAP weighted index
-			*	Not sure I am gonna use it..
-		cap drop SNAP_index_w_std
-		summ	SNAP_index_w  [aw=wgt_long_fam_adj]
-		gen	SNAP_index_w_std = (SNAP_index_w - r(mean)) / r(sd)
-		lab	var	SNAP_index_w_std	"SNAP policy index (weighted \& standardized)"
+		*	Re-scale (to vary from 0 to 1) and standardize SNAP index
+		*	Not sure I am gonna use it..
+			foreach	type	in	uw	w	{
+
+				*	Re-scaled version
+				cap	drop	SNAP_index_`type'_0to1
+				summ	SNAP_index_`type'  [aw=wgt_long_fam_adj]
+				gen		SNAP_index_`type'_0to1	=	(SNAP_index_`type'-r(min)) / (r(max) - r(min))
+				lab	var	SNAP_index_`type'_0to1		"SNAP Policy Index (`type' \& rescaled)"
+						
+				*	Standardized version				
+				cap drop SNAP_index_`type'_std
+				summ	SNAP_index_`type'  [aw=wgt_long_fam_adj]
+				gen	SNAP_index_`type'_std = (SNAP_index_`type' - r(mean)) / r(sd)
+				lab	var	SNAP_index_`type'_std	"SNAP policy index (`type' \& standardized)"
+				
+			}
+
 		
-		*	Re-scaled weighted SNAP index (to vary from 0 to 1)
-		
-			*	Manual
-			cap	drop	SNAP_index_w_0to1
-			summ	SNAP_index_w  [aw=wgt_long_fam_adj]
-			gen		SNAP_index_w_0to1	=	(SNAP_index_w-r(min)) / (r(max) - r(min))
-			lab	var	SNAP_index_w_0to1	"SNAP Policy Index (weighted \& rescaled)"
-			
-			*	Official
-			cap	drop	SNAP_index_off_w_0to1
-			summ	SNAP_index_off_w  [aw=wgt_long_fam_adj]
-			gen		SNAP_index_off_w_0to1	=	(SNAP_index_off_w-r(min)) / (r(max) - r(min))
-			lab	var	SNAP_index_off_w_0to1	"SNAP Policy Index (official &\ weighted \& rescaled)"
 			
 		*	Re-scale citizen ideology variable (from 0-100 to 0-1 : for better interpretation)
 		cap	drop	citi6016_0to1
@@ -156,13 +157,65 @@
 		
 	
 	
-	
-	
+		*	(2023-7-2)
+		*	As many things have changed, I am writing this comments to organize my thoughts
+		/*	
+			1. IV
+			We will use the following IVs
+				a. SNAP policy index (benchmark IV)
+					-	Available period: 1996-2013
+					-	unweighted: Easy to interpret (increase in index by 1 implies adopting one more friendly policy), but does not capture relative importance of each policy.
+					-	weighted: Not so eaasy to interpret, but captures relative importance of each policy.
+				b.	SNAP overpayment rate (if possible)
+					-	Available period: 1980-2013, 2017-2019 (2015 is not complete due to quality issue)
+				c.	Social spending index
+					-	Available period: 1977-2019
+			2.	Estimation method
+				a.	Classic (OLS in both 1st and 2nd stagethe first)
+					-	Can be used for all three IVs above
+				b.	Probit/logit in the first stage, and include the predicted variable as an IV in the second stage (benchmark estimation)
+					-	Source: https://www.statalist.org/forums/forum/general-stata-discussion/general/1399436-instrumental-variables-with-binary-endogenous-regressor
+			3.	Estimations to be done
+				a.	policy index only (OLS and MLE)
+				b.	SNAP overpayment only (OLS and MLE)
+				c.	policy index AND overpayment (OLS and MLE. need to do overidentifying test.)
+				d.	social spending index (for full period)
+			4.	FE
+				a.	No FE
+				b.	State FE
+				c.	state, and individual-FE
+				
+			
+			*	Since there are many specifications/IV/methods/FE to try, let's do one by one
+			*	For now (2023-07-02), try SNAP policy index (unweighted and weighted) only. We can gradually test other IVs
+				*	SNAP policy index (unweighted, weighted)
+					1.	OLS - no FE, state FE and full FE
+					2.	IV
+						2a.	1st-stage OLS
+							-	original IV (Z)
+							-	predicted 1st-stage (Dhat) only
+							-	Both Z and Dhat
+				CAUTION: IF WE USE PROBIT/LOGIT FOR THE FIRST STAGE, IT WOULD BE "FORBIDDEN REGRESSION" BELOW. SO I WOULD NOT CONSIDER THAT FOR NOW.
+			
 		
-						
+			NOTE: Be careful NOT to do "forbidden regression"
+			(address: https://twitter.com/jmwooldridge/status/1365119735424307204)
+				 a) Using fitted values from a nonlinear first stage as IVs in a linear second stage.
+				(b) Finding your high school sweetheart on Facebook.
+				(c) Inserting fitted values from a first stage into a nonlinear second stage.
+			(source: https://edrub.in/ARE212/section11.html#the_forbidden_regression)
+				(a) You use a nonlinear predictor in your first stage, e.g., probit, logit, Poisson, etc. You need linear OLS in the first stage to guarantee that the covariates and fitted values in second stage will be uncorrelated with the error (exogenous).
+				(b) Your first stage does not match your second stage, e.g.,
+					You use different fixed effects in the two stages
+					You use a different functional form of the endogenous covariate in the two stages, e.g., x inn the first stage and x^2 in the second stage.
+		
+		
+		*/	
+		
+		
+		
 			*	Set the benchmark specification based on the test above.	
 			*	Benchmark specification
-			*	(2022-7-28) Note: the last benchmark model (SSI as single IV to instrument amount of FS benefit) tested was including "${statevars}" and excluding "lagged PFS"
 			*	But here I inclued "lagged PFS" as Chris suggested, and excluded "statevars" by my own decision. We can further test this specification with different IV/endogenous variable (political status didn't work still)
 			*	(2022-11-16) updates
 				*	(1) use 'food expenditure' up to the 2nd order as lagged state,
@@ -172,58 +225,71 @@
 				*	(1) Use new PFS (which is estimated using new commands, with state, individual- and year-FE)
 				*	(2) Use new command (reghdfe, ivreghdfe) - generates same result.
 				*	(3) Always include state FE
+			*	(2022-7-28) Note: the last benchmark model (SSI as single IV to instrument amount of FS benefit) tested was including "${statevars}" and excluding "lagged PFS"
 			
-			global	FSD_on_FS_X			${statevars}	${demovars} ${econvars}	${healthvars}	${empvars}	${familyvars}	${eduvars} 	${macrovars}
-				
+			global	FSD_on_FS_X		${statevars}	${demovars} ${econvars}	${healthvars}	${empvars}	${familyvars}	${eduvars} 	${macrovars} 
 			global	PFS_est_1st
 			global	PFS_est_2nd
 			global	PFS_est_1st
 			global	PFS_est_2nd	//	This one includes OLS as well.
 			
 			
-			*	First we run main IV regression, to find the samples in the regression
+			*	Regression setup
 			loc	depvar		PFS_glm
 			loc	endovar		FSdummy	//	FSamt_capita
-			loc	IV			SNAP_index_w_0to1	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
-			loc	IVname		index
-				
-				cap	drop reg_sample	
-				ivreghdfe	`depvar'	 ${FSD_on_FS_X}	 (`endovar' = `IV')	[aw=wgt_long_fam_adj] if	income_below_200==1 &	!mi(`IV'),	///
-					absorb(ib31.rp_state x11101ll) robust first  savefirst savefprefix(`IVname')	 
-				gen	reg_sample=1 if e(sample)
-				lab	var	reg_sample "Sample in IV regression"
+			loc	IV			SNAP_index_uw	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
+			loc	IVname		index_uw
 			
+				*	First we run main IV regression including all FE, to use the uniform sample across different FE/specifications
+					cap	drop reg_sample	
+					ivreghdfe	`depvar'	 ${FSD_on_FS_X}	 (`endovar' = `IV')	[aw=wgt_long_fam_adj] if	income_below_200==1 &	inrange(year,1996,2013)	&	!mi(`IV'),	///
+						absorb(ib31.rp_state x11101ll) robust first  savefirst savefprefix(`IVname')	 
+					gen	reg_sample=1 if e(sample)
+					lab	var	reg_sample "Sample in IV regression"														
 			
 				*	OLS
 						
 					*	no FE
-					reghdfe		PFS_glm	 FSdummy ${FSD_on_FS_X}	 [aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(reg_sample),	vce(robust) noabsorb
+					reghdfe		PFS_glm	 FSdummy ${FSD_on_FS_X}	 [aw=wgt_long_fam_adj] if	income_below_200==1 &	inrange(year,1996,2013)	& !mi(reg_sample),	vce(cluster x11101ll) noabsorb
 					*reg		`depvar'	`endovar'	${FSD_on_FS_X}	[aw=wgt_long_fam_adj]	if	income_below_200==1,	robust	//cluster(x11101ll) // first savefirst savefprefix(`IVname')
 					est	store	nofe_ols	
 					
+						/*
 						*	With 1996-2015 only (SNAP index)
 						reghdfe		PFS_glm	 FSdummy ${FSD_on_FS_X}	 [aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(reg_sample)	&	!mi(SNAP_index_w),	vce(robust) noabsorb
 						est	store	nofesub_ols
+						*/
 					
 					*	state FE
 					*reg		`depvar'	`endovar'	${FSD_on_FS_X}	${regionvars}	[aw=wgt_long_fam_adj]	if	income_below_200==1,	robust	// cluster(x11101ll) // first savefirst savefprefix(`IVname') ///
-					reghdfe		PFS_glm	 FSdummy ${FSD_on_FS_X}	 [aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(reg_sample),	vce(robust) absorb(ib31.rp_state)
+					reghdfe		PFS_glm	 FSdummy ${FSD_on_FS_X}	 [aw=wgt_long_fam_adj] if	income_below_200==1 &	inrange(year,1996,2013)	&	 !mi(reg_sample),	vce(cluster x11101ll) absorb(ib31.rp_state)
 					est	store	stfe_ols
 					
+						/*
 						*	With 1996-2015 only (SNAP index)
 						reghdfe		PFS_glm	 FSdummy ${FSD_on_FS_X}	 [aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(reg_sample) & !mi(SNAP_index_w),	vce(robust) absorb(ib31.rp_state)
 						est	store	stfesub_ols
-					
+						*/
+						
 					*	state and individual FE
-					reghdfe		PFS_glm	 FSdummy ${FSD_on_FS_X}	 [aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(reg_sample),	vce(robust) absorb(ib31.rp_state x11101ll)
+					reghdfe		PFS_glm	 FSdummy ${FSD_on_FS_X}	 [aw=wgt_long_fam_adj] if	income_below_200==1 &	inrange(year,1996,2013)	& !mi(reg_sample),	vce(cluster x11101ll) absorb(ib31.rp_state x11101ll)
 					est	store	fe_ols
 					
+						/*
 						*	With 1996-2015 only (SNAP index)
 						reghdfe		PFS_glm	 FSdummy ${FSD_on_FS_X}	 [aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(reg_sample) & !mi(SNAP_index_w),	vce(robust) absorb(ib31.rp_state x11101ll)
 						est	store	fesub_ols
+						*/
 					
 				*	IV		
 							
+						*	We first construct fitted value of the endogenous variable from the first stage, to be used as an IV
+						*	(2023-07-02) Manual 1st-stage and ivreg first stage are not exactly the same in coefficients (slightly different). Need to figure out why, but we will use manual regression for now.
+						reghdfe	FSdummy	${FSD_on_FS_X}	[aw=wgt_long_fam_adj] if	reg_sample==1, vce(cluster x11101ll) noabsorb
+						predict	
+						
+						ivreghdfe	PFS_glm	${FSD_on_FS_X}	(FSdummy = SNAP_index_uw)	[aw=wgt_long_fam_adj] if	reg_sample==1, cluster (x11101ll)	first savefirst savefprefix(FSdummy)	 
+						
 						*	w/o FE						
 							ivreghdfe	PFS_glm	${FSD_on_FS_X}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(`IV') & reg_sample==1, robust	first savefirst savefprefix(`IVname')	 
 							est	store	`IVname'_IV_nofe_2nd
@@ -241,6 +307,7 @@
 							*global	PFS_est_2nd	${PFS_est_2nd}	`IVname'_2nd
 						
 						
+							/*
 							*	Add dynamic effects.
 							*	First, predict FS amount received
 							est restore `IVname'_nofe_IV_1st
@@ -253,6 +320,7 @@
 							est	store	`IVname'_dyn_X_nofe_2nd
 						
 							*global	PFS_est_2nd	${PFS_est_2nd}	PFS_dyn_X_2nd
+							*/
 					
 					
 						*	with state FE							
@@ -271,7 +339,7 @@
 							*global	PFS_est_1st	${PFS_est_1st}	`IVname'_1st
 							*global	PFS_est_2nd	${PFS_est_2nd}	`IVname'_2nd
 						
-						
+							/*
 							*	Add dynamic effects.
 							*	First, predict FS amount received
 							est restore `IVname'_stfe_IV_1st
@@ -282,6 +350,7 @@
 							*	Now, regress 2nd stage, including FS across multiple periods
 							reghdfe	PFS_glm FS_wth_PFS_hat	l2.FS_wth_PFS_hat	${FSD_on_FS_X}	[aw=wgt_long_fam_adj]	if	income_below_200==1	&	!mi(`IV') & reg_sample==1,	vce(robust) absorb(ib31.rp_state)
 							est	store	`IVname'_dyn_X_stfe_2nd
+							*/
 							
 						*	state and individual FE														
 							ivreghdfe	PFS_glm	${FSD_on_FS_X}	(`endovar' = `IV')	[aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(`IV') & reg_sample==1,	absorb(ib31.rp_state x11101ll) robust	first savefirst savefprefix(`IVname')	 
@@ -299,7 +368,7 @@
 							*global	PFS_est_1st	${PFS_est_1st}	`IVname'_1st
 							*global	PFS_est_2nd	${PFS_est_2nd}	`IVname'_2nd
 						
-						
+							/*
 							*	Add dynamic effects.
 							*	First, predict FS amount received
 							est restore `IVname'_fe_IV_1st
@@ -310,7 +379,7 @@
 							*	Now, regress 2nd stage, including FS across multiple periods
 							reghdfe	PFS_glm FS_wth_PFS_hat	l2.FS_wth_PFS_hat	${FSD_on_FS_X}	[aw=wgt_long_fam_adj]	if	income_below_200==1	&	!mi(`IV') & reg_sample==1,	vce(robust) absorb(ib31.rp_state x11101ll)
 							est	store	`IVname'_dyn_X_fe_2nd
-						
+							*/
 												
 					
 						*	Tabulate results comparing OLS and IV
@@ -589,8 +658,8 @@
 			
 		*	Sample stats
 
-		
 			*	Individual-level (unique per individual)	
+				
 				*	Gender
 				local	var	ind_female
 				cap	drop	`var'_uniq
