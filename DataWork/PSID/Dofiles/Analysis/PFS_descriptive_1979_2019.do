@@ -247,7 +247,7 @@
 						
 				*	Variablest to be collapsed
 				local	collapse_vars	foodexp_tot_exclFS_pc	foodexp_tot_inclFS_pc	foodexp_tot_exclFS_pc_real	foodexp_tot_inclFS_pc_real	foodexp_W_TFP_pc foodexp_W_TFP_pc_real	///	//	Food expenditure and TFP cost per capita (nominal and real)
-										rp_female	rp_nonWhte	rp_col	rp_disabled	FS_rec_wth	FS_rec_amt_capita	FS_rec_amt_capita_real	///	//	Gender, race, education, FS participation rate, FS amount
+										rp_age	rp_female	rp_nonWhte	rp_HS	rp_col	rp_disabled	FS_rec_wth	FS_rec_amt_capita	FS_rec_amt_capita_real	///	//	Gender, race, education, FS participation rate, FS amount
 										PFS_glm	NME	PFS_FI_glm	NME_below_1	//	Outcome variables	
 				
 				*	All population
@@ -281,16 +281,29 @@
 		*	Annual plots
 		use	`annual_agg_all', clear
 		
-			*	Gender, race, HS and college degree
+			*	Gender, race, disabled
 			graph	twoway	(line rp_female 		year, lpattern(dash) xaxis(1 2) yaxis(1) legend(label(1 "Female (RP)")))	///
 							(line rp_nonWhte				year, lpattern(dot) xaxis(1 2) yaxis(1) legend(label(2 "Non-White (RP)")))	///
-							(line rp_disabled	year, lpattern(dash_dot) xaxis(1 2) yaxis(1)  legend(label(3 "Disabled")))  ///
-							(line rp_col			year, /*lpattern(dash_dot)*/ xaxis(1 2) yaxis(1)  legend(label(4 "College degree"))),  ///
+							(line rp_disabled	year, lpattern(dash_dot) xaxis(1 2) yaxis(1)  legend(label(3 "Disabled"))),  ///
 							/*xline(1980 1993 1999 2007, axis(1) lpattern(dot))*/ xlabel(/*1980 "No payment" 1993 "xxx" 2009 "ARRA" 2020 "COVID"*/, axis(2))	///
 							xtitle(Year)	xtitle("", axis(2))	ytitle("Share", axis(1)) ///
 							/*ytitle("Stamp benefit ($)", axis(2))*/ title(Sample Demographics)	bgcolor(white)	graphregion(color(white)) /*note(Source: USDA & BLS)*/	name(demographic_annual, replace)
 			
 			graph	export	"${SNAP_outRaw}/demographic_annual.png", replace	
+			graph	close	
+			
+			
+			*	HS, College degree and the age of RP
+				*	We observer greater jump of college graduates around the Great Recession 2008
+				*	Note: https://hechingerreport.org/how-the-2008-great-recession-affected-higher-education-will-history-repeat/
+			graph	twoway	(line rp_HS 		year, lpattern(dash) xaxis(1 2) yaxis(1) legend(label(1 "High school (RP)")))	///
+							(line rp_col				year, lpattern(dot) xaxis(1 2) yaxis(1) legend(label(2 "College degree (RP)")))	///
+							(line rp_age	year, lpattern(dash_dot) xaxis(1 2) yaxis(2)  legend(label(3 "Age (RP)")))  ,  ///
+							/*xline(1980 1993 1999 2007, axis(1) lpattern(dot))*/ xlabel(/*1980 "No payment" 1993 "xxx" 2009 "ARRA" 2020 "COVID"*/, axis(2))	///
+							xtitle(Year)	xtitle("", axis(2))	ytitle("Share", axis(1)) ///
+							/*ytitle("Stamp benefit ($)", axis(2))*/ title(Sample Demographics)	bgcolor(white)	graphregion(color(white)) /*note(Source: USDA & BLS)*/	name(demographic_annual, replace)
+			
+			graph	export	"${SNAP_outRaw}/education_age.png", replace	
 			graph	close	
 			
 			   
