@@ -86,12 +86,174 @@
 			label var	`var'		"\% of FS used throughouth the period"
 			label var	`var'_uniq	"\% of FS used throughouth the period"
 			
+		*	Save
+		save	"${SNAP_dtInt}/SNAP_descdta_1979_2019", replace	//	Inermediate descriptive data for 1979-2019
+
+	
+	*	Importing Census data for comparsion
+	*	Note: this section should be moved to the original "SNAP_clean.do" file later.
+		
+		*	Household by type (gender of householder, family/non-family)
+			*	Family: 2 or more people related by marriage/birth/adoption/etc live together
+			*	Non-family: Single-person HH, or people unrelated live together.
+		import	excel	"${clouldfolder}/DataWork/Census/Historical Household Tables/hh1.xls", sheet(Table HH-1) firstrow	cellrange(A15:K61)	clear
+		
+		rename	(A B C D F G I J K)	///
+				(year total_HH	total_family_HH married_HH family_oth_maleHH family_oth_femaleHH total_nonfamily_HH nonfamily_maleHH nonfamily_femaleHH)
+		drop	E H
+		
+		*	Use the revised record
+		*drop	if	year=="2021"
+		drop	if	year=="2011"
+		drop	if	year=="1993"
+		drop	if	year=="1988"
+		drop	if	year=="1984"
+		drop	if	year=="1980"
+		*replace	year="2021" if	year=="2021r"
+		replace	year="2014"	if	year=="2014s"
+		replace	year="2011" if	year=="2011r"
+		replace	year="2001"	if	year=="2001e"
+		replace	year="1993"	if	year=="1993r"
+		replace	year="1988"	if	year=="1988a"
+		replace	year="1984"	if	year=="1984b"
+		replace	year="1980"	if	year=="1980c"
+		destring	year, replace
+		
+		*	Label variables
+		lab	var	year				"Year"
+		lab	var	total_HH			"Total # of HH"
+		lab	var	total_family_HH		"Total # of family HH"
+		lab	var	married_HH			"Total # of married couples"
+		lab	var	family_oth_maleHH	"Total # of other family HH - male householder"
+		lab	var	family_oth_femaleHH	"Total # of other family HH - female householder"
+		lab	var	total_nonfamily_HH	"Total # of nonfamily HH"
+		lab	var	nonfamily_maleHH	"Total # of nonfamily HH - male householder"
+		lab	var	nonfamily_femaleHH	"Total # of nonfamily HH - female householder"
+		
+		*	Generate the share of female-headed HH
+		*	Note: In Census, "Married couple" does not say whether householder is male or female, so I cannot figure it out from the data
+		*	In this practice, I regard all married couple as male householder, to be consistent with the PSID policy that treats male partner as the reference person.
+		loc	var	pct_rp_female_Census
+		cap	drop	`var'
+		gen	`var'	=	(family_oth_femaleHH + nonfamily_femaleHH) / total_HH
+		lab	var	`var'	"\% of female-headed householder (RP) - Census"
+		
+		*	Save
+		save	"${SNAP_dtInt}/HH_type_census.dta", replace
+		
+		
+		*	HH by race
+		import	excel	"${clouldfolder}/DataWork/Census/Historical Household Tables/hh2.xls", sheet(Table HH-2) firstrow	cellrange(A14:H56)	clear
+		
+		*	According to the detailed 2022 data, race has the following categories: (1) White alone (2) Black alone (3) Asian alone (4) Any other single-race or combination of races
+		*	However, in this historical data, (4) is not available, and I cannot figure out how to impute it from historical data
+		*	Thus, I only keep the following variables (1) Total HH (2) White-alone (3) Black-alone.
+			*	Non-White is defined as "(1) - (2)"
+		keep A B C E
+		rename	(A B C E) (year total_HH White_HH Black_HH)
+		
+		*	Use revised record
+		drop	if	year=="2011"
+		
+		replace	year="2014"	if	year=="2014s"
+		replace	year="2011"	if	year=="2011r"
+		replace	year="1980"	if	year=="1980r"
+		destring	year, replace
+		
+		*	Variable label
+		lab	var	year	"Year"
+		lab	var	total_HH	"Total \# of HH"
+		lab	var	White_HH	"Total \# of White householder"
+		lab	var	Black_HH	"Total \# of Black householder"
+		
+		*	Generate percentage indicator
+		loc	var	pct_rp_White_Census
+		cap	drop	`var'
+		gen	`var'	=	(White_HH / total_HH)
+		lab	var	`var'	"\% of White householder (RP) - Census"
+		
+		loc	var	pct_rp_nonWhite_Census
+		cap	drop	`var'
+		gen	`var'	=	(total_HH - White_HH / total_HH)
+		lab	var	`var'	"\% of non-White householder (RP) - Census"
+		
+		*	Save
+		save	"${SNAP_dtInt}/HH_race_census.dta", replace
+		
+		
+		*	Householder age
+		import	excel	"${clouldfolder}/DataWork/Census/Historical Household Tables/hh3.xls", sheet(Table HH-3) firstrow	cellrange(A14:K57)	clear
+		
+		rename	(A-K)	(year	total_HH	HH_age_below_25	HH_age_25_29	HH_age_30_34	HH_age_35_44	///
+							HH_age_45_54	HH_age_55_64	HH_age_65_74	HH_age_above_75	HH_age_median)
+							
+		*	Keep revised record only
+		drop	if	year=="2011"
+		drop	if	year=="1993"
+		
+		replace	year="2014"	if	year=="2014s"
+		replace	year="2011"	if	year=="2011r"
+		replace	year="1993"	if	year=="1993r"
+		destring	year,	replace
+		
+		*	Variable label
+		lab	var	year	"Year"
+		lab	var	total_HH	"Total \# of HH"
+		lab	var	HH_age_below_25	"# of HH - householder age below 25"
+		lab	var	HH_age_25_29	"# of HH - householder age 25-29"
+		lab	var	HH_age_30_34	"# of HH - householder age 30-34"
+		lab	var	HH_age_35_44	"# of HH - householder age 35-44"
+		lab	var	HH_age_45_54	"# of HH - householder age 45-54"
+		lab	var	HH_age_55_64	"# of HH - householder age 55-64"
+		lab	var	HH_age_65_74	"# of HH - householder age 65-74"
+		lab	var	HH_age_above_75	"# of HH - householder age 65-74"
+		lab	var	HH_age_median	"Median householder age"
+		
+		*	Generage additional variables
 			
-
-	*	Save
-	save	"${SNAP_dtInt}/SNAP_descdta_1979_2019", replace	//	Inermediate descriptive data for 1979-2019
-
-
+			*	Householder age 30 or below
+			loc	var	HH_age_below_30
+			cap	drop	`var'
+			egen	`var'	=	rowtotal(HH_age_below_25	HH_age_25_29)
+			lab	var	`var'	"# of HH - householder age below 30 - Census"
+			
+			loc	var	pct_HH_age_below_30
+			cap	drop	`var'
+			gen	`var'	=	(HH_age_below_30) / total_HH
+			lab	var	`var'	"\% of HH - householder age below 30 - Census"
+		
+		*	Save
+		save	"${SNAP_dtInt}/HH_age_census.dta", replace
+		
+	
+		*	HH size
+		import	excel	"${clouldfolder}/DataWork/Census/Historical Household Tables/hh4.xls", sheet(Table HH-4) firstrow	cellrange(A13:J56)	clear
+		
+		rename	(A B)	(year total_HH)
+		rename	(C-H)	HH_size_#, addnumber
+		rename	I		HH_size_7_above
+		rename	J		HH_size_avg_Census
+		
+		*	Keep modified record only
+		drop	if	year=="2011"
+		drop	if	year=="1993"
+		
+		replace	year="2014"	if	year=="2014s"
+		replace	year="2011"	if	year=="2011r"
+		replace	year="1993"	if	year=="1993r"
+		destring	year, replace
+		
+		*	Variable label
+		lab	var	year	"Year"
+		lab	var	total_HH	"Total \# of HH"
+		forval	i=1/6	{
+			lab	var	HH_size_`i'	"HH size: `i'"
+		}
+		lab	var	HH_size_7_above	"HH size: 7+"
+		lab	var	HH_size_avg_Census	"Average HH size: Census"
+		
+		*	Save
+		save	"${SNAP_dtInt}/HH_size_census.dta", replace
 	
 	*************** Descriptive stats
 	use	"${SNAP_dtInt}/SNAP_descdta_1979_2019", clear
