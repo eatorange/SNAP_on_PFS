@@ -6,6 +6,8 @@
 	
 	*	Preamble
 
+		*	ssc install lgraph, replace
+		
 		*	Keep relevant study sample only
 		keep	if	!mi(PFS_glm)
 		
@@ -329,12 +331,31 @@
 			save	"${SNAP_dtInt}/ind_education_CPS.dta", replace
 		
 		
+		*	Poverty status
+		import	excel	"${clouldfolder}/DataWork/Census/hstpov2.xlsx", sheet(pov02) firstrow	cellrange(A10:D53)	clear
+		
+			*	Keep modified record only
+			keep	A	D	
+			rename	(A	D)	(year	pov_rate)
+			
+			drop	if	year=="2013 (4)"
+			drop	if	year=="2017"
+			
+			replace	year=substr(year,1,4)
+			lab	var	year	"Year"
+			lab	var	pov_rate	"Poverty rate"
+			destring	year, replace
+			
+			*	Save
+			save	"${SNAP_dtInt}/pov_rate_1979_2019.dta", replace
+		
 		*	Merge Census HH data
 		use	"${SNAP_dtInt}/HH_type_census.dta", clear
 		merge	1:1	year	using	"${SNAP_dtInt}/HH_race_census.dta", nogen assert(3)
 		merge	1:1	year	using	"${SNAP_dtInt}/HH_age_census.dta", nogen assert(3)
 		merge	1:1	year	using	"${SNAP_dtInt}/HH_size_census.dta", nogen assert(3)
 		merge	1:1	year	using	"${SNAP_dtInt}/ind_education_CPS.dta", nogen assert(3)
+		merge	1:1	year	using	"${SNAP_dtInt}/pov_rate_1979_2019.dta", nogen assert(3)
 		save	"${SNAP_dtInt}/HH_census_1979_2019.dta", replace
 		
 	*************** Descriptive stats
@@ -543,7 +564,7 @@
 		
 			*	Gender (RP) 
 			graph	twoway	(line rp_female 			year, lpattern(dash) xaxis(1) yaxis(1) legend(label(1 "Study Sample (PSID)")))	///
-							(line pct_rp_female_Census	year, lpattern(dot) xaxis(1) yaxis(1) legend(label(2 "Census"))),	///
+							(line pct_rp_female_Census	year, lpattern(dash_dot) xaxis(1) yaxis(1) legend(label(2 "Census"))),	///
 							/*(line rp_disabled	year, lpattern(dash_dot) xaxis(1 2) yaxis(1)  legend(label(3 "Disabled"))), */ ///
 							xline(1987 1992 2007, axis(1) lcolor(black) lpattern(solid))	///
 							xline(1989 1990, lwidth(10) lc(gs12)) xlabel(1980(10)2010 2007)  ///
@@ -556,7 +577,7 @@
 			
 			*	Race (RP)
 			graph	twoway	(line rp_nonWhte 			year, lpattern(dash) xaxis(1) yaxis(1) legend(label(1 "Study Sample (PSID)")))	///
-							(line pct_rp_nonWhite_Census	year, lpattern(dot) xaxis(1) yaxis(1) legend(label(2 "Census"))),	///
+							(line pct_rp_nonWhite_Census	year, lpattern(dash_dot) xaxis(1) yaxis(1) legend(label(2 "Census"))),	///
 							/*(line rp_disabled	year, lpattern(dash_dot) xaxis(1 2) yaxis(1)  legend(label(3 "Disabled"))), */ ///
 							xline(1987 1992 2007, axis(1) lcolor(black) lpattern(dash))	///
 							xline(1989 1990, lwidth(10) lc(gs12)) xlabel(1980(10)2010 2007)  ///
@@ -577,7 +598,7 @@
 			sort	year	
 			
 			graph	twoway	(line rp_age 			year, lpattern(dash) xaxis(1) yaxis(1) legend(label(1 "Study Sample (PSID)")))	///
-							(line HH_age_median_int	year, lpattern(dot) xaxis(1) yaxis(1) legend(label(2 "Census"))),	///
+							(line HH_age_median_int	year, lpattern(dash_dot) xaxis(1) yaxis(1) legend(label(2 "Census"))),	///
 							/*(line rp_disabled	year, lpattern(dash_dot) xaxis(1 2) yaxis(1)  legend(label(3 "Disabled"))), */ ///
 							xline(1987 1992 2007, axis(1) lcolor(black) lpattern(dash))	///
 							xline(1989 1990, lwidth(10) lc(gs12)) xlabel(1980(10)2010 2007)  ///
@@ -588,9 +609,9 @@
 			graph	close
 			
 				*	Share of HH RP age below 30.
-
+				use	`annual_agg_all', clear
 				graph	twoway	(line rp_age_below30 			year, lpattern(dash) xaxis(1) yaxis(1) legend(label(1 "Sample")))	///
-							(line pct_HH_age_below_30_Census	year, lpattern(dot) xaxis(1) yaxis(1) legend(label(2 "Census"))),	///	///
+							(line pct_HH_age_below_30_Census	year, lpattern(dash_dot) xaxis(1) yaxis(1) legend(label(2 "Census"))),	///	///
 							/*(line rp_disabled	year, lpattern(dash_dot) xaxis(1 2) yaxis(1)  legend(label(3 "Disabled"))), */ ///
 							xline(1987 1992 2007, axis(1) lcolor(black) lpattern(dash))	///
 							xline(1989 1990, lwidth(10) lc(gs12)) xlabel(1980(10)2010 2007)  ///
@@ -601,9 +622,8 @@
 				graph	close
 			
 			*	HH size (RP)
-			use	`annual_agg_all', clear
 			graph	twoway	(line famnum 			year, lpattern(dash) xaxis(1) yaxis(1) legend(label(1 "Study Sample (PSID)")))	///
-							(line HH_size_avg_Census	year, lpattern(dot) xaxis(1) yaxis(1) legend(label(2 "Census"))),	///
+							(line HH_size_avg_Census	year, lpattern(dash_dot) xaxis(1) yaxis(1) legend(label(2 "Census"))),	///
 							/*(line rp_disabled	year, lpattern(dash_dot) xaxis(1 2) yaxis(1)  legend(label(3 "Disabled"))), */ ///
 							xline(1987 1992 2007, axis(1) lcolor(black) lpattern(dash))	///
 							xline(1989 1990, lwidth(10) lc(gs12)) xlabel(1980(10)2010 2007)  ///
@@ -616,7 +636,7 @@
 			
 			*	Educational attainment (college degree) and share of HH
 			graph	twoway	(line rp_col_4yr 			year, lpattern(dash) xaxis(1) yaxis(1) legend(label(1 "Sample; RP")))	///
-							(line pct_col_Census	year, lpattern(dot) xaxis(1) yaxis(1) legend(label(2 "Census; population"))),	///
+							(line pct_col_Census	year, lpattern(dash_dot) xaxis(1) yaxis(1) legend(label(2 "Census; population"))),	///
 							/*(line rp_disabled	year, lpattern(dash_dot) xaxis(1 2) yaxis(1)  legend(label(3 "Disabled"))), */ ///
 							xline(1987 1992 2007, axis(1) lcolor(black) lpattern(dash))	///
 							xline(1989 1990, lwidth(10) lc(gs12)) xlabel(1980(10)2010 2007)  ///
@@ -630,7 +650,7 @@
 				   
 			*	Food expenditure per capita (including stamp benefit), TFP cost (real)
 			graph	twoway	(line foodexp_tot_inclFS_pc_real	year, lpattern(dash) xaxis(1 2) yaxis(1)  legend(label(1 "Food exp")))  ///
-							(line foodexp_W_TFP_pc_real			year, lpattern(dot) xaxis(1 2) yaxis(1)  legend(label(2 "TFP cost"))),	///						
+							(line foodexp_W_TFP_pc_real			year, lpattern(dash_dot) xaxis(1 2) yaxis(1)  legend(label(2 "TFP cost"))),	///						
 							xline(1987 1992 2007, axis(1) lcolor(black) lpattern(dash))	///
 							xline(1989 1990, lwidth(10) lc(gs12)) xlabel(1980(10)2010 2007)  ///
 							xtitle(Year)	xtitle("", axis(2))	ytitle("Food exp with stamp benefit ($)", axis(1)) ///
@@ -643,10 +663,11 @@
 			
 			*	FS participation rate and unemployment rate
 			graph	twoway	(line FS_rec_wth 	year, lpattern(dash) xaxis(1 2) yaxis(1) legend(label(1 "FS participation (%)")))	///
-							(line unemp_rate	year, /*lpattern(dash_dot)*/ xaxis(1 2) yaxis(2)  legend(label(2 "Unemployment Rate (%)"))),  ///
-							xline(1987 1992 2007, axis(1) lcolor(black) lpattern(dash))	///
+							(line unemp_rate	year, lpattern(dot) xaxis(1 2) yaxis(2)  legend(label(2 "Unemployment Rate (%)")))  ///
+							(line pov_rate	year, lpattern(dash_dot) xaxis(1 2) yaxis(2)  legend(label(3 "Poverty Rate"))),  ///
+							xline(1987 1992 2007, axis(1) lcolor(black) lpattern(solid))	///
 							xline(1989 1990, lwidth(10) lc(gs12)) xlabel(1980(10)2010 2007)  ///
-							xtitle(Year)	xtitle("", axis(2))	ytitle("Share (%)", axis(1)) 	ytitle("Amount ($)", axis(2)) ///
+							xtitle(Year)	xtitle("", axis(2))	ytitle("Fraction", axis(1)) 	ytitle("Percentage (%)", axis(2)) ///
 							title(FS participation and monthly benefit amount)	bgcolor(white)	graphregion(color(white)) /*note(Source: USDA & BLS)*/	name(FS_rate_amt_annual, replace)
 							
 			graph	export	"${SNAP_outRaw}/FS_rate_amt_annual.png", replace	
@@ -655,10 +676,125 @@
 		
 			
 			
+			*	PFS and NME dummies and dummy
+			graph	twoway	(line PFS_FI_glm	year, lpattern(dash_dot) xaxis(1 2) yaxis(1)  legend(label(1 "PFS < 0.5")))  ///
+							(line NME_below_1	year, /*lpattern(dash_dot)*/ xaxis(1 2) yaxis(1)  legend(label(2 "NME < 1"))),  ///
+							xline(1987 1992 2007, axis(1) lcolor(black) lpattern(solid))	///
+							xline(1989 1990, lwidth(10) lc(gs12)) xlabel(1980(10)2010 2007)  ///
+							xtitle(Year)	xtitle("", axis(2))	ytitle("Scale", axis(1)) 		///
+							title(PFS and NME Dummies)	bgcolor(white)	graphregion(color(white)) /*note(Source: USDA & BLS)*/	name(PFS_NME_annual, replace)
+			graph	export	"${SNAP_outRaw}/PFS_NME_dummies_annual.png", replace	
+			graph	close	
+				
+			*graph	export	"${SNAP_outRaw}/foodexp_FSamt_byyear.png", replace
+			*graph	close	
 			
 			
 			
+			*	Distribution of PFS over time, by category
+			*	"lgraph" ssc ins required
+			 use	"${SNAP_dtInt}/SNAP_const", clear
+			 	 
+				*	Overall 
+				lgraph PFS_glm year [aw=wgt_long_fam_adj], errortype(iqr) separate(0.01) title(PFS) note(25th and 75th percentile)
+				graph	export	"${SNAP_outRaw}/PFS_annual.png", replace
+				graph	close
+				
+				*	By gender
+				lab	define	rp_female	0	"Male"	1	"Female", replace
+				lab	val	rp_female	rp_female
+				lgraph PFS_glm year rp_female	[aw=wgt_long_fam_adj], errortype(iqr) separate(0.01)  title(PFS by Gender) note(25th and 75th percentile)
+				graph	export	"${SNAP_outRaw}/PFS_annual_gender.png", replace
+				graph	close
 			
+				*	By race
+				lab	define	rp_nonWhte	0	"White"	1	"non-White", replace
+				lab	val	rp_nonWhte	rp_nonWhte
+				lgraph PFS_glm year rp_nonWhte	[aw=wgt_long_fam_adj], errortype(iqr) separate(0.01)  title(PFS by Race) note(25th and 75th percentile)
+				graph	export	"${SNAP_outRaw}/PFS_annual_race.png", replace
+				graph	close
+			
+				*	By educational attainment
+				lgraph PFS_glm year rp_edu_cat	[aw=wgt_long_fam_adj], separate(0.01)  title(PFS by Education) note(25th and 75th percentile)
+				graph	export	"${SNAP_outRaw}/PFS_annual_education.png", replace
+				graph	close
+			
+			
+				*	By marital status
+				lab	define	rp_married	0	"Single or spouse-absent"	1	"Spouse present", replace
+				lab	val	rp_married	rp_married
+				lgraph PFS_glm year rp_married	[aw=wgt_long_fam_adj], errortype(iqr)	separate(0.01)  title(PFS by marital status) note(25th and 75th percentile)
+			
+				graph	export	"${SNAP_outRaw}/PFS_annual_marital.png", replace
+				graph	close
+			
+			
+			
+			*	FSD analysis
+				*	PFS threshold value: 0.5
+			
+			
+				*	Define years we will use for dynamics analyses
+				*	Due to the lack of data and change in survey frequency, the following year do not have the full 3 observations over 5-year reference period
+					*	1977, 1978, 1984-1987, 1994, 1996, 2017, 2019
+				*	We tag the years where full dynamics variable can be constructed
+				loc	var	dyn_sample_5yr
+				cap	drop	`var'
+				gen		`var'=0	if	inlist(year,1977,1978,1984,1985,1986,1987,1994,1996,2017,2019)
+				replace	`var'=1	if	!inlist(year,1977,1978,1984,1985,1986,1987,1994,1996,2017,2019)
+				lab	var	`var'	"Years with full 5-year reference period."
+				*	Exclude unbalanced sample
+				replace	`var'=0	if	(mi(PFS_glm) | mi(f2.PFS_glm) | mi(f4.PFS_glm))
+				*	Missing if PFS is missing
+				replace	`var'=.	if	mi(PFS_glm)
+				
+				*	Spell length (# of consecutive years experiencing FI)
+					
+					*	Overall
+					lgraph SL_5 year [aw=wgt_long_fam_adj] if PFS_FI_glm==1 & dyn_sample_5yr==1, separate(0.01)  ///
+					xline(1983 1992 2007, axis(1) lcolor(black) lpattern(solid))	///
+					xline(1987 1988, lwidth(23) lc(gs12)) xlabel(1980 1987 1992 2000 2007 2010)  ///
+					title(Spell length) ytitle(average length) note(spell length longer than 3 waves are capped at 3)
+				
+					graph	export	"${SNAP_outRaw}/SL5_annual.png", replace
+					graph	close
+				
+					*	By gender
+					lab	define	rp_female	0	"Male"	1	"Female", replace
+					lab	val	rp_female	rp_female
+					lgraph SL_5 year rp_female [aw=wgt_long_fam_adj] if PFS_FI_glm==1 & dyn_sample_5yr==1, separate(0.01)  ///
+					xline(1983 1992 2007, axis(1) lcolor(black) lpattern(solid))	///
+					xline(1987 1988, lwidth(23) lc(gs12)) xlabel(1980 1987 1992 2000 2007 2010)  ///
+					title(Spell length by gender) ytitle(average length) note(spell length longer than 3 waves are capped at 3)
+					graph	export	"${SNAP_outRaw}/SL5_annual_gender.png", replace
+					graph	close
+			
+					
+					*	By race
+					lab	define	rp_nonWhte	0	"White"	1	"non-White", replace
+					lab	val	rp_nonWhte	rp_nonWhte
+					lgraph SL_5 year rp_nonWhte [aw=wgt_long_fam_adj] if PFS_FI_glm==1 & dyn_sample_5yr==1, separate(0.01)  ///
+					xline(1983 1992 2007, axis(1) lcolor(black) lpattern(solid))	///
+					xline(1987 1988, lwidth(23) lc(gs12)) xlabel(1980 1987 1992 2000 2007 2010)  ///
+					title(Spell length by race) ytitle(average length) note(spell length longer than 3 waves are capped at 3)
+					graph	export	"${SNAP_outRaw}/SL5_annual_race.png", replace
+					graph	close
+			
+					*	By educational attainment
+					loc	var	rp_HS_less
+					cap	drop	`var'
+					gen		`var'=1	if	inlist(rp_edu_cat,1,2)
+					replace	`var'=0	if	inlist(rp_edu_cat,3,4)
+					replace	`var'=.	if	mi(rp_edu_cat)
+					lab	define	`var'	0	"Some college or above"	1	"High school or less", replace
+					lab	val	`var'	`var'
+					
+					lgraph SL_5 year rp_HS_less [aw=wgt_long_fam_adj] if PFS_FI_glm==1 & dyn_sample_5yr==1, separate(0.01)  ///
+					xline(1983 1992 2007, axis(1) lcolor(black) lpattern(solid))	///
+					xline(1987 1988, lwidth(23) lc(gs12)) xlabel(1980 1987 1992 2000 2007 2010)  ///
+					title(Spell length by education) ytitle(average length) note(spell length longer than 3 waves are capped at 3)
+					graph	export	"${SNAP_outRaw}/SL5_annual_education.png", replace
+					graph	close
 			
 			
 			
