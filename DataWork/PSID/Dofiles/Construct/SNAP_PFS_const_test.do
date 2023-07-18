@@ -144,7 +144,7 @@ assert	inrange(year,1977,2019)
 					ppmlhdfe	${depvar}	${statevars}	[pw=wgt_long_fam_adj], absorb(ib31.rp_state ib1979.year)	vce(cluster x11101ll)
 					
 					*	Individual FE, but no weight
-					*	The following three lines generat same regression coefficients. The first two have same SE, but the third one have larger SE
+					*	The following three lines generate same regression coefficients. The first two have same SE, but the third one have larger SE
 					*	However, the first two do NOT allow non-constant survey weights within unit, so we use the third one.
 					xtpoisson	${depvar}	${empvars}, fe
 					xtpqml		${depvar}	${empvars}, i(x11101ll)
