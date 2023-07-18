@@ -65,16 +65,16 @@
 	
 	*	Codes to be executed
 		*	SECTION 1: Import individual- and family-level PSID variables
-		local	ind_agg			1	//	Aggregate individual-level variables across waves
-		local	fam_agg			1	//	Aggregate family-level variables across waves
+		local	ind_agg			0	//	Aggregate individual-level variables across waves
+		local	fam_agg			0	//	Aggregate family-level variables across waves
 		
 		*	SECTION 2: Prepare external data
-		local	ext_data		1	//	Prepare external data (CPI, TFP, etc.)
+		local	ext_data		0	//	Prepare external data (CPI, TFP, etc.)
 		
 		*	SECTION 3: Construct PSID panel data and import external data
-		local	cr_panel		1	//	Create panel structure from ID variable
+		local	cr_panel		0	//	Create panel structure from ID variable
 			local	panel_view	0	//	Create an excel file showing the change of certain clan over time (for internal data-check only)
-		local	merge_data		1	//	Merge ind- and family- variables and import it into ID variable
+		local	merge_data		0	//	Merge ind- and family- variables and import it into ID variable
 			local	raw_reshape	1		//	Merge raw variables and reshape into long data (takes time)
 			local	add_clean	1		//	Do additional cleaning and import external data (CPI, TFP)
 			local	import_dta	1		//	Import aggregated variables and external data into ID data. 
@@ -150,6 +150,34 @@
 			*	Reason for non-response
 			loc	var	noresp_why
 			psid use || `var' [68]ER30018 [69]ER30041 [70]ER30065 [71]ER30089 [72]ER30115 [73]ER30136 [74]ER30158 [75]ER30186 [76]ER30215 [77]ER30244 [78]ER30281 [79]ER30311 [80]ER30341 [81]ER30371 [82]ER30397 [83]ER30427 [84]ER30461 [85]ER30496 [86]ER30533 [87]ER30568 [88]ER30604 [89]ER30640 [90]ER30685 [91]ER30729 [92]ER30802 [93]ER30863 [94]ER33127 [95]ER33283 [96]ER33325 [97]ER33437 [99]ER33545 [01]ER33636 [03]ER33739 [05]ER33847 [07]ER33949 [09]ER34044 [11]ER34153 [13]ER34267 [15]ER34412 [17]ER34649 [19]ER34862  using  "${SNAP_dtRaw}/Unpacked"  , keepnotes design(any) clear	
+			
+			keep	x11101ll	`var'*
+			save	"${SNAP_dtInt}/Ind_vars/`var'", replace
+			
+			keep	x11101ll	`var'*
+			save	"${SNAP_dtInt}/Ind_vars/`var'", replace
+			
+			*	Grade completed (individual level)
+				*	Note: has value zero if a person is 16-year old or younger.
+				*	Considers GED, unlike family-level RP variable. For example, if a person completed less than 12 grade (say, 10) but has GED, it would be 10 for family-level variable, but 12 in this variable.
+			loc	var	ind_edu
+			psid use || `var' [68]ER30010 [70]ER30052 [71]ER30076 [72]ER30100 [73]ER30126 [74]ER30147 [75]ER30169 [76]ER30197 [77]ER30226 [78]ER30255 [79]ER30296 [80]ER30326 [81]ER30356 [82]ER30384 [83]ER30413 [84]ER30443 [85]ER30478 [86]ER30513 [87]ER30549 [88]ER30584 [89]ER30620 [90]ER30657 [91]ER30703 [92]ER30748 [93]ER30820 [94]ER33115 [95]ER33215 [96]ER33315 [97]ER33415 [99]ER33516 [01]ER33616 [03]ER33716 [05]ER33817 [07]ER33917 [09]ER34020 [11]ER34119 [13]ER34230 [15]ER34349 [17]ER34548 [19]ER34752  using  "${SNAP_dtRaw}/Unpacked"  , keepnotes design(any) clear
+			
+			keep	x11101ll	`var'*
+			save	"${SNAP_dtInt}/Ind_vars/`var'", replace
+			
+			
+			*	Health, good or bad
+				*	Note: Not fully available over the entire study period.
+			loc	var	ind_health
+			psid use || `var' [86]ER30527 [88]ER30598 [89]ER30634 [90]ER30671 [91]ER30719 [92]ER30764 [93]ER30827 [94]ER33117 [95]ER33217 [96]ER33317 [97]ER33417 [99]ER33517 [01]ER33617 [03]ER33717 [05]ER33818 [07]ER33918 [09]ER34021 [11]ER34120 [13]ER34231 [15]ER34381 [17]ER34580 [19]ER34788  using  "${SNAP_dtRaw}/Unpacked"  , keepnotes design(any) clear
+			
+			keep	x11101ll	`var'*
+			save	"${SNAP_dtInt}/Ind_vars/`var'", replace
+			
+			*	Employment status
+			loc	var	ind_employed
+			psid use || `var' [79]ER30293 [80]ER30323 [81]ER30353 [82]ER30382 [83]ER30411 [84]ER30441 [85]ER30474 [86]ER30509 [87]ER30545 [88]ER30580 [89]ER30616 [90]ER30653 [91]ER30699 [92]ER30744 [93]ER30816 [94]ER33111 [95]ER33211 [96]ER33311 [97]ER33411 [99]ER33512 [01]ER33612 [03]ER33712 [05]ER33813 [07]ER33913 [09]ER34016 [11]ER34116 [13]ER34216 [15]ER34317 [17]ER34516 [19]ER34716  using  "${SNAP_dtRaw}/Unpacked"  , keepnotes design(any) clear
 			
 			keep	x11101ll	`var'*
 			save	"${SNAP_dtInt}/Ind_vars/`var'", replace
@@ -1850,7 +1878,7 @@
 		*	SNAP policy index data file (1997-2014)
 		*	(2023-05-22) This file includes the indices matching to the working paper, but different from manually computed index.
 		*	(2023-06-12) We found an issue with the manually imported data, so we use the official data
-		
+		{
 			import excel	"${clouldfolder}/DataWork/USDA/DataSets/Raw/snappolicyindexdata.xls", firstrow cellrange(A2:X971) clear
 				
 				*	Clean data
@@ -1875,6 +1903,241 @@
 			
 			*	Save
 			save	"${SNAP_dtInt}/SNAP_policy_data_official",	replace
+		}
+		
+		
+		*	Census data (household information, poverty rate, etc.)
+		
+			*	Household by type (gender of householder, family/non-family)
+			*	Family: 2 or more people related by marriage/birth/adoption/etc live together
+			*	Non-family: Single-person HH, or people unrelated live together.
+			import	excel	"${clouldfolder}/DataWork/Census/Historical Household Tables/hh1.xls", sheet(Table HH-1) firstrow	cellrange(A15:K61)	clear
+			
+			rename	(A B C D F G I J K)	///
+					(year total_HH	total_family_HH married_HH family_oth_maleHH family_oth_femaleHH total_nonfamily_HH nonfamily_maleHH nonfamily_femaleHH)
+			drop	E H
+		
+			*	Use the revised record
+			*drop	if	year=="2021"
+			drop	if	year=="2011"
+			drop	if	year=="1993"
+			drop	if	year=="1988"
+			drop	if	year=="1984"
+			drop	if	year=="1980"
+			*replace	year="2021" if	year=="2021r"
+			replace	year="2014"	if	year=="2014s"
+			replace	year="2011" if	year=="2011r"
+			replace	year="2001"	if	year=="2001e"
+			replace	year="1993"	if	year=="1993r"
+			replace	year="1988"	if	year=="1988a"
+			replace	year="1984"	if	year=="1984b"
+			replace	year="1980"	if	year=="1980c"
+			destring	year, replace
+			
+			*	Label variables
+			lab	var	year				"Year"
+			lab	var	total_HH			"Total # of HH"
+			lab	var	total_family_HH		"Total # of family HH"
+			lab	var	married_HH			"Total # of married couples"
+			lab	var	family_oth_maleHH	"Total # of other family HH - male householder"
+			lab	var	family_oth_femaleHH	"Total # of other family HH - female householder"
+			lab	var	total_nonfamily_HH	"Total # of nonfamily HH"
+			lab	var	nonfamily_maleHH	"Total # of nonfamily HH - male householder"
+			lab	var	nonfamily_femaleHH	"Total # of nonfamily HH - female householder"
+			
+			*	Generate the share of female-headed HH
+			*	Note: In Census, "Married couple" does not say whether householder is male or female, so I cannot figure it out from the data
+			*	In this practice, I regard all married couple as male householder, to be consistent with the PSID policy that treats male partner as the reference person.
+			loc	var	pct_rp_female_Census
+			cap	drop	`var'
+			gen	`var'	=	(family_oth_femaleHH + nonfamily_femaleHH) / total_HH
+			lab	var	`var'	"\% of female-headed householder (RP) - Census"
+			
+			*	Save
+			save	"${SNAP_dtInt}/HH_type_census.dta", replace
+		
+		
+		*	HH by race
+		import	excel	"${clouldfolder}/DataWork/Census/Historical Household Tables/hh2.xls", sheet(Table HH-2) firstrow	cellrange(A14:H56)	clear
+		
+			*	According to the detailed 2022 data, race has the following categories: (1) White alone (2) Black alone (3) Asian alone (4) Any other single-race or combination of races
+			*	However, in this historical data, (4) is not available, and I cannot figure out how to impute it from historical data
+			*	Thus, I only keep the following variables (1) Total HH (2) White-alone (3) Black-alone.
+				*	Non-White is defined as "(1) - (2)"
+			keep A B C E
+			rename	(A B C E) (year total_HH White_HH Black_HH)
+			
+			*	Use revised record
+			drop	if	year=="2011"
+			
+			replace	year="2014"	if	year=="2014s"
+			replace	year="2011"	if	year=="2011r"
+			replace	year="1980"	if	year=="1980r"
+			destring	year, replace
+			
+			*	Variable label
+			lab	var	year	"Year"
+			lab	var	total_HH	"Total \# of HH"
+			lab	var	White_HH	"Total \# of White householder"
+			lab	var	Black_HH	"Total \# of Black householder"
+			
+			*	Generate percentage indicator
+			loc	var	pct_rp_White_Census
+			cap	drop	`var'
+			gen	`var'	=	(White_HH / total_HH)
+			lab	var	`var'	"\% of White householder (RP) - Census"
+			
+			loc	var	pct_rp_nonWhite_Census
+			cap	drop	`var'
+			gen	`var'	=	(total_HH - White_HH) / total_HH
+			lab	var	`var'	"\% of non-White householder (RP) - Census"
+			
+			*	Save
+			save	"${SNAP_dtInt}/HH_race_census.dta", replace
+			
+		
+		*	Householder age
+		import	excel	"${clouldfolder}/DataWork/Census/Historical Household Tables/hh3.xls", sheet(Table HH-3) firstrow	cellrange(A14:K57)	clear
+		
+			rename	(A-K)	(year	total_HH	HH_age_below_25	HH_age_25_29	HH_age_30_34	HH_age_35_44	///
+								HH_age_45_54	HH_age_55_64	HH_age_65_74	HH_age_above_75	HH_age_median_Census)
+								
+			*	Keep revised record only
+			drop	if	year=="2011"
+			drop	if	year=="1993"
+			
+			replace	year="2014"	if	year=="2014s"
+			replace	year="2011"	if	year=="2011r"
+			replace	year="1993"	if	year=="1993r"
+			destring	year,	replace
+			
+			*	Variable label
+			lab	var	year	"Year"
+			lab	var	total_HH	"Total \# of HH"
+			lab	var	HH_age_below_25	"# of HH - householder age below 25"
+			lab	var	HH_age_25_29	"# of HH - householder age 25-29"
+			lab	var	HH_age_30_34	"# of HH - householder age 30-34"
+			lab	var	HH_age_35_44	"# of HH - householder age 35-44"
+			lab	var	HH_age_45_54	"# of HH - householder age 45-54"
+			lab	var	HH_age_55_64	"# of HH - householder age 55-64"
+			lab	var	HH_age_65_74	"# of HH - householder age 65-74"
+			lab	var	HH_age_above_75	"# of HH - householder age 65-74"
+			lab	var	HH_age_median_Census	"Median householder age"
+		
+		*	Generate additional variables
+			
+			*	Median age as intenger
+			gen	HH_age_median_Census_int	=	int(HH_age_median_Census)
+			
+			*	Householder age 30 or below
+			loc	var	HH_age_below_30_Census
+			cap	drop	`var'
+			egen	`var'	=	rowtotal(HH_age_below_25	HH_age_25_29)
+			lab	var	`var'	"# of HH - householder age below 30 - Census"
+			
+			loc	var	pct_HH_age_below_30_Census
+			cap	drop	`var'
+			gen	`var'	=	(HH_age_below_30_Census) / total_HH
+			lab	var	`var'	"\% of HH - householder age below 30 - Census"
+			
+			*	Save
+			save	"${SNAP_dtInt}/HH_age_census.dta", replace
+			
+	
+		*	HH size
+		import	excel	"${clouldfolder}/DataWork/Census/Historical Household Tables/hh4.xls", sheet(Table HH-4) firstrow	cellrange(A13:J56)	clear
+		
+			rename	(A B)	(year total_HH)
+			rename	(C-H)	HH_size_#, addnumber
+			rename	I		HH_size_7_above
+			rename	J		HH_size_avg_Census
+			
+			*	Keep modified record only
+			drop	if	year=="2011"
+			drop	if	year=="1993"
+			
+			replace	year="2014"	if	year=="2014s"
+			replace	year="2011"	if	year=="2011r"
+			replace	year="1993"	if	year=="1993r"
+			destring	year, replace
+			
+			*	Variable label
+			lab	var	year	"Year"
+			lab	var	total_HH	"Total \# of HH"
+			forval	i=1/6	{
+				lab	var	HH_size_`i'	"HH size: `i'"
+			}
+			lab	var	HH_size_7_above	"HH size: 7+"
+			lab	var	HH_size_avg_Census	"Average HH size: Census"
+			
+			*	Save
+			save	"${SNAP_dtInt}/HH_size_census.dta", replace
+			
+		*	Educational attainment (individual-level)
+		import	excel	"${clouldfolder}/DataWork/Census/CPS Historical Time Series Tables/taba-1.xlsx", sheet(hst_attain01) firstrow	cellrange(A10:H51)	clear
+		
+			rename	(A-H)	(year	tot_pop	elem_0to4	elem_5to8	HS_1to3	HS_4	col_1to3	col_4)
+			lab	var	year		"Year"
+			lab	var	tot_pop		"Population - 25+ years old (K)"
+			lab	var	elem_0to4	"Elementary school - 0 to 4 years (K)"
+			lab	var	elem_5to8	"Elementary school - 5 to 8 years (K)"
+			lab	var	HS_1to3		"High school - 1 to 3 years (K)"
+			lab	var	HS_4		"High school - 4 years (K)"
+			lab	var	col_1to3	"College - 1 to 3 years (K)"
+			lab	var	col_4		"College - 4 years (K)"
+			
+			*	Generate indicators
+			loc	var	pct_noHS_Census
+			cap	drop	`var'
+			gen	`var'	=	(elem_0to4 + elem_5to8 +	HS_1to3) / tot_pop
+			lab	var	`var'	"\% of population less than HS"
+			
+			loc	var	pct_HS_Census
+			cap	drop	`var'
+			gen	`var'	=	(HS_4) / tot_pop
+			lab	var	`var'	"\% of population HS"
+			
+			loc	var	pct_somecol_Census
+			cap	drop	`var'
+			gen	`var'	=	(col_1to3) / tot_pop
+			lab	var	`var'	"\% of population with 1-3 college years"
+			
+			loc	var	pct_col_Census
+			cap	drop	`var'
+			gen	`var'	=	(col_4) / tot_pop
+			lab	var	`var'	"\% of population with 4-year college"
+			
+			*	Save
+			save	"${SNAP_dtInt}/ind_education_CPS.dta", replace
+		
+		
+		*	Poverty status
+		import	excel	"${clouldfolder}/DataWork/Census/hstpov2.xlsx", sheet(pov02) firstrow	cellrange(A10:D53)	clear
+		
+			*	Keep modified record only
+			keep	A	D	
+			rename	(A	D)	(year	pov_rate_national)
+			
+			drop	if	year=="2013 (4)"
+			drop	if	year=="2017"
+			
+			replace	year=substr(year,1,4)
+			lab	var	year	"Year"
+			lab	var	pov_rate_national	"Poverty rate (national)"
+			destring	year, replace
+			
+			*	Save
+			save	"${SNAP_dtInt}/pov_rate_1979_2019.dta", replace
+		
+		*	Merge Census HH data
+		use	"${SNAP_dtInt}/HH_type_census.dta", clear
+		merge	1:1	year	using	"${SNAP_dtInt}/HH_race_census.dta", nogen assert(3)
+		merge	1:1	year	using	"${SNAP_dtInt}/HH_age_census.dta", nogen assert(3)
+		merge	1:1	year	using	"${SNAP_dtInt}/HH_size_census.dta", nogen assert(3)
+		merge	1:1	year	using	"${SNAP_dtInt}/ind_education_CPS.dta", nogen assert(3)
+		merge	1:1	year	using	"${SNAP_dtInt}/pov_rate_1979_2019.dta", nogen assert(3)
+		save	"${SNAP_dtInt}/HH_census_1979_2019.dta", replace
+			
 		
 		*	CPI data (to convert current to real dollars)
 			*	(2023-1-15) Baseline month as Jan 2019 (CPI=100)
@@ -2661,7 +2924,7 @@
 			**	(2022-3-13) This code is added, as somehow existing code did not run properly ("age_ind" variable, which is required to merge with TFP cost data, didn't exist). We can see later what the problem is.
 			cd "${SNAP_dtInt}/Ind_vars"
 			
-			global	varlist_ind	age_ind	/*wgt_long_ind	relrp*/	origfu_id	noresp_why
+			global	varlist_ind	age_ind	/*wgt_long_ind	relrp*/	origfu_id	noresp_why	ind_edu	ind_health	ind_employed
 			
 			foreach	var	of	global	varlist_ind	{
 				
@@ -2858,6 +3121,7 @@
 				
 				label	var	`var'	"Survey Month"
 				
+				
 				*	Generate survey year+month variable (yyyymm)
 				loc	var	svy_yrmonth
 				cap	drop	`var'
@@ -3000,6 +3264,10 @@
 			*	Import SNAP policy data
 			*merge m:1 rp_state prev_yrmonth using "${SNAP_dtInt}/SNAP_policy_data", nogen keep(1 3)
 			merge m:1 rp_state year using "${SNAP_dtInt}/SNAP_policy_data_official", nogen keep(1 3) // keepusing(SNAP_index_off_uw	SNAP_index_off_w)
+			
+			*	Import census data
+			merge	m:1	year	using	"${SNAP_dtInt}/HH_census_1979_2019.dta", nogen keep(1 3) ///
+				keepusing(pct_rp_female_Census  pct_rp_nonWhite_Census HH_age_median_Census_int pct_HH_age_below_30_Census HH_size_avg_Census pct_col_Census pov_rate_national)
 			
 			*	Import state-wide monthly unemployment data
 			merge m:1 rp_state prev_yrmonth using "${SNAP_dtInt}/Unemployment Rate_state_month", nogen keep(1 3) keepusing(unemp_rate)
@@ -3153,6 +3421,26 @@
 			cap	drop	`var'
 			gen	`var'	=	(rp_age*rp_age)/1000
 			lab	var	rp_age_sq	"Age(RP)$^2$/1000"
+			
+			
+				*	RP age group (to compare with the Census data)
+			
+				*	Below 30.
+				loc	var	rp_age_below30
+				cap	drop	var
+				gen		`var'=.
+				replace	`var'=0	if	!mi(rp_age)	&	!inrange(rp_age,1,29)
+				replace	`var'=1	if	!mi(rp_age)	&	inrange(rp_age,1,29)
+				lab	var	`var'	"RP age below 30"
+				
+				*	Over 65
+				loc	var	rp_age_over65
+				cap	drop	var
+				gen		`var'=.
+				replace	`var'=0	if	!mi(rp_age)	&	!inrange(rp_age,66,120)
+				replace	`var'=1	if	!mi(rp_age)	&	inrange(rp_age,66,120)
+				lab	var	`var'	"RP age over 65"
+				
 
 		
 		*	Gender
@@ -3271,71 +3559,130 @@
 				
 		
 		*	Employment Status
-		*	Two different variables over time, and even single series changes variable over waves. Need to harmonize them.
-		loc	var	rp_employed
-		cap	drop	`var'
-		gen		`var'=.
-		
-		replace	`var'=0	if	inrange(year,1968,1975)	&	inrange(rp_employment_status,2,6)	//	I treat "Other" as "unemployed". In the raw PSID data less than 0.2% HH answer "other" during these waves
-		replace	`var'=1	if	inrange(year,1968,1975)	&	inrange(rp_employment_status,1,1)	//	Include temporarily laid off/maternity leave/etc.
-		
-		replace	`var'=0	if	inrange(year,1976,1996)	&	inrange(rp_employment_status,3,9)	//	I treat "Other" as "unemployed". In the raw PSID data less than 0.2% HH answer "other" during these waves
-		replace	`var'=1	if	inrange(year,1976,1996)	&	inrange(rp_employment_status,1,2)	//	Include temporarily laid off/maternity leave/etc.
-		
-		replace	`var'=0	if	inrange(year,1997,2019)	&	inrange(rp_employment_status,3,99)	|	rp_employment_status==0	//	Include other, "workfare", "DK/refusal"
-		replace	`var'=1	if	inrange(year,1997,2019)	&	inrange(rp_employment_status,1,2)	//	Include temporarily laid off/maternity leave/etc.
-		
-		
-		label	value	`var'	yes1no0
-		label	var		`var'	"Employed"
+			
+			
+			*	Individual-level education (1979-2019)
+			loc	var	ind_employed_dummy
+			cap	drop	`var'
+			gen		`var'=.
+			
+			replace	`var'=0	if	inrange(ind_employed,1,2)	//	"Working now" and "Temporarily laid off"
+			replace	`var'=1	if	inrange(ind_employed,3,9)	//	Looking for work, retired, permanently disabled, housekeeping, student, other.
+			
+			*	Treating inappropriate values
+				*	On one hand, we should treat them as zero, or many observations with missing values will NOT be included in regression. And some inapp cases make sense to be treated as zero (i.e. 16-year old or younger)
+				*	On the other hand, treating some categories as zero could be missleaning (i.e. not yet born) 
+				*	Need to think about it.
+			replace	`var'=0	if	ind_employed==0	
+			
+			label	value	`var'	yes1no0
+			label	var		`var'	"=1 if Person Employed"
+			
+			
+			*	RP's education (family-level)
+			*	Two different variables over time, and even single series changes variable over waves. Need to harmonize them.
+			loc	var	rp_employed
+			cap	drop	`var'
+			gen		`var'=.
+			
+			replace	`var'=0	if	inrange(year,1968,1975)	&	inrange(rp_employment_status,2,6)	//	I treat "Other" as "unemployed". In the raw PSID data less than 0.2% HH answer "other" during these waves
+			replace	`var'=1	if	inrange(year,1968,1975)	&	inrange(rp_employment_status,1,1)	//	Include temporarily laid off/maternity leave/etc.
+			
+			replace	`var'=0	if	inrange(year,1976,1996)	&	inrange(rp_employment_status,3,9)	//	I treat "Other" as "unemployed". In the raw PSID data less than 0.2% HH answer "other" during these waves
+			replace	`var'=1	if	inrange(year,1976,1996)	&	inrange(rp_employment_status,1,2)	//	Include temporarily laid off/maternity leave/etc.
+			
+			replace	`var'=0	if	inrange(year,1997,2019)	&	inrange(rp_employment_status,3,99)	|	rp_employment_status==0	//	Include other, "workfare", "DK/refusal"
+			replace	`var'=1	if	inrange(year,1997,2019)	&	inrange(rp_employment_status,1,2)	//	Include temporarily laid off/maternity leave/etc.
+			
+			
+			label	value	`var'	yes1no0
+			label	var		`var'	"Employed"
 		
 		*	Grades completed
 		*	We split grade completion into four categories; No HS, HS, some college, College+
-		*	For households who didn't respond, I will create a separate category as "NA/DK/Refusal/Inapp"
-		loc	var	rp_edu_cat
-		cap	drop	`var'
-		gen		`var'=.
-		
-			*	No High school (Less than 12 degree)
-			*	Includes "cannot read or write"
-			replace	`var'=1	if	inrange(year,1968,1990)	&	inrange(rp_gradecomp,0,3)	// Includes 0 coded as "cannot read or write"
-			replace	`var'=1	if	inrange(year,1991,2019)	&	inrange(rp_gradecomp,0,11)	//	Less than 12 grade
 			
-			*	High School
-			replace	`var'=2	if	inrange(year,1968,1990)	&	inrange(rp_gradecomp,4,5)	//	12 grade and higher
-			replace	`var'=2	if	inrange(year,1991,2019)	&	inrange(rp_gradecomp,12,12)	//	12 grade and higher
-			replace	`var'=2	if	inrange(year,1985,2019)	&	inlist(rp_HS_GED,1,2) 	//	HS or GED
+			*	Individual-level
+			loc	var	ind_edu_cat
+			cap	drop	`var'
 			
-			*	Some college (College without degree)
-			replace	`var'=3	if	inrange(year,1968,1990)	&	rp_gradecomp==6	//	College, but no degree
-			replace	`var'=3	if	inrange(year,1991,2019)	&	inrange(rp_gradecomp,13,15)	//	13-15 grades
+			gen		`var'=0		if	inrange(ind_edu,0,0)	//	Inapp
+			replace	`var'=1		if	inrange(ind_edu,1,11)	//	Less than HS (I treat )
+			replace	`var'=2		if	inrange(ind_edu,12,12)	//	HS
+			replace	`var'=3		if	inrange(ind_edu,13,15)	//	Some college
+			replace	`var'=4		if	inrange(ind_edu,16,17)	//	College
+			replace	`var'=.n	if	inrange(ind_edu,98,99)	//	Dk/NA
 			
-			*	College or greater
-			replace	`var'=4	if	inrange(year,1968,1990)	&	inrange(rp_gradecomp,7,8)	//	College
-			replace	`var'=4	if	inrange(year,1991,2019)	&	inrange(rp_gradecomp,16,17)	//	College, but no degree
-			replace	`var'=4	if	inrange(year,1991,2019)	&	rp_coldeg==1	//	Answered "yes" to "has college degree"
+			replace	`var'=0	if	seqnum==0	//	there are only 2 out of 200K zero seqnum obs that have non-zero value. Possibly data entry error.
 			
-			*	NA/DK
-				*	Usually when it is unknown whether RP has high school diploma or how many years of college education completed.
-				*	Excluding "cannot read/write in early years"
-			replace	`var'=.n	if	inrange(year,1968,1990)	&	inrange(rp_gradecomp,9,9)
-			replace	`var'=.n	if	inrange(year,1991,2019)	&	inrange(rp_gradecomp,99,99)
-			
-			label	define	`var'	1	"Less than HS"	2	"High School/GED"	3	"Some college"	4	"College"	/*99	"NA/DK"*/,	replace
+			label	define	`var'	0	"Inapp"	1	"Less than HS"	2	"High School/GED"	3	"Some college"	4	"College"	/*99	"NA/DK"*/,	replace
 			label	value	`var'	`var'
-			label 	variable	`var'	"Education category (RP)"
+			label 	variable	`var'	"Education category (ind)"
 			
-			cap	drop	rp_edu?		rp_NoHS	rp_HS	rp_somecol	rp_col
-			tab `var', gen(rp_edu)
-			rename	(rp_edu1	rp_edu2	rp_edu3	rp_edu4	/*rp_edu5*/)	(rp_NoHS	rp_HS	rp_somecol	rp_col	/*rp_NADK*/)
+				*	Dummies for each category
+				cap	drop	ind_edu?
+				cap	drop	ind_edu_inapp	ind_NoHS	ind_HS	ind_somecol	ind_col
+				tab `var', gen(ind_edu)
+				rename	(ind_edu1	ind_edu2	ind_edu3	ind_edu4	ind_edu5)	(ind_edu_inapp	ind_NoHS	ind_HS	ind_somecol	ind_col)
+				
+				lab	value	ind_edu_inapp	ind_NoHS	ind_HS	ind_somecol	ind_col	yes1no0
+				
+				label	var	ind_edu_inapp	"Inapp education (ind)"
+				label	var	ind_NoHS		"Less than High School (ind)"
+				label	var	ind_HS			"High School (ind)"
+				label	var	ind_somecol		"Some college (ind)"
+				label	var	ind_col			"College Degree (ind)"
+				*label	var	rp_NADK	"Education (NA/DK)"
 			
-			lab	value	rp_NoHS	rp_HS	rp_somecol	rp_col	/*rp_NADK*/	yes1no0
 			
-			label	var	rp_NoHS	"Less than High School"
-			label	var	rp_HS	"High School"
-			label	var	rp_somecol	"College (w/o degree)"
-			label	var	rp_col	"College Degree"
-			*label	var	rp_NADK	"Education (NA/DK)"
+			*	RP's education (family-level)
+			*	For households who didn't respond, I will create a separate category as "NA/DK/Refusal/Inapp"
+			loc	var	rp_edu_cat
+			cap	drop	`var'
+			gen		`var'=.
+			
+				*	No High school (Less than 12 degree)
+				*	Includes "cannot read or write"
+				replace	`var'=1	if	inrange(year,1968,1990)	&	inrange(rp_gradecomp,0,3)	// Includes 0 coded as "cannot read or write"
+				replace	`var'=1	if	inrange(year,1991,2019)	&	inrange(rp_gradecomp,0,11)	//	Less than 12 grade
+				
+				*	High School
+				replace	`var'=2	if	inrange(year,1968,1990)	&	inrange(rp_gradecomp,4,5)	//	12 grade and higher
+				replace	`var'=2	if	inrange(year,1991,2019)	&	inrange(rp_gradecomp,12,12)	//	12 grade and higher
+				replace	`var'=2	if	inrange(year,1985,2019)	&	inlist(rp_HS_GED,1,2) 	//	HS or GED
+				
+				*	Some college (College without degree)
+				replace	`var'=3	if	inrange(year,1968,1990)	&	rp_gradecomp==6		//	During these years, rp_gradecomp==6 means "College, but no degree"
+				replace	`var'=3	if	inrange(year,1991,2019)	&	inrange(rp_gradecomp,13,17)	&	rp_coldeg!=1	//	13-grade or over, but did not say "yes" to the question "has college degree?"
+				
+				*	College or greater 
+				*	(2023-7-17) Previously it tagged community degree as well.
+				replace	`var'=4	if	inrange(year,1968,1990)	&	inrange(rp_gradecomp,7,8)	//	College
+				replace	`var'=4	if	inrange(year,1991,2019)	&	rp_coldeg==1	// said "yes" to "has college degree"
+				*replace	`var'=4	if	inrange(year,1991,2019)	&	inrange(rp_gradecomp,13,17)		&	rp_coldeg==1	//	Said "yes" to the question "has college degree?" (disabled as of 2023-07-17)
+				
+				
+				
+				*	NA/DK
+					*	Usually when it is unknown whether RP has high school diploma or how many years of college education completed.
+					*	Excluding "cannot read/write in early years"
+				replace	`var'=.n	if	inrange(year,1968,1990)	&	inrange(rp_gradecomp,9,9)
+				replace	`var'=.n	if	inrange(year,1991,2019)	&	inrange(rp_gradecomp,99,99)
+				
+				label	define	`var'	1	"Less than HS"	2	"High School/GED"	3	"Some college"	4	"College"	/*99	"NA/DK"*/,	replace
+				label	value	`var'	`var'
+				label 	variable	`var'	"Education category (RP)"
+				
+				cap	drop	rp_edu?		rp_NoHS	rp_HS	rp_somecol	rp_col
+				tab `var', gen(rp_edu)
+				rename	(rp_edu1	rp_edu2	rp_edu3	rp_edu4	/*rp_edu5*/)	(rp_NoHS	rp_HS	rp_somecol	rp_col	/*rp_NADK*/)
+				
+				lab	value	rp_NoHS	rp_HS	rp_somecol	rp_col	/*rp_NADK*/	yes1no0
+				
+				label	var	rp_NoHS	"Less than High School"
+				label	var	rp_HS	"High School"
+				label	var	rp_somecol	"College (w/o degree)"
+				label	var	rp_col	"College Degree"
+				*label	var	rp_NADK	"Education (NA/DK)"
 			
 		*	Disability
 		*	I categorize RP as disabled if RP has either "amount" OR "type" of work limitation
@@ -3594,6 +3941,14 @@
 			
 			label	var	`var'	"FS/SNAP amount received last month"
 			
+			
+			*	Replace food stamp amount received with missing if didn't receive stamp (FS_rec_wth==0), for summary stats
+			*	There are only two obs with non-zero amount, so should be safe to clean.
+			*	This code can be integrated into "cleaning" part later
+			*replace	FS_rec_amt_capita_real=.n	if	FS_rec_wth==0
+			replace	FS_rec_amt=.n	if	FS_rec_wth==0
+						
+	
 			*	FS amt received per capita
 			loc	var	FS_rec_amt_capita
 			cap	drop	`var'

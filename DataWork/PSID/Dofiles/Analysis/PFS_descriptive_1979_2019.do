@@ -18,9 +18,9 @@
 		
 		*	Replace food stamp amount received with missing if didn't receive stamp (FS_rec_wth==0), for summary stats
 			*	There are only two obs with non-zero amount, so should be safe to clean.
-			*	This code can be integrated into "cleaning" part later
-			replace	FS_rec_amt_capita_real=.n	if	FS_rec_wth==0
-			replace	FS_rec_amt_capita=.n	if	FS_rec_wth==0
+			*	This code can be integrated into "cleaning" part later (moved as of 2023/7/17)
+			*replace	FS_rec_amt_capita_real=.n	if	FS_rec_wth==0
+			*replace	FS_rec_amt_capita=.n	if	FS_rec_wth==0
 						
 		*	Label variables
 			lab	define	rp_female	0	"Male"	1	"Female", replace
@@ -88,8 +88,9 @@
 			label var	`var'		"\% of FS used throughouth the period"
 			label var	`var'_uniq	"\% of FS used throughouth the period"
 			
+			/*
 			*	RP age group (to compare with the Census data)
-			
+			*	(Moved to clean.do file as of 2023/7/17)
 				*	Below 30.
 				loc	var	rp_age_below30
 				cap	drop	var
@@ -103,11 +104,14 @@
 				gen		`var'=0	if	!mi(rp_age)
 				replace	`var'=1	if	inrange(rp_age,66,120)
 				lab	var	`var'	"RP age over 65"
+			*/
 				
 			*	4-year college degree
 			*	Current variable (rp_col) also set value to 1 if RP said "yes" to "do you have a college degree?" and has less than 16 years of education.
 			*	This could imply that community college degree (2-year) is also included, which might be the reason for sudden jump in 2009
 			*	So I create a separate variable recognizing 4-year college degree only
+			*	Disabled as of 2023/7/17, as we cannot distinguish whether people has 16-year education and college degree ans 2-year degree or 4-year degree.
+			/*
 			loc	var	rp_col_4yr
 			cap	drop	`var'
 			gen		`var'=.
@@ -122,7 +126,7 @@
 			replace	`var'=.n	if	inrange(year,1991,2019)	&	inrange(rp_gradecomp,99,99)
 			
 			lab	var	`var'	"4-year college degree (RP)"
-			
+			*/
 			
 		*	Save
 		save	"${SNAP_dtInt}/SNAP_descdta_1979_2019", replace	//	Inermediate descriptive data for 1979-2019
@@ -130,6 +134,8 @@
 	
 	*	Importing Census data for comparsion
 	*	Note: this section should be moved to the original "SNAP_clean.do" file later.
+	*	(2023-7-17) Moved to "clean.do" file, so disable it here.
+	/*
 		
 		*	Household by type (gender of householder, family/non-family)
 			*	Family: 2 or more people related by marriage/birth/adoption/etc live together
@@ -223,7 +229,7 @@
 		import	excel	"${clouldfolder}/DataWork/Census/Historical Household Tables/hh3.xls", sheet(Table HH-3) firstrow	cellrange(A14:K57)	clear
 		
 			rename	(A-K)	(year	total_HH	HH_age_below_25	HH_age_25_29	HH_age_30_34	HH_age_35_44	///
-								HH_age_45_54	HH_age_55_64	HH_age_65_74	HH_age_above_75	HH_age_median)
+								HH_age_45_54	HH_age_55_64	HH_age_65_74	HH_age_above_75	HH_age_median_Census)
 								
 			*	Keep revised record only
 			drop	if	year=="2011"
@@ -245,9 +251,12 @@
 			lab	var	HH_age_55_64	"# of HH - householder age 55-64"
 			lab	var	HH_age_65_74	"# of HH - householder age 65-74"
 			lab	var	HH_age_above_75	"# of HH - householder age 65-74"
-			lab	var	HH_age_median	"Median householder age"
+			lab	var	HH_age_median_Census	"Median householder age"
 		
 		*	Generate additional variables
+		
+			*	Median age as intenger
+			gen	HH_age_median_Census_int	=	int(HH_age_median_Census)
 			
 			*	Householder age 30 or below
 			loc	var	HH_age_below_30_Census
@@ -336,14 +345,14 @@
 		
 			*	Keep modified record only
 			keep	A	D	
-			rename	(A	D)	(year	pov_rate)
+			rename	(A	D)	(year	pov_rate_national)
 			
 			drop	if	year=="2013 (4)"
 			drop	if	year=="2017"
 			
 			replace	year=substr(year,1,4)
 			lab	var	year	"Year"
-			lab	var	pov_rate	"Poverty rate"
+			lab	var	pov_rate_national	"Poverty rate (national)"
 			destring	year, replace
 			
 			*	Save
@@ -357,6 +366,7 @@
 		merge	1:1	year	using	"${SNAP_dtInt}/ind_education_CPS.dta", nogen assert(3)
 		merge	1:1	year	using	"${SNAP_dtInt}/pov_rate_1979_2019.dta", nogen assert(3)
 		save	"${SNAP_dtInt}/HH_census_1979_2019.dta", replace
+		*/
 		
 	*************** Descriptive stats
 	use	"${SNAP_dtInt}/SNAP_descdta_1979_2019", clear
@@ -521,7 +531,7 @@
 						
 				*	Variablest to be collapsed
 				local	collapse_vars	foodexp_tot_exclFS_pc	foodexp_tot_inclFS_pc	foodexp_tot_exclFS_pc_real	foodexp_tot_inclFS_pc_real	foodexp_W_TFP_pc foodexp_W_TFP_pc_real	///	//	Food expenditure and TFP cost per capita (nominal and real)
-										rp_age	rp_age_below30 rp_age_over65	rp_female	rp_nonWhte	rp_HS	rp_somecol	rp_col	rp_col_4yr	rp_disabled	famnum	FS_rec_wth	FS_rec_amt_capita	FS_rec_amt_capita_real	///	//	Gender, race, education, FS participation rate, FS amount
+										rp_age	rp_age_below30 rp_age_over65	rp_female	rp_nonWhte	rp_HS	rp_somecol	rp_col	rp_disabled	famnum	FS_rec_wth	FS_rec_amt_capita	FS_rec_amt_capita_real	///	//	Gender, race, education, FS participation rate, FS amount
 										PFS_glm	NME	PFS_FI_glm	NME_below_1	//	Outcome variables	
 				
 				*	All population
@@ -531,7 +541,7 @@
 					lab	var	rp_nonWhte	"Non-White (RP)"
 					*lab	var	rp_HS_GED	"HS or GED (RP)"
 					lab	var	rp_col		"College degree (RP)"
-					lab	var	rp_col_4yr	"4-year College degree (RP)"
+					*lab	var	rp_col_4yr	"4-year College degree (RP)"
 					lab	var	rp_disabled	"Disabled (RP)"
 					lab	var	FS_rec_wth	"FS received"
 					lab	var	PFS_glm		"PFS"
@@ -591,14 +601,14 @@
 			
 			*	Age (RP)
 			*	Since Census data does NOT release average age, we use the median age instead	
-			use	"${SNAP_dtInt}/SNAP_descdta_1979_2019", clear
-			collapse (median) rp_age [aw=wgt_long_fam_adj], by(year)
-			merge	1:1	year	using	"${SNAP_dtInt}/HH_age_census.dta", keepusing(HH_age_median)
-			gen	HH_age_median_int	=	int(HH_age_median)
+			*use	"${SNAP_dtInt}/SNAP_descdta_1979_2019", clear
+			*collapse (median) rp_age [aw=wgt_long_fam_adj], by(year)
+			*merge	1:1	year	using	"${SNAP_dtInt}/HH_age_census.dta", keepusing(HH_age_median_Census)
+			*gen	HH_age_median_Census_int	=	int(HH_age_median_Census)
 			sort	year	
 			
 			graph	twoway	(line rp_age 			year, lpattern(dash) xaxis(1) yaxis(1) legend(label(1 "Study Sample (PSID)")))	///
-							(line HH_age_median_int	year, lpattern(dash_dot) xaxis(1) yaxis(1) legend(label(2 "Census"))),	///
+							(line HH_age_median_Census_int	year, lpattern(dash_dot) xaxis(1) yaxis(1) legend(label(2 "Census"))),	///
 							/*(line rp_disabled	year, lpattern(dash_dot) xaxis(1 2) yaxis(1)  legend(label(3 "Disabled"))), */ ///
 							xline(1987 1992 2007, axis(1) lcolor(black) lpattern(dash))	///
 							xline(1989 1990, lwidth(10) lc(gs12)) xlabel(1980(10)2010 2007)  ///
@@ -635,7 +645,7 @@
 			graph	close
 			
 			*	Educational attainment (college degree) and share of HH
-			graph	twoway	(line rp_col_4yr 			year, lpattern(dash) xaxis(1) yaxis(1) legend(label(1 "Sample; RP")))	///
+			graph	twoway	(line rp_col 			year, lpattern(dash) xaxis(1) yaxis(1) legend(label(1 "Sample; RP")))	///
 							(line pct_col_Census	year, lpattern(dash_dot) xaxis(1) yaxis(1) legend(label(2 "Census; population"))),	///
 							/*(line rp_disabled	year, lpattern(dash_dot) xaxis(1 2) yaxis(1)  legend(label(3 "Disabled"))), */ ///
 							xline(1987 1992 2007, axis(1) lcolor(black) lpattern(dash))	///
@@ -664,7 +674,7 @@
 			*	FS participation rate and unemployment rate
 			graph	twoway	(line FS_rec_wth 	year, lpattern(dash) xaxis(1 2) yaxis(1) legend(label(1 "FS participation (%)")))	///
 							(line unemp_rate	year, lpattern(dot) xaxis(1 2) yaxis(2)  legend(label(2 "Unemployment Rate (%)")))  ///
-							(line pov_rate	year, lpattern(dash_dot) xaxis(1 2) yaxis(2)  legend(label(3 "Poverty Rate"))),  ///
+							(line pov_rate_national	year, lpattern(dash_dot) xaxis(1 2) yaxis(2)  legend(label(3 "Poverty Rate"))),  ///
 							xline(1987 1992 2007, axis(1) lcolor(black) lpattern(solid))	///
 							xline(1989 1990, lwidth(10) lc(gs12)) xlabel(1980(10)2010 2007)  ///
 							xtitle(Year)	xtitle("", axis(2))	ytitle("Fraction", axis(1)) 	ytitle("Percentage (%)", axis(2)) ///
