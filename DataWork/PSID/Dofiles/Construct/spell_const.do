@@ -6,8 +6,102 @@ use	"${SNAP_dtInt}/SNAP_long_PFS", clear
 keep	if	!mi(PFS_glm)
 
 *	Generate spell-related variables
+**	IMPORANT NOTE: Since the PFS data has (1) gap period b/w 1988-1991 and (2) changed frequency since 1997, it is not clear how to define "spell"
+**	Based on 2023-7-25 discussion, we decide to define spell as "the number of consecutive 'OBSERVATIONS' experiencing food insecurity", regardless of gap period and updated frequency
+	**	We can do robustness check with the updated spell (i) splitting pre-gap period and post-gap period, and (ii) Multiplying spell by 2 for post-1997
+	
 cap drop	_seq	_spell	_end
 tsspell, cond(year>=1979 & PFS_FI_glm==1)
+
+br	x11101ll	year	PFS_glm	PFS_FI_glm	_seq	_spell	_end
+
+tempfile	temp
+save	`temp', replace
+
+	
+		
+		
+	*	Distribution of spell length	
+	*	Since "hist" does not accept aweight, we use the percentage in frequency table
+		use	`temp', clear
+		
+		
+		cap	mat	drop	spell_pct_all
+		
+		
+		mat	HCR_cat_sup			=	nullmat(HCR_cat_sup)	\	e(b)[1,1]
+		
+		*	All sample
+		tab	_seq	[aw=wgt_long_fam_adj]	if	_end==1,	matcell(spell_freq_w)
+		mat	list	spell_freq_w
+		local	N=r(N)
+		mat	spell_pct_tot	=	spell_freq_w	/	r(N)
+		
+		mat	spell_pct_all		=	nullmat(spell_pct_all),	spell_pct_tot
+		
+		*	By category
+		*	We use categories by - gender, race and college degree (dummy for each category)
+		*	I do NOT use individual-information for two reasons; (i) individual-level race not available. (ii) individual-education not available for indivdiual 16-years or less
+		
+		foreach	catvar	in	rp_female rp_White rp_col	{
+			
+			foreach	val	in	0 1	{
+				
+				tab	_seq	[aw=wgt_long_fam_adj]	if	_end==1	&	`catvar'==`val',	matcell(spell_freq_`catvar'_`val')
+				mat	list	spell_freq_`catvar'_`val'
+				local	N=r(N)
+				mat	spell_pct_`catvar'_`val'	=	spell_freq_`catvar'_`val'	/	r(N)	
+				mat	list	spell_pct_`catvar'_`val'
+				
+				mat	spell_pct_all		=	nullmat(spell_pct_all),	spell_pct_`catvar'_`val'
+			}
+			
+		}
+		
+	
+		
+	*preserve
+	
+		clear
+		set	obs	26
+		gen	spell_length	=	_n
+		
+		svmat	spell_pct_all
+		foreach	var	in	spell_pct_w	spell_pct_ind_f_0	spell_pct_ind_f_1	{
+		
+		svmat	`var'
+		rename	`var'1	`var'
+		
+		}
+		
+		
+		*	All population
+		graph hbar spell_pct_w, over(spell_length, sort(spell_percent_w) /*descending*/	label(labsize(vsmall)))	legend(lab (1 "Fraction") size(small) rows(1))	///
+			bar(1, fcolor(gs03*0.5)) /*bar(2, fcolor(gs10*0.6))*/	graphregion(color(white)) bgcolor(white) title(Distribution of Spell Length) ytitle(Fraction)
+	
+		graph	export	"${SNAP_outRaw}/Spell_length_dist.png", replace
+		graph	close
+		
+		*	By gender
+		graph hbar spell_pct_ind_f_0	spell_pct_ind_f_1, over(spell_length, /*descending*/	label(labsize(vsmall)))	legend(lab (1 "Male") lab(2 "Female") size(small) rows(1))	///
+			bar(1, fcolor(gs03*0.5)) bar(2, fcolor(gs10*0.6))	graphregion(color(white)) bgcolor(white) title(Distribution of Spell Length - By Gender) ytitle(Fraction)
+	
+		graph	export	"${SNAP_outRaw}/Spell_length_dist_gender.png", replace
+		graph	close
+		
+	restore
+	
+	
+	
+	tab	_seq	[fw=wgt_long_fam_adj]	if	_end==1
+	tab	_seq	[aw=wgt_long_fam_adj]	if	_end==1
+	hist	_seq	[fw=wgt_long_fam_adj]	if	_end==1
+	
+	
+	tab	_seq	[aw=wgt_long_fam_adj]	if	_end==1,	matcell(dist_freq)
+	
+	tabstat	_seq	[aw=wgt_long_fam_adj]	if	_end==1,	stats(mean)
+
 
 *	SNAP redemption pattern from 1979-1987
 *	To see if HH use SNAP continuously or often -in and -out
