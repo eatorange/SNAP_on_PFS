@@ -19,18 +19,48 @@ tempfile	temp
 save	`temp', replace
 
 	
+*	Descriptive stats for spell length
+
+	*	# of su
+	
+	*	Summary stats (N, mean and SD)
+	*	Note: "end==1" restricts only the observations when the spell ends (so only considers the final spell length)
+	
+	cap	mat	drop	summstat_spell_length
+	summ	_seq	[aw=wgt_long_fam_adj]	if	_end==1	//	Total
+	
+	mat	summstat_spell_length	=	(r(N), r(mean), r(sd))
+	mat	list	summstat_spell_length
+	
+	*	By category
+	foreach	catvar	in	rp_female rp_White rp_col	{
+			
+		foreach	val	in	0 1	{
+			
+			summ	_seq	[aw=wgt_long_fam_adj]	if	_end==1	&	`catvar'==`val'
+			mat	summstat_spell_length	=	summstat_spell_length	\		(r(N), r(mean), r(sd))
+			
+		}
 		
+	}
+	
+	mat	colnames	summstat_spell_length	=	"N"	"Mean"	"SD"
+	mat	rownames	summstat_spell_length	=	"All"	"Male"	"Female"	"NonWhite"	"White"	"No-col-degree"	"Col-degree"
+		
+	mat	list	summstat_spell_length
+	
+	
+	
+	
+	
+	
+	*graph	twoway	(kdensity	PFS_glm	[aw=wgt_long_fam_adj]	if	rp_col==0)	(kdensity	PFS_glm	[aw=wgt_long_fam_adj]	if	rp_col==1)
 		
 	*	Distribution of spell length	
 	*	Since "hist" does not accept aweight, we use the percentage in frequency table
-		use	`temp', clear
-		
 		
 		cap	mat	drop	spell_pct_all
-		
-		
-		mat	HCR_cat_sup			=	nullmat(HCR_cat_sup)	\	e(b)[1,1]
-		
+	
 		*	All sample
 		tab	_seq	[aw=wgt_long_fam_adj]	if	_end==1,	matcell(spell_freq_w)
 		mat	list	spell_freq_w
@@ -62,33 +92,52 @@ save	`temp', replace
 		
 	*preserve
 	
+	*	Summary table
+	
+	
+	*	Figures
+	
+	preserve
+	
 		clear
 		set	obs	26
 		gen	spell_length	=	_n
 		
 		svmat	spell_pct_all
-		foreach	var	in	spell_pct_w	spell_pct_ind_f_0	spell_pct_ind_f_1	{
 		
-		svmat	`var'
-		rename	`var'1	`var'
-		
-		}
+		rename	spell_pct_all?	(spell_pct_all	spell_pct_male	spell_pct_female	spell_pct_nonWhite	spell_pct_White	spell_pct_nocol	spell_pct_col)
 		
 		
-		*	All population
-		graph hbar spell_pct_w, over(spell_length, sort(spell_percent_w) /*descending*/	label(labsize(vsmall)))	legend(lab (1 "Fraction") size(small) rows(1))	///
-			bar(1, fcolor(gs03*0.5)) /*bar(2, fcolor(gs10*0.6))*/	graphregion(color(white)) bgcolor(white) title(Distribution of Spell Length) ytitle(Fraction)
-	
-		graph	export	"${SNAP_outRaw}/Spell_length_dist.png", replace
-		graph	close
+		*	Figures
+			
+			*	All population
+			graph hbar spell_pct_all, over(spell_length, sort(spell_percent_w) /*descending*/	label(labsize(vsmall)))	legend(lab (1 "Fraction") size(small) rows(1))	///
+				bar(1, fcolor(gs03*0.5)) /*bar(2, fcolor(gs10*0.6))*/	graphregion(color(white)) bgcolor(white) title(Distribution of Spell Length) ytitle(Fraction)
 		
-		*	By gender
-		graph hbar spell_pct_ind_f_0	spell_pct_ind_f_1, over(spell_length, /*descending*/	label(labsize(vsmall)))	legend(lab (1 "Male") lab(2 "Female") size(small) rows(1))	///
-			bar(1, fcolor(gs03*0.5)) bar(2, fcolor(gs10*0.6))	graphregion(color(white)) bgcolor(white) title(Distribution of Spell Length - By Gender) ytitle(Fraction)
-	
-		graph	export	"${SNAP_outRaw}/Spell_length_dist_gender.png", replace
-		graph	close
+			graph	export	"${SNAP_outRaw}/Spell_length_dist.png", replace
+			graph	close
+			
+			*	By gender
+			graph hbar spell_pct_male	spell_pct_female, over(spell_length, /*descending*/	label(labsize(vsmall)))	legend(lab (1 "Male") lab(2 "Female") size(small) rows(1))	///
+				bar(1, fcolor(gs03*0.5)) bar(2, fcolor(gs10*0.6))	graphregion(color(white)) bgcolor(white) title(Distribution of Spell Length - By Gender) ytitle(Fraction)
 		
+			graph	export	"${SNAP_outRaw}/Spell_length_dist_gender.png", replace
+			graph	close
+			
+			*	By race
+			graph hbar spell_pct_White	spell_pct_nonWhite, over(spell_length, /*descending*/	label(labsize(vsmall)))	legend(lab (1 "White") lab(2 "Non-White") size(small) rows(1))	///
+				bar(1, fcolor(gs03*0.5)) bar(2, fcolor(gs10*0.6))	graphregion(color(white)) bgcolor(white) title(Distribution of Spell Length - By Race) ytitle(Fraction)
+		
+			graph	export	"${SNAP_outRaw}/Spell_length_dist_race.png", replace
+			graph	close
+			
+			*	By education (college degree)
+			graph hbar spell_pct_col	spell_pct_nocol, over(spell_length, /*descending*/	label(labsize(vsmall)))	legend(lab (1 "College degree") lab(2 "No college degree") size(small) rows(1))	///
+				bar(1, fcolor(gs03*0.5)) bar(2, fcolor(gs10*0.6))	graphregion(color(white)) bgcolor(white) title(Distribution of Spell Length - By College) ytitle(Fraction)
+		
+			graph	export	"${SNAP_outRaw}/Spell_length_dist_college.png", replace
+			graph	close
+					
 	restore
 	
 	

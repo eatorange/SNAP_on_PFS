@@ -1,3 +1,5 @@
+*	Note: Cleaning part is imported into "SNAP_clean.do"
+
 import	excel	"${clouldfolder}/DataWork/C2ER/COLI Historical Data - 1990 Q1 - 2022 Annual.xlsx", firstrow sheet(HistoricalIndexData)	clear
 
 	*	Notes on data
@@ -33,6 +35,28 @@ import	excel	"${clouldfolder}/DataWork/C2ER/COLI Historical Data - 1990 Q1 - 202
 	*	Compute state-year-level average value
 	collapse	COMPOSITE_INDEX GROCERY_ITEMS, by(YEAR STATE_NAME)
 	
+	*	Rename variables
+	rename	(YEAR STATE_NAME	COMPOSITE_INDEX	GROCERY_ITEMS)	(year	state	COLI_composite	COLI_grocery)
+	lab	var	COLI_composite	"COLI - Composite"
+	lab	var	COLI_grocery	"COLI - Grocery"
+	
+	*	merge with statecode, to be merged into the main data
+	drop	if	inlist(state,"British Columbia","Puerto Rico","Saskatoon","Virgin Islands")
+	replace	state="Washington D.C."	if	state=="District of Columbia"
+	merge	m:1	state	using	"${SNAP_dtRaw}/Statecode.dta",	nogen	assert(3)
+	
+	rename	state	rp_state
+	
+	*	Save
+	compress
+	save	"${SNAP_dtInt}/COLI.dta", replace
+	
+	
+	
+	*	Analysis
+	
+	
+	
 	*	Graph time trend for selected states
 	graph	twoway (bar GROCERY_ITEMS YEAR if STATE_NAME=="California", title(Grocery Index in California))
 	graph export "E:\GitHub\SNAP_on_FS\DataWork\PSID\Output\Raw\COLI_CA.png", as(png) name("Graph") replace
@@ -54,5 +78,3 @@ import	excel	"${clouldfolder}/DataWork/C2ER/COLI Historical Data - 1990 Q1 - 202
 	*	See annual national trend
 		collapse COMPOSITE_INDEX GROCERY_ITEMS, by(YEAR)	
 		graph	twoway (bar GROCERY_ITEMS YEAR, title(Grocery Index in NY))
-
-//	use  "${SNAP_dtRaw}/Statecode.dta", clear

@@ -347,7 +347,10 @@
 		cap drop	_seq	_spell	_end
 		tsspell, cond(year>=2 & PFS_FI_glm==1)
 		
-		br	x11101ll	year	PFS_glm	PFS_FI_glm	_seq	_spell	_end
+		br	x11101ll	year	fam_income	incomePL		income_below_200	income_below_130	PFS_glm	PFS_FI_glm	_seq	_spell	_end
+		
+	
+		
 		
 		*	Before genering FSDs, generate the number of non-missing PFS values over the 5-year
 		*	It will vary from 0 to the full length of reference period (currently 3)

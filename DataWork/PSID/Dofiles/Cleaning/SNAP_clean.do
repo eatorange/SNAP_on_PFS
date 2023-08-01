@@ -65,19 +65,19 @@
 	
 	*	Codes to be executed
 		*	SECTION 1: Import individual- and family-level PSID variables
-		local	ind_agg			1	//	Aggregate individual-level variables across waves
+		local	ind_agg			0	//	Aggregate individual-level variables across waves
 		local	fam_agg			0	//	Aggregate family-level variables across waves
 		
 		*	SECTION 2: Prepare external data
-		local	ext_data		1	//	Prepare external data (CPI, TFP, etc.)
+		local	ext_data		0	//	Prepare external data (CPI, TFP, etc.)
 		
 		*	SECTION 3: Construct PSID panel data and import external data
-		local	cr_panel		1	//	Create panel structure from ID variable
+		local	cr_panel		0	//	Create panel structure from ID variable
 			local	panel_view	0	//	Create an excel file showing the change of certain clan over time (for internal data-check only)
-		local	merge_data		1	//	Merge ind- and family- variables and import it into ID variable
-			local	raw_reshape	1		//	Merge raw variables and reshape into long data (takes time)
-			local	add_clean	1		//	Do additional cleaning and import external data (CPI, TFP)
-			local	import_dta	1		//	Import aggregated variables and external data into ID data. 
+		local	merge_data		0	//	Merge ind- and family- variables and import it into ID variable
+			local	raw_reshape	0		//	Merge raw variables and reshape into long data (takes time)
+			local	add_clean	0		//	Do additional cleaning and import external data (CPI, TFP)
+			local	import_dta	0		//	Import aggregated variables and external data into ID data. 
 		
 		*	SECTION 4: Clean data and save it
 		local	clean_vars		1	//	Clean variables and save it
@@ -1907,7 +1907,7 @@
 		
 		
 		*	Census data (household information, poverty rate, etc.)
-		
+		{
 			*	Household by type (gender of householder, family/non-family)
 			*	Family: 2 or more people related by marriage/birth/adoption/etc live together
 			*	Non-family: Single-person HH, or people unrelated live together.
@@ -2137,7 +2137,62 @@
 		merge	1:1	year	using	"${SNAP_dtInt}/ind_education_CPS.dta", nogen assert(3)
 		merge	1:1	year	using	"${SNAP_dtInt}/pov_rate_1979_2019.dta", nogen assert(3)
 		save	"${SNAP_dtInt}/HH_census_1979_2019.dta", replace
+		}	
+		
+		
+		*	Cost of Living Index (1990-2021)
+		{
+		import	excel	"${clouldfolder}/DataWork/C2ER/COLI Historical Data - 1990 Q1 - 2022 Annual.xlsx", firstrow sheet(HistoricalIndexData)	clear
+
+			*	Notes on data
+			*	Up to 2006, the data has full quarterly value (Q1 to Q4)
+			*	Since 2007, the data has Q1-Q3 and annual data (no Q4) , except 2020 which is out of our study period.
 			
+			
+			*	Keep relevant variables only
+			keep	YEAR QUARTER STATE_CODE STATE_NAME COMPOSITE_INDEX GROCERY_ITEMS
+			
+			*	Replace unknown value as missing
+			*	There's on observation (1991 Q1 NY Ithaca) where composite index was recorded as "parta". Will replace it as missing.
+			replace	GROCERY_ITEMS=""	if	GROCERY_ITEMS=="parta"
+			
+			*	Destring cost index
+			destring	GROCERY_ITEMS, replace
+			
+			*	Replace quarter with numeric value
+			loc	var	svy_quarter
+			cap	drop	`var'
+			gen		`var'=1	if	QUARTER=="Q1"	//	Variable name to be equal to the one in main data
+			replace	`var'=2	if	QUARTER=="Q2"	//	Variable name to be equal to the one in main data
+			replace	`var'=3	if	QUARTER=="Q3"	//	Variable name to be equal to the one in main data
+			replace	`var'=4	if	QUARTER=="Q4"	//	Variable name to be equal to the one in main data
+			replace	`var'=99	if	QUARTER=="Annual"	//	Variable name to be equal to the one in main data
+			
+			*	Due to different data availability, we keep only "ANNUAL" value since 2007
+			drop	if	svy_quarter!=99	&	inrange(YEAR,2007,2020)
+			
+			*	Adjust 2013 data whose annual average is 96 instead of 100
+			replace GROCERY_ITEMS = GROCERY_ITEMS * 100/94.6908 if YEAR==2013
+			
+			*	Compute state-year-level average value
+			collapse	COMPOSITE_INDEX GROCERY_ITEMS, by(YEAR STATE_NAME)
+			
+			*	Rename variables
+			rename	(YEAR STATE_NAME	COMPOSITE_INDEX	GROCERY_ITEMS)	(year	state	COLI_composite	COLI_grocery)
+			lab	var	COLI_composite	"COLI - Composite"
+			lab	var	COLI_grocery	"COLI - Grocery"
+			
+			*	merge with statecode, to be merged into the main data
+			drop	if	inlist(state,"British Columbia","Puerto Rico","Saskatoon","Virgin Islands")
+			replace	state="Washington D.C."	if	state=="District of Columbia"
+			merge	m:1	state	using	"${SNAP_dtRaw}/Statecode.dta",	nogen	assert(3)
+			
+			rename	statecode	rp_state	// rename to be merged with the main data
+			
+			*	Save
+			compress
+			save	"${SNAP_dtInt}/COLI.dta", replace
+		}
 		
 		*	CPI data (to convert current to real dollars)
 			*	(2023-1-15) Baseline month as Jan 2019 (CPI=100)
@@ -3272,6 +3327,9 @@
 			*	Import state-wide monthly unemployment data
 			merge m:1 rp_state prev_yrmonth using "${SNAP_dtInt}/Unemployment Rate_state_month", nogen keep(1 3) keepusing(unemp_rate)
 			
+			*	Import COLI data
+			merge m:1	rp_state	year	using	"${SNAP_dtInt}/COLI", nogen keep(1 3)
+			
 			*	Import Poverty guideline data
 			merge	m:1	year	famnum	using	"${SNAP_dtInt}/Poverty_guideline",	nogen	keep(1 3)
 			
@@ -3783,6 +3841,70 @@
 			gen		`var'=0	if	!mi(fam_income)	&	fam_income>incomePL*2
 			replace	`var'=1	if	!mi(fam_income)	&	fam_income<=incomePL*2
 			lab	var	`var'	"Income below 200\% PL"
+			
+			
+		*	Individual whose family income was below 130%/200% "at least" once
+		*	It seems almost all individuals (over 98%) have their family income below 200% at least onc
+			
+			*	200%, entire study period.
+			loc	var	income_ever_below_200
+			cap	drop	`var'
+			bys	x11101ll:	egen	`var'	=	max(income_below_200)
+			lab	var	`var'	"Income below 200% PL at least once"
+			tab	`var'	if	year==2013	&	in_sample==1	//	counting only one obs per person. 99% of individuals fall into this category
+				
+			*	200%, 1997-2013
+			loc	var	income_ever_below_200_973
+			cap	drop	`var'
+			bys	x11101ll:	egen	`var'	=	max(income_below_200)	if	inrange(year,1997,2013)
+			lab	var	`var'	"Income below 200% PL at least once (1997-2013)"
+			tab	`var'	if	year==2013	&	in_sample==1	//	counting only one obs per person. 65% individuals (7,819) fall into this category
+			
+			*	130%, entire study period
+			loc	var	income_ever_below_130
+			cap	drop	`var'
+			bys	x11101ll:	egen	`var'	=	max(income_below_130)
+			lab	var	`var'	"Income below 130% PL at least once"
+			tab	`var'	if	year==2013	&	in_sample==1	//	counting only one obs per person. 98.5% of the invidiuals (17,930) fall into this category
+			
+			*	130%, 1997-2013
+			loc	var	income_ever_below_130_9713
+			cap	drop	`var'
+			bys	x11101ll:	egen	`var'	=	max(income_below_130)	if	inrange(year,1997,2013)
+			lab	var	`var'	"Income below 130% PL at least once (1997-2013)"
+			tab	`var'	if	year==2013	&	in_sample==1	//	counting only one obs per person. 48% of the individuals (5,845) fall into this category
+		
+		*	Individuals whose family income was "consistently" below 130%/200%
+		
+			*	200%, entire study period
+			loc	var	income_always_below_200
+			cap	drop	`var'
+			bys	x11101ll:	egen	`var'	=	min(income_below_200)	//	If individual's income is always below cutoff, then the minimum value would be 1. Otherwise, it would be 0.
+			lab	var	`var'	"Income always below 200% PL"
+			tab	`var'	if	year==2013	&	in_sample==1	//	counting only one obs per person. 9.5% of individuals (1700) fall into this category.
+			
+			*	200%, 1997-2013
+			loc	var	income_always_below_200_9713
+			cap	drop	`var'
+			bys	x11101ll:	egen	`var'	=	min(income_below_200)	if	inrange(year,1997,2013)	//	If individual's income is always below cutoff, then the minimum value would be 1. Otherwise, it would be 0.
+			lab	var	`var'	"Income always below 200% PL (1997-2013)"
+			tab	`var'	if	year==2013	&	in_sample==1	//	counting only one obs per person. 12% of individuals (1,468) fall into this category.
+			
+			*	130%, entire study period
+			loc	var	income_always_below_130
+			cap	drop	`var'
+			bys	x11101ll:	egen	`var'	=	min(income_below_130)	//	If individual's income is always below cutoff, then the minimum value would be 1. Otherwise, it would be 0.
+			lab	var	`var'	"Income always below 130% PL"
+			tab	`var'	if	year==1979	&	in_sample==1	//	counting only one obs per person. Only 4% (721) individuals fall into this category.
+		
+			*	130%, 1997-2013
+			loc	var	income_always_below_130_9713
+			cap	drop	`var'
+			bys	x11101ll:	egen	`var'	=	min(income_below_130)	if	inrange(year,1997,2013)	//	If individual's income is always below cutoff, then the minimum value would be 1. Otherwise, it would be 0.
+			lab	var	`var'	"Income always below 130% PL (1997-2013)"
+			tab	`var'	if	year==2013	&	in_sample==1	//	counting only one obs per person. 4.7% of individuals (574) fall into this category.
+		
+			
 		
 		*	Food stamp
 		
