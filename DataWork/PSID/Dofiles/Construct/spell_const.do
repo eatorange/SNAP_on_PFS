@@ -3,7 +3,12 @@
 use	"${SNAP_dtInt}/SNAP_long_PFS", clear
 
 *	Keep only non-missing PFS observation
-keep	if	!mi(PFS_glm)
+keep	if	!mi(PFS_glm_noCOLI)
+
+
+*	Declare survey structure
+svyset	sampcls [pweight=wgt_long_fam_adj] ,strata(sampstr)   singleunit(scaled)	
+		
 
 *	Generate spell-related variables
 **	IMPORANT NOTE: Since the PFS data has (1) gap period b/w 1988-1991 and (2) changed frequency since 1997, it is not clear how to define "spell"
@@ -11,56 +16,197 @@ keep	if	!mi(PFS_glm)
 	**	We can do robustness check with the updated spell (i) splitting pre-gap period and post-gap period, and (ii) Multiplying spell by 2 for post-1997
 	
 cap drop	_seq	_spell	_end
-tsspell, cond(year>=1979 & PFS_FI_glm==1)
+tsspell, cond(year>=1979 & PFS_FI_glm_noCOLI==1)
 
-br	x11101ll	year	PFS_glm	PFS_FI_glm	_seq	_spell	_end
+br	x11101ll	year	PFS_glm_noCOLI	PFS_FI_glm_noCOLI	_seq	_spell	_end
 
-tempfile	temp
-save	`temp', replace
+	*	# of survey waves in sample
+	loc	var	num_waves_in_FU
+	cap	drop	`var'
+	cap	drop	`var'_temp
+	cap	drop	`var'_uniq
+	bys	x11101ll:	egen	`var'=total(live_in_FU)	if	live_in_FU==1 // Only counts the period when individual was living in FU. NOT including it will result in counting invalid periods (ex. before born)
+	bys x11101ll:	egen	`var'_temp	=	max(`var')
+	bys x11101ll:	gen 	`var'_uniq	=	`var'_temp if _n==1
 
 	
-*	Descriptive stats for spell length
+	*	Save
+	tempfile	temp
+	save	`temp', replace
 
-	*	# of su
 	
-	*	Summary stats (N, mean and SD)
-	*	Note: "end==1" restricts only the observations when the spell ends (so only considers the final spell length)
+*	Descriptive stats 
+
 	
-	cap	mat	drop	summstat_spell_length
-	summ	_seq	[aw=wgt_long_fam_adj]	if	_end==1	//	Total
-	
-	mat	summstat_spell_length	=	(r(N), r(mean), r(sd))
-	mat	list	summstat_spell_length
-	
-	*	By category
-	foreach	catvar	in	rp_female rp_White rp_col	{
-			
-		foreach	val	in	0 1	{
-			
-			summ	_seq	[aw=wgt_long_fam_adj]	if	_end==1	&	`catvar'==`val'
-			mat	summstat_spell_length	=	summstat_spell_length	\		(r(N), r(mean), r(sd))
-			
-		}
+	*	Scatterplot (x-axis: # of surveys. y-axis: # of SNAP redemption)
+	*	We do this by 2-step data collapse	
 		
-	}
-	
-	mat	colnames	summstat_spell_length	=	"N"	"Mean"	"SD"
-	mat	rownames	summstat_spell_length	=	"All"	"Male"	"Female"	"NonWhite"	"White"	"No-col-degree"	"Col-degree"
 		
-	mat	list	summstat_spell_length
-	
-	
-	
-	
-	
-	
-	*graph	twoway	(kdensity	PFS_glm	[aw=wgt_long_fam_adj]	if	rp_col==0)	(kdensity	PFS_glm	[aw=wgt_long_fam_adj]	if	rp_col==1)
+			collapse	(count)	num_waves_in_sample=PFS_FI_glm_noCOLI	///	//	# of waves in sample
+						(sum)	total_SNAP_used=FS_rec_wth	///	# of SNAP redemption
+						(mean)	wgt_long_fam_adj_avg=wgt_long_fam_adj ///	//	weighted family wgt
+							if !mi(PFS_FI_glm_noCOLI), by(x11101ll)
 		
+		*	First, collapse data to individual-level (should be unweighted)
+		preserve
+			collapse	(count)	num_waves_in_sample=PFS_FI_glm_noCOLI	///	//	# of waves in sample
+						(sum)	total_SNAP_used=FS_rec_wth	///	# of SNAP redemption
+						(mean)	wgt_long_fam_adj_avg=wgt_long_fam_adj ///	//	weighted family wgt
+							if !mi(PFS_FI_glm_noCOLI), by(x11101ll)
+			lab	var	num_waves_in_sample	"# of waves in sample"
+			lab	var	total_SNAP_used		"# of SNAP participation in sample"
+			lab	var	wgt_long_fam_adj_avg	"Avg longitudinal family wgt - adjusted"
+			
+			tempfile	col1
+			save	`col1', replace
+			
+		*	Second, collapse data into (# of waves x # of SNAP) level. This can be weighted or unweighted (NOT sure which one is correct)
+			
+			*	weighted
+			collapse	(count) wgt_long_fam_adj_avg [pw=wgt_long_fam_adj_avg], by(num_waves_in_sample total_SNAP_used)
+			
+			*twoway	contour	wgt_long_fam_adj_avg	total_SNAP_used	num_waves_in_sample // contour plot - looks very odd
+			
+			twoway	(scatter total_SNAP_used num_waves_in_sample [pw=wgt_long_fam_adj_avg], msymbol(circle_hollow)),	///
+				title(Joint distribution of survey waves and SNAP participation)	///
+				note(Weighted by longitudinal individual survey weight.)
+			graph	export	"${SNAP_outRaw}/joint_waves_SNAP_w.png", replace	
+			graph	close
+			
+			twoway	(scatter total_SNAP_used num_waves_in_sample [pw=wgt_long_fam_adj_avg] if total_SNAP_used>=1, msymbol(circle_hollow)),	///
+				title(Joint distribution of survey waves and SNAP participation)	///
+				note(Weighted by longitudinal individual survey weight. Zero SNAP participation excluded.)
+			graph	export	"${SNAP_outRaw}/joint_waves_SNAP_w_nozero.png", replace	
+			graph	close
+			
+			*	Unweighted
+			use	`col1', clear
+			
+			collapse	(count) wgt_long_fam_adj_avg /*[pw=wgt_long_fam_adj_avg]*/, by(num_waves_in_sample total_SNAP_used)
+			
+			*twoway	contour	wgt_long_fam_adj_avg	total_SNAP_used	num_waves_in_sample // contour plot - still looks very odd
+			twoway	(scatter total_SNAP_used num_waves_in_sample [pw=wgt_long_fam_adj_avg], msymbol(circle_hollow)),	///
+				title(Joint distribution of survey waves and SNAP participation)	///
+				note(Unweighted.)
+			graph	export	"${SNAP_outRaw}/joint_waves_SNAP_uw.png", replace	
+			graph	close
+			
+			twoway	(scatter total_SNAP_used num_waves_in_sample [pw=wgt_long_fam_adj_avg] if total_SNAP_used>=1, msymbol(circle_hollow)),	///
+				title(Joint distribution of survey waves and SNAP participation)	///
+				note(Zero SNAP participation excluded. Unweighted)
+			graph	export	"${SNAP_outRaw}/joint_waves_SNAP_uw_nozero.png", replace	
+			graph	close
+	restore
+	
+	/*
+	*	First, we construct the variables to be used in X and Y
+		
+		*	# of waves in survey (note. only those with non-missing PFS is counted)
+		loc	var	num_waves_in_survey
+		cap	drop	`var'
+		cap	drop	`var'_temp
+		cap	drop	`var'_uniq
+		bys	x11101ll:	egen	`var'=count(PFS_glm_noCOLI)
+		bys x11101ll:	egen	`var'_temp	=	max(`var')
+		bys x11101ll:	gen 	`var'_uniq	=	`var'_temp if _n==1
+		drop	`var'
+		rename	`var'_temp	`var'
+		summ	`var'_uniq,d
+		label	var	`var'_uniq "\# of waves surveyed"
+		
+		*	# of SNAP used
+		loc	var	total_SNAP_used
+		cap	drop	`var'
+		cap	drop	`var'_temp
+		cap	drop	`var'_uniq
+		bys	x11101ll:	egen	`var'=	total(FS_rec_wth)	if	!mi(PFS_glm_noCOLI)
+		bys x11101ll:	egen	`var'_temp	=	max(`var')
+		bys x11101ll:	gen 	`var'_uniq	=	`var'_temp if _n==1
+		summ	`var'_uniq if `var'_uniq>=1,d
+		label var	`var'		"Total SNAP used throughouth the period"
+		label var	`var'_uniq	"Total SNAP used throughouth the period"
+		
+	*	Next, impute an individual-level weight by aggregating it over time.
+	*	This weight will be used to plot the weighted figure (if not, we do not know which year's weight to use.)
+		loc	var	wgt_long_fam_adj_avg
+		cap	drop	`var'
+		bys	x11101ll:	egen	`var'=	mean(wgt_long_fam_adj)	if	!mi(PFS_glm_noCOLI)
+		lab	var	`var'	"Avg longitudinal family weight - adjusted"
+		
+		br x11101ll year	FS_rec_wth PFS_glm_noCOLI PFS_FI_glm_noCOLI num_waves_in_survey total_SNAP_used wgt_long_fam_adj_avg if x11101ll==4006
+	*/	
+
+	*	Spell length	
+		*	Summary stats (N, mean and SD) of spell length
+		*	Note: "end==1" restricts only the observations when the spell ends (so only considers the final spell length)
+		
+		
+		
+		*	Testing mean and standard deviation/error with different sturctures (i) unweighted (ii) analytic weight (iii) survey weight combind with "estat sd"
+		*	Note that (ii) and (iii) gives the same mean (point estimate), but SD are different.
+			*	Source: https://www.stata.com/support/faqs/statistics/weights-and-summary-statistics/
+			*	Thus (iii) would be most accurate.
+		svyset	sampcls [pweight=wgt_long_fam_adj] ,strata(sampstr)   singleunit(scaled)	
+		
+		cap	mat	drop	summstat_spell_length
+		svy, subpop(if _end==1): mean _seq
+		estat sd
+		mat	summstat_spell_length	=	e(N_sub), r(mean), r(sd)
+		mat	list	spell_lengh_summ
+
+		
+		*	By category (gender, race, education, region, disability)
+		foreach	catvar	in	rp_female rp_nonWhte	rp_edu_cat	rp_region rp_disabled	{
+					
+			di	"catvar is `catvar'"
+			
+			if	inlist("`catvar'","rp_region")	{	//	region (1-5)
+				
+				loc	catval	1	2	3	4	5
+				
+			}	//	region
+			
+			else	if	inlist("`catvar'","rp_edu_cat")	{	//	edu (1-4)
+				
+				loc	catval	1	2	3	4		
+			
+			}	//	edu
+			
+			else	{	//	binary (0-1)
+				
+				loc	catval	0	1		
+				
+			}	//	binary
+			
+			foreach	val	of	local	catval	{		
+				
+				di	"value is `val'"
+				qui	svy, subpop(if _end==1	&	`catvar'==`val'): mean _seq
+				estat	sd
+				mat	summstat_spell_length	=	summstat_spell_length	\		(e(N_sub), r(mean), r(sd))
+				
+			}	//	val		
+			
+		}	//	catvar
+		
+		mat	colnames	summstat_spell_length	=	"N"	"Mean"	"SD"
+		mat	rownames	summstat_spell_length	=	"All"	"Male"	"Female"	"White"	"Non-White"	"Less than HS"	"HS"	"Some college"	"College"	///
+													"Northeast"	"Mid-Atlantic"	"South"	"Midwest"	"West"	"NOT disabled"	"Disabled"
+			
+		mat	list	summstat_spell_length
+		
+		putexcel	set	"${SNAP_outRaw}/spell_length_table", sheet(summstat) replace
+		putexcel	A5	=	matrix(summstat_spell_length), names overwritefmt nformat(number_d1)
+		
+	
 	*	Distribution of spell length	
 	*	Since "hist" does not accept aweight, we use the percentage in frequency table
-		
-		cap	mat	drop	spell_pct_all
+		*	Note (2023-08-03) I eyeballed that the percentage in weighted tabluate "tab [aw=]" is equal to the proportion with svy previs "svy: proportion"
+		*	Thus if I am interested in that percentage, I can use "tab aw" which is more convenient.
 	
+	
+		cap	mat	drop	spell_pct_all
+		
 		*	All sample
 		tab	_seq	[aw=wgt_long_fam_adj]	if	_end==1,	matcell(spell_freq_w)
 		mat	list	spell_freq_w
@@ -228,21 +374,21 @@ save	`temp', replace
 	loc	var	PFS_FI_FI
 	cap	drop	`var'
 	gen	`var'=.
-	replace	`var'=0	if	(inrange(year,1980,1987)	| inrange(year,1993,1997))	&	!(l.PFS_FI_glm==1	&	PFS_FI_glm==1)
-	replace	`var'=1	if	(inrange(year,1980,1987)	| inrange(year,1993,1997))	&	l.PFS_FI_glm==1	&	PFS_FI_glm==1
+	replace	`var'=0	if	(inrange(year,1980,1987)	| inrange(year,1993,1997))	&	!(l.PFS_FI_glm_noCOLI==1	&	PFS_FI_glm_noCOLI==1)
+	replace	`var'=1	if	(inrange(year,1980,1987)	| inrange(year,1993,1997))	&	l.PFS_FI_glm_noCOLI==1	&	PFS_FI_glm_noCOLI==1
 	
-	replace	`var'=0	if	inrange(year,1999,2019)	&	!(l2.PFS_FI_glm==1	&	PFS_FI_glm==1)
-	replace	`var'=1	if	inrange(year,1999,2019)	&	l2.PFS_FI_glm==1	&	PFS_FI_glm==1
+	replace	`var'=0	if	inrange(year,1999,2019)	&	!(l2.PFS_FI_glm_noCOLI==1	&	PFS_FI_glm_noCOLI==1)
+	replace	`var'=1	if	inrange(year,1999,2019)	&	l2.PFS_FI_glm_noCOLI==1	&	PFS_FI_glm_noCOLI==1
 	
 	*	(FS,FI) in two consecutive periods (entry)
 	loc	var	PFS_FS_FI
 	cap	drop	`var'
 	gen	`var'=.
-	replace	`var'=0	if	(inrange(year,1980,1987)	| inrange(year,1993,1997))	&	!(l.PFS_FI_glm==0	&	PFS_FI_glm==1)
-	replace	`var'=1	if	(inrange(year,1980,1987)	| inrange(year,1993,1997))	&	l.PFS_FI_glm==0	&	PFS_FI_glm==1
+	replace	`var'=0	if	(inrange(year,1980,1987)	| inrange(year,1993,1997))	&	!(l.PFS_FI_glm_noCOLI==0	&	PFS_FI_glm_noCOLI==1)
+	replace	`var'=1	if	(inrange(year,1980,1987)	| inrange(year,1993,1997))	&	l.PFS_FI_glm_noCOLI==0	&	PFS_FI_glm_noCOLI==1
 	
-	replace	`var'=0	if	inrange(year,1999,2019)	&	!(l2.PFS_FI_glm==0	&	PFS_FI_glm==1)
-	replace	`var'=1	if	inrange(year,1999,2019)	&	l2.PFS_FI_glm==0	&	PFS_FI_glm==1
+	replace	`var'=0	if	inrange(year,1999,2019)	&	!(l2.PFS_FI_glm_noCOLI==0	&	PFS_FI_glm_noCOLI==1)
+	replace	`var'=1	if	inrange(year,1999,2019)	&	l2.PFS_FI_glm_noCOLI==0	&	PFS_FI_glm_noCOLI==1
 
 	
 	collapse (mean) PFS_FI_FI	PFS_FS_FI [aw=wgt_long_fam_adj], by(year)
@@ -300,18 +446,18 @@ save	`temp', replace
 		
 	*	Transition in FS status, comparing 96-97 (1-year period) and 97-99 (2-year period)
 		*	Previously FI
-		tab	PFS_FI_glm if year==1995	&	l.PFS_FI_glm==1
-		tab	PFS_FI_glm if year==1996	&	l.PFS_FI_glm==1
-		tab	PFS_FI_glm if year==1997	&	l.PFS_FI_glm==1
-		tab	PFS_FI_glm if year==1999	&	l2.PFS_FI_glm==1
-		tab	PFS_FI_glm if year==2001	&	l2.PFS_FI_glm==1
+		tab	PFS_FI_glm_noCOLI if year==1995	&	l.PFS_FI_glm_noCOLI==1
+		tab	PFS_FI_glm_noCOLI if year==1996	&	l.PFS_FI_glm_noCOLI==1
+		tab	PFS_FI_glm_noCOLI if year==1997	&	l.PFS_FI_glm_noCOLI==1
+		tab	PFS_FI_glm_noCOLI if year==1999	&	l2.PFS_FI_glm_noCOLI==1
+		tab	PFS_FI_glm_noCOLI if year==2001	&	l2.PFS_FI_glm_noCOLI==1
 		
 		*	Previously FS
-		tab	PFS_FI_glm if year==1995	&	l.PFS_FI_glm==0
-		tab	PFS_FI_glm if year==1996	&	l.PFS_FI_glm==0
-		tab	PFS_FI_glm if year==1997	&	l.PFS_FI_glm==0
-		tab	PFS_FI_glm if year==1999	&	l2.PFS_FI_glm==0
-		tab	PFS_FI_glm if year==2001	&	l2.PFS_FI_glm==0
+		tab	PFS_FI_glm_noCOLI if year==1995	&	l.PFS_FI_glm_noCOLI==0
+		tab	PFS_FI_glm_noCOLI if year==1996	&	l.PFS_FI_glm_noCOLI==0
+		tab	PFS_FI_glm_noCOLI if year==1997	&	l.PFS_FI_glm_noCOLI==0
+		tab	PFS_FI_glm_noCOLI if year==1999	&	l2.PFS_FI_glm_noCOLI==0
+		tab	PFS_FI_glm_noCOLI if year==2001	&	l2.PFS_FI_glm_noCOLI==0
 		
 	
 		
