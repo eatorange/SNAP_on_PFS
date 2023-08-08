@@ -75,9 +75,9 @@
 		local	cr_panel		0	//	Create panel structure from ID variable
 			local	panel_view	0	//	Create an excel file showing the change of certain clan over time (for internal data-check only)
 		local	merge_data		0	//	Merge ind- and family- variables and import it into ID variable
-			local	raw_reshape	0		//	Merge raw variables and reshape into long data (takes time)
-			local	add_clean	0		//	Do additional cleaning and import external data (CPI, TFP)
-			local	import_dta	0		//	Import aggregated variables and external data into ID data. 
+			local	raw_reshape	1		//	Merge raw variables and reshape into long data (takes time)
+			local	add_clean	1		//	Do additional cleaning and import external data (CPI, TFP)
+			local	import_dta	1		//	Import aggregated variables and external data into ID data. 
 		
 		*	SECTION 4: Clean data and save it
 		local	clean_vars		1	//	Clean variables and save it
@@ -1908,11 +1908,69 @@
 		
 		*	Census data (household information, poverty rate, etc.)
 		{
+			
+			*	U.S. population estimates (in person)
+			
+				*	1979-1999
+				import delimited "${clouldfolder}\DataWork\Census\Annul Estimates of the Resident Population\popclockest.txt", delimiter(space) clear 
+				keep	in	7/27
+				keep	v4	v10
+				rename	(v4	v10)	(year	US_est_pop)
+				replace	US_est_pop	=	subinstr(US_est_pop,",","",.)
+				destring	*, replace
+				format	%12.0fc	US_est_pop
+				
+				lab	var	year	"Year"
+				lab	var	US_est_pop	"US Population Estimates"
+				
+				tempfile	US_est_pop_1979_1999
+				save		`US_est_pop_1979_1999'
+				
+				*	2000-2009
+				import	excel	"${clouldfolder}\DataWork\Census\Annul Estimates of the Resident Population\us-est00int-01.xls", sheet("US-EST00INT-01") clear
+				keep	C-L
+				
+				keep	in	5
+				destring	*, replace
+				rename	(C-L)	(US_est_pop#), addnumber 
+				rename	(US_est_pop#)	(US_est_pop#), renumber(2000)
+				
+				gen		B=1	//	temporary variable for reshape
+				reshape	long	US_est_pop, i(B) j(year)
+				drop	B
+				
+				tempfile	US_est_pop_2000_2009
+				save		`US_est_pop_2000_2009'
+				
+				*	2010-2019
+				import excel "${clouldfolder}\DataWork\Census\Annul Estimates of the Resident Population\nst-est2019-01.xlsx", sheet("NST01") clear
+				keep	D-M
+				rename	(D-M)	(US_est_pop#), addnumber 
+				rename	(US_est_pop#)	(US_est_pop#), renumber(2010)
+				keep	in	5
+				destring	*, replace
+				
+				gen		B=1	//	temporary variable for reshape
+				reshape	long	US_est_pop, i(B) j(year)
+				drop	B
+				
+				tempfile	US_est_pop_2010_2019
+				save		`US_est_pop_2010_2019'
+				
+				*	Append data
+				use		`US_est_pop_1979_1999',	clear
+				append	using	`US_est_pop_2000_2009'
+				append	using	`US_est_pop_2010_2019'
+				sort	year
+				
+				save	"${SNAP_dtInt}/US_population_estimates.dta", replace
+			
 			*	Household by type (gender of householder, family/non-family)
 			*	Family: 2 or more people related by marriage/birth/adoption/etc live together
 			*	Non-family: Single-person HH, or people unrelated live together.
 			import	excel	"${clouldfolder}/DataWork/Census/Historical Household Tables/hh1.xls", sheet(Table HH-1) firstrow	cellrange(A15:K61)	clear
-			
+			keep	
+					
 			rename	(A B C D F G I J K)	///
 					(year total_HH	total_family_HH married_HH family_oth_maleHH family_oth_femaleHH total_nonfamily_HH nonfamily_maleHH nonfamily_femaleHH)
 			drop	E H
@@ -2130,7 +2188,8 @@
 			save	"${SNAP_dtInt}/pov_rate_1979_2019.dta", replace
 		
 		*	Merge Census HH data
-		use	"${SNAP_dtInt}/HH_type_census.dta", clear
+		use	"${SNAP_dtInt}/US_population_estimates.dta", clear
+		merge	1:1	year	using	"${SNAP_dtInt}/HH_type_census.dta", nogen	assert(3)
 		merge	1:1	year	using	"${SNAP_dtInt}/HH_race_census.dta", nogen assert(3)
 		merge	1:1	year	using	"${SNAP_dtInt}/HH_age_census.dta", nogen assert(3)
 		merge	1:1	year	using	"${SNAP_dtInt}/HH_size_census.dta", nogen assert(3)
@@ -3322,7 +3381,7 @@
 			
 			*	Import census data
 			merge	m:1	year	using	"${SNAP_dtInt}/HH_census_1979_2019.dta", nogen keep(1 3) ///
-				keepusing(pct_rp_female_Census  pct_rp_nonWhite_Census HH_age_median_Census_int pct_HH_age_below_30_Census HH_size_avg_Census pct_col_Census pov_rate_national)
+				keepusing(pct_rp_female_Census  pct_rp_nonWhite_Census HH_age_median_Census_int pct_HH_age_below_30_Census HH_size_avg_Census pct_col_Census pov_rate_national	US_est_pop)
 			
 			*	Import state-wide monthly unemployment data
 			merge m:1 rp_state prev_yrmonth using "${SNAP_dtInt}/Unemployment Rate_state_month", nogen keep(1 3) keepusing(unemp_rate)
@@ -3350,7 +3409,10 @@
 			
 			*	Import income poverty line
 			merge	m:1	year famnum	using	"${SNAP_dtInt}/incomePL", nogen keep(1 3)
-						
+			
+			*	Import SNAP summary data
+			merge	m:1	year using	"${SNAP_dtInt}/SNAP_summary", nogen keep(1 3)
+			
 			*	Import	state and government ideology data
 			merge	m:1	year	rp_state	using	"${SNAP_dtInt}/citizen_government_ideology", /*gen(merge2)*/ nogen keep(1 3) keepusing(citi6016 inst6017_nom)
 			
@@ -3853,11 +3915,11 @@
 			lab	var	`var'	"Income below 200% PL at least once"
 			tab	`var'	if	year==2013	&	in_sample==1	//	counting only one obs per person. 99% of individuals fall into this category
 				
-			*	200%, 1997-2013
-			loc	var	income_ever_below_200_973
+			*	200%, 1997-2017
+			loc	var	income_ever_below_200_9713
 			cap	drop	`var'
 			bys	x11101ll:	egen	`var'	=	max(income_below_200)	if	inrange(year,1997,2013)
-			lab	var	`var'	"Income below 200% PL at least once (1997-2013)"
+			lab	var	`var'	"Income below 200% PL at least once (1997-2017)"
 			tab	`var'	if	year==2013	&	in_sample==1	//	counting only one obs per person. 65% individuals (7,819) fall into this category
 			
 			*	130%, entire study period
@@ -3867,11 +3929,11 @@
 			lab	var	`var'	"Income below 130% PL at least once"
 			tab	`var'	if	year==2013	&	in_sample==1	//	counting only one obs per person. 98.5% of the invidiuals (17,930) fall into this category
 			
-			*	130%, 1997-2013
+			*	130%, 1997-2017
 			loc	var	income_ever_below_130_9713
 			cap	drop	`var'
 			bys	x11101ll:	egen	`var'	=	max(income_below_130)	if	inrange(year,1997,2013)
-			lab	var	`var'	"Income below 130% PL at least once (1997-2013)"
+			lab	var	`var'	"Income below 130% PL at least once (1997-2017)"
 			tab	`var'	if	year==2013	&	in_sample==1	//	counting only one obs per person. 48% of the individuals (5,845) fall into this category
 		
 		*	Individuals whose family income was "consistently" below 130%/200%
@@ -3883,11 +3945,11 @@
 			lab	var	`var'	"Income always below 200% PL"
 			tab	`var'	if	year==2013	&	in_sample==1	//	counting only one obs per person. 9.5% of individuals (1700) fall into this category.
 			
-			*	200%, 1997-2013
+			*	200%, 1997-2017
 			loc	var	income_always_below_200_9713
 			cap	drop	`var'
 			bys	x11101ll:	egen	`var'	=	min(income_below_200)	if	inrange(year,1997,2013)	//	If individual's income is always below cutoff, then the minimum value would be 1. Otherwise, it would be 0.
-			lab	var	`var'	"Income always below 200% PL (1997-2013)"
+			lab	var	`var'	"Income always below 200% PL (1997-2017)"
 			tab	`var'	if	year==2013	&	in_sample==1	//	counting only one obs per person. 12% of individuals (1,468) fall into this category.
 			
 			*	130%, entire study period
@@ -3897,14 +3959,24 @@
 			lab	var	`var'	"Income always below 130% PL"
 			tab	`var'	if	year==1979	&	in_sample==1	//	counting only one obs per person. Only 4% (721) individuals fall into this category.
 		
-			*	130%, 1997-2013
+			*	130%, 1997-2017
 			loc	var	income_always_below_130_9713
 			cap	drop	`var'
 			bys	x11101ll:	egen	`var'	=	min(income_below_130)	if	inrange(year,1997,2013)	//	If individual's income is always below cutoff, then the minimum value would be 1. Otherwise, it would be 0.
-			lab	var	`var'	"Income always below 130% PL (1997-2013)"
+			lab	var	`var'	"Income always below 130% PL (1997-2017)"
 			tab	`var'	if	year==2013	&	in_sample==1	//	counting only one obs per person. 4.7% of individuals (574) fall into this category.
 		
 			
+		*	COLI (Cost of Living Index)	
+		*	Adjust TFP costs with COLI - grocery index
+		gen	TFP_monthly_cost_COLI		=	TFP_monthly_cost	*	(COLI_grocery/100)
+		lab	var	TFP_monthly_cost_COLI		"Monthly TFP cost (COLI adjusted)"
+		gen	foodexp_W_TFP_COLI			=	foodexp_W_TFP 		*	(COLI_grocery/100)
+		lab	var	foodexp_W_TFP_COLI			"Total Monthly TFP cost (COLI adjusted)"
+		gen	foodexp_W_TFP_pc_COLI		=	foodexp_W_TFP_pc	*	(COLI_grocery/100)
+		lab	var	foodexp_W_TFP_pc_COLI		"Total Monthly TFP cost per capita (COLI adjusted)"
+		gen	foodexp_W_TFP_pc_th_COLI	=	foodexp_W_TFP_pc_th	*	(COLI_grocery/100)
+		lab	var	foodexp_W_TFP_pc_th_COLI	"Total Monthly TFP cost per capita (K) (COLI adjusted)"
 		
 		*	Food stamp
 		
@@ -4725,7 +4797,7 @@
 		*	Create constant dollars of monetary variables  (ex. food exp, TFP)
 		*	Baseline CPI is 2019 Jan (100) 
 		qui	ds	fam_income_pc	FS_rec_amt	FS_rec_amt_capita foodexp_home_inclFS foodexp_home_exclFS  foodexp_out foodexp_deliv foodexp_tot_exclFS foodexp_tot_inclFS ///
-				TFP_monthly_cost foodexp_W_TFP foodexp_W_TFP_pc	foodexp_W_TFP_pc_th	///
+				TFP_monthly_cost foodexp_W_TFP foodexp_W_TFP_pc	foodexp_W_TFP_pc_th	TFP_monthly_cost_COLI foodexp_W_TFP_COLI foodexp_W_TFP_pc_COLI foodexp_W_TFP_pc_th_COLI	///
 				foodexp_tot_exclFS_pc foodexp_tot_inclFS_pc	foodexp_tot_exclFS_pc_? foodexp_tot_inclFS_pc_?
 		global	money_vars_current	`r(varlist)'
 		
