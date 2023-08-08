@@ -9,34 +9,47 @@
 		*	(2022-05-01) For now, we use IV to predict T(FS participation) and use it to predict W (food expenditure per capita) (previously I used it to predict PFS in the second stage)
 		use	"${SNAP_dtInt}/SNAP_const", clear
 		
-		
-		
+		*	Construct an indicator with balanced sample from 1997-2013
+			*	For dynamic treatment effect, each endogenous treatment should be instrumented, meaning I can use observations when IV is available (1997-2013)
+			*	If we aggregate PFS over 3 waves (PFS_t, PFS_t-2, PFS_t-4), we can have FSD variables over three waves (FSD_2001, ..., FSD_2013)
+		cap	drop	num_nomiss_9713	
+		cap	drop	balanced_9713
+		bys	x11101ll: egen num_nomiss_9713 = count(PFS_glm) if inrange(year,1997,2013)
+		gen	balanced_9713	=	1	if	inrange(year,1997,2013)	&	num_nomiss_9713	==	9	// should be 11 non-missing PFS over 1997-2017
+		lab	var	balanced_9713	"PFS balanced b/w 1997-2017"
+		drop	num_nomiss_9713
 		
 		*	Keep only observations where citizen ideology IV is available (1977-2015)
 		*	(2023-1-15) Maybe I shouldn't do it, because even if IV is available till 2015, we still use PFS in 2017 and 2019 (Iv regression automatically exclude 2017/2019, since there's no IV there.)
 		*keep	if	inrange(year,1977,2015) & !mi(citi6016)
 		
-		
+		*	Change variable label (will be imported into clean.do later)
+		lab	var	FS_rec_wth	"Received FS"
+		*lab	var	FSdummy	"Received FS"
+			
 		*	Outcome variables
 		summ	PFS_glm	PFS_FI_glm
 		summ	PFS_glm PFS_FI_glm	[aw=wgt_long_fam_adj]
-		summ	PFS_glm PFS_FI_glm	[aw=wgt_long_fam_adj] if income_below_200==1 
+		summ	PFS_glm PFS_FI_glm	[aw=wgt_long_fam_adj] if income_ever_below_200_9713==1 &	balanced_9713==1
+		
+		*	Uniq sample individuals
+		unique	x11101ll	if income_ever_below_200_9713==1 &	balanced_9713==1
 		
 		*	IV: Official SNAP index (unweighted and weighted)	
 		summ	SNAP_index_uw SNAP_index_w
 		summ	SNAP_index_uw SNAP_index_w	[aw=wgt_long_fam_adj]
-		summ	SNAP_index_uw SNAP_index_w	[aw=wgt_long_fam_adj] if income_below_200==1 
+		summ	SNAP_index_uw SNAP_index_w	[aw=wgt_long_fam_adj] if income_ever_below_200_9713==1 
 		
 		
-		summ	citi6016	[aw=wgt_long_fam_adj] if income_below_200==1 
+		summ	citi6016	[aw=wgt_long_fam_adj] if income_ever_below_200_9713==1 
 		
 		*	(Corrlation and bivariate regression of stamp redemption with state/govt ideology)
-		pwcorr	FS_rec_wth	citi6016 inst6017_nom 	if	in_sample==1 & inrange(year,1997,2015)  & income_below_200==1,	sig
+		pwcorr	FS_rec_wth	citi6016 inst6017_nom 	if	in_sample==1 & inrange(year,1997,2015)  & income_ever_below_200_9713==1,	sig
 		reg	FS_rec_wth	citi6016	[aw=wgt_long_fam_adj]	///
-					if	in_sample==1 & inrange(year,1977,2019)  & income_below_200==1,	///
+					if	in_sample==1 & inrange(year,1977,2019)  & income_ever_below_200_9713==1,	///
 					robust	cluster(x11101ll) 
 		reg	FS_rec_wth	inst6017_nom	[aw=wgt_long_fam_adj]	///
-					if	in_sample==1 & inrange(year,1977,2019)  & income_below_200==1,	///
+					if	in_sample==1 & inrange(year,1977,2019)  & income_ever_below_200_9713==1,	///
 					robust	cluster(x11101ll) 
 		
 		
@@ -54,7 +67,7 @@
 		global	macrovars		unemp_rate	CPI
 		global	regionvars		rp_state_enum2-rp_state_enum31 rp_state_enum33-rp_state_enum50 	//	Excluding NY (rp_state_enum32) and outside 48 states (1, 52, 53). The latter should be excluded when running regression
 		*global	timevars		year_enum4-year_enum11 year_enum14-year_enum30 //	Exclude year_enum3 (1978) as base category. year_enum12 (1990)  and year_enum13 (1991) are excluded due to lack of lagged data.
-		global	timevars		year_enum19-year_enum27	//	Using year_enum18 (1996) as a base year, when regressing with SNAP index IV (1996-2013)
+		global	timevars		year_enum19-year_enum26	//	Using year_enum18 (1996) as a base year, when regressing with SNAP index IV (1996-2013)
 		global	indvars			/*ind_female*/ age_ind ind_NoHS ind_somecol ind_col /* ind_employed_dummy*/
 		
 
@@ -229,14 +242,48 @@
 				*	(1) Use new PFS (which is estimated using new commands, with state, individual- and year-FE)
 				*	(2) Use new command (reghdfe, ivreghdfe) - generates same result.
 				*	(3) Always include state FE
-			*	(2022-7-28) Note: the last benchmark model (SSI as single IV to instrument amount of FS benefit) tested was including "${statevars}" and excluding "lagged PFS"
+			*	(2023-7-28) Note: the last benchmark model (SSI as single IV to instrument amount of FS benefit) tested was including "${statevars}" and excluding "lagged PFS"
+			*	(2023-8-01) Drop state-FE based on Nico's suggestion.
 			
-			global	FSD_on_FS_X		/*${statevars}*/	${demovars} ${econvars}	${healthvars}	${empvars}	${familyvars}	${eduvars} ${regionvars}		//	${indvars}		${macrovars} 
+			global	FSD_on_FS_X		/*${statevars}*/	${demovars} ${econvars}	${healthvars}	${empvars}	${familyvars}	${eduvars}	${indvars}	//	 ${regionvars}	${macrovars} 
 			global	PFS_est_1st
 			global	PFS_est_2nd
 			global	PFS_est_1st
 			global	PFS_est_2nd	//	This one includes OLS as well.
 			
+		*	Construct lagged treatment variables and controls (Will be later imported to "clean.do" file.)
+		
+			*	Treatment
+			cap	drop	l2_FSdummy
+			cap	drop	l4_FSdummy
+			gen	l2_FSdummy	=	l2.FSdummy
+			gen	l4_FSdummy	=	l4.FSdummy
+			lab	var	l2_FSdummy	"Received SNAP in t-2"
+			lab	var	l4_FSdummy	"Received SNAP in t-4"
+			
+			*	Controls
+			*	Reset macros		
+			global	FSD_on_FS_X_l4l2	//	Controls in l2 and l4
+			global	FSD_on_FS_X_l2		//	Controls in l2
+			global	FSD_on_FS_X_l4		//	Controls in l4
+			
+			foreach	var	of	global	FSD_on_FS_X	{
+				
+				cap	drop	l2_`var'
+				cap	drop	l4_`var'
+				
+				gen		l2_`var'	=	l2.`var'
+				gen		l4_`var'	=	l4.`var'
+				
+				global	FSD_on_FS_X_l4l2	${FSD_on_FS_X_l2l4}	l2_`var'	l4_`var'
+				global	FSD_on_FS_X_l2		${FSD_on_FS_X_l2}	l2_`var'
+				global	FSD_on_FS_X_l4		${FSD_on_FS_X_l4}	l4_`var'
+			}
+			
+			di "${FSD_on_FS_X_l4l2}"
+			di "${FSD_on_FS_X_l2}"
+			di "${FSD_on_FS_X_l4}"			
+				
 			
 			*	Unweighted Policy index
 				
@@ -248,10 +295,11 @@
 	
 			
 				*	First we run main IV regression including all FE, to use the uniform sample across different FE/specifications
-				*	
+				*	Sample restricted to (i) Income always below 200% through 97
 					cap	drop reg_sample	
-					ivreghdfe	`depvar'	 ${FSD_on_FS_X}	 ${timevars}	(`endovar' = `IV')	[aw=wgt_long_fam_adj] if	income_below_200==1 &	inrange(year,1996,2013)	&	!mi(`IV'),	///
-						absorb(x11101ll	/*ib1996.year*/)  robust	cluster(x11101ll) first  savefirst savefprefix(`IVname')	 
+					ivreghdfe	`depvar'	 ${FSD_on_FS_X}	 ${timevars}	(`endovar' = `IV')	[aw=wgt_long_fam_adj] ///
+						if	income_ever_below_200_9713==1 &	balanced_9713==1	&	!mi(`IV'),	///
+						absorb(x11101ll	/*ib1996.year*/)  robust	cluster(x11101ll) //first  savefirst savefprefix(`IVname')	 
 					gen	reg_sample=1 if e(sample)
 					lab	var	reg_sample "Sample in IV regression"		
 					
@@ -304,7 +352,7 @@
 						
 					*	Output OLS results
 						esttab	nofe_ols	yfe_ols	 mund_ols	yife_ols	using "${SNAP_outRaw}/PFS_index_OLS_only.csv", ///
-						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2 Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(rp_state_enum*)	///
+						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2 Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
 						title(PFS on FS dummy)		replace	
 					
 				*	IV		
@@ -380,7 +428,7 @@
 												
 						*	1st stage
 						esttab	index_uw_Z_nofe_1st 	index_uw_Dhat_nofe_1st	index_uw_ZDhat_nofe_1st	using "${SNAP_outRaw}/PFS_index_IV_nofe_1st.csv", ///
-						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(rp_state_enum*)	///
+						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
 						title(PFS on FS dummy)		replace	
 													
 					
@@ -389,7 +437,7 @@
 													
 						*	SNAP index
 						esttab	nofe_ols	index_uw_Z_nofe_2nd 	index_uw_Dhat_nofe_2nd	index_uw_ZDhat_nofe_2nd	using "${SNAP_outRaw}/PFS_index_IV_nofe_2nd.csv", ///
-						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(rp_state_enum*)	///
+						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
 						title(PFS on FS dummy)		replace	
 						
 						/*
@@ -472,7 +520,7 @@
 										
 						*	1st stage
 						esttab	index_uw_Z_yfe_1st 	index_uw_Dhat_yfe_1st	index_uw_ZDhat_yfe_1st	using "${SNAP_outRaw}/PFS_index_IV_yfe_1st.csv", ///
-						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(rp_state_enum* year_enum*)	///
+						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/ year_enum*)	///
 						title(PFS on FS dummy)		replace	
 													
 					
@@ -481,15 +529,10 @@
 													
 						*	SNAP index
 						esttab	yfe_ols	index_uw_Z_yfe_2nd 	index_uw_Dhat_yfe_2nd	index_uw_ZDhat_yfe_2nd	using "${SNAP_outRaw}/PFS_index_IV_yfe_2nd.csv", ///
-						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(rp_state_enum* year_enum*)	///
+						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/ year_enum*)	///
 						title(PFS on FS dummy)		replace	
 						
-						/*
-						esttab	nofe_ols	index_uw_Z_nofe_2nd 	index_uw_Dhat_nofe_2nd	index_uw_ZDhat_nofe_2nd	using "${SNAP_outRaw}/PFS_index_IV_nofe_2nd.tex", ///
-						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(rp_state_enum*)	///
-						title(PFS on FS dummy)		replace	
-						*/		
-			
+				
 				
 				*	With Mundlak controls (which include year-FE) (Wooldridge 2019)
 				
@@ -564,7 +607,7 @@
 						
 						*	1st stage
 						esttab	index_uw_Z_mund_1st 	index_uw_Dhat_mund_1st	index_uw_ZDhat_mund_1st	using "${SNAP_outRaw}/PFS_index_IV_mund_1st.csv", ///
-						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(rp_state_enum* year_enum*)	///
+						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/ year_enum*)	///
 						title(PFS on FS dummy)		replace	
 													
 					
@@ -572,11 +615,15 @@
 													
 						*	SNAP index
 						esttab	mund_ols	index_uw_Z_mund_2nd 	index_uw_Dhat_mund_2nd	index_uw_ZDhat_mund_2nd	using "${SNAP_outRaw}/PFS_index_IV_mund_2nd.csv", ///
-						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(rp_state_enum* year_enum*)	///
+						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/ year_enum*)	///
 						title(PFS on FS dummy)		replace	
 				
 			
 				*	with year- and individual- FE
+				*	(2023-08-01) NOTE: It does not work with the latest sample (balanced individuals whose income is ever below 200% PL) due to unexpeded errors seems to be related with the perfect collinearity
+					*	(source: https://github.com/sergiocorreia/ivreghdfe/issues/24)
+				*	I will disable it for now.
+					*	When I manually run without displaying the first stage, the second stage effect goes crazy (0.55), so should be OK to ignore it.
 					
 					*	IV
 					loc	depvar		PFS_glm
@@ -586,8 +633,9 @@
 	
 						
 						*	OLS in the first stage (classic 2SLS)
-						ivreghdfe	PFS_glm	${FSD_on_FS_X}	${timevars}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	reg_sample==1, ///
-							absorb(x11101ll)		cluster (x11101ll)		first savefirst savefprefix(`IVname')
+						ivreghdfe	PFS_glm	${FSD_on_FS_X}	${timevars} 		(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	reg_sample==1, ///
+							absorb(x11101ll)		cluster (x11101ll)  		first  savefirst savefprefix(`IVname')
+							
 						est	store	`IVname'_yife_2nd
 						scalar	Fstat_CD_`IVname'	=	 e(cdf)
 						scalar	Fstat_KP_`IVname'	=	e(widstat)
@@ -652,7 +700,7 @@
 												
 						*	1st stage
 						esttab	index_uw_Z_yife_1st 	index_uw_Dhat_yife_1st	index_uw_ZDhat_yife_1st	using "${SNAP_outRaw}/PFS_index_IV_yife_1st.csv", ///
-						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(rp_state_enum* year_enum*)	///
+						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/ year_enum*)	///
 						title(PFS on FS dummy)		replace	
 													
 					
@@ -661,7 +709,7 @@
 													
 						*	SNAP index
 						esttab	yife_ols	index_uw_Z_yife_2nd 	index_uw_Dhat_yife_2nd	index_uw_ZDhat_yife_2nd	using "${SNAP_outRaw}/PFS_index_IV_yife_2nd.csv", ///
-						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(rp_state_enum* year_enum*)	///
+						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/ year_enum*)	///
 						title(PFS on FS dummy)		replace	
 						
 						/*
@@ -670,21 +718,21 @@
 						title(PFS on FS dummy)		replace	
 						*/		
 			
-					
+				
 					*	Output in the order I want
 					
 					*	1st stage (Z, Dhat, Z and Dhat)
 					esttab	index_uw_Z_nofe_1st	index_uw_Dhat_nofe_1st	index_uw_ZDhat_nofe_1st	index_uw_Z_yfe_1st	index_uw_Dhat_yfe_1st	index_uw_ZDhat_yfe_1st	///
 							index_uw_Z_mund_1st	index_uw_Dhat_mund_1st	index_uw_ZDhat_mund_1st	index_uw_Z_yife_1st	index_uw_Dhat_yife_1st	index_uw_ZDhat_yife_1st			///
 						using "${SNAP_outRaw}/PFS_index_uw_1st.csv", ///
-						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(rp_state_enum* year_enum*)	///
+						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/ year_enum*)	///
 						title(PFS on FS dummy)		replace	
 				
 					*	2nd stage (Z, Dhat, Z and Dhat)
 					esttab	index_uw_Z_nofe_2nd	index_uw_Dhat_nofe_2nd	index_uw_ZDhat_nofe_2nd	index_uw_Z_yfe_2nd	index_uw_Dhat_yfe_2nd	index_uw_ZDhat_yfe_2nd	///
 							index_uw_Z_mund_2nd	index_uw_Dhat_mund_2nd	index_uw_ZDhat_mund_2nd	index_uw_Z_yife_2nd	index_uw_Dhat_yife_2nd	index_uw_ZDhat_yife_2nd			///
 						using "${SNAP_outRaw}/PFS_index_uw_2nd.csv", ///
-						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2 Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(rp_state_enum* year_enum*)	///
+						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2 Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/ year_enum*)	///
 						title(PFS on FS dummy)		replace	
 				
 				
@@ -702,8 +750,8 @@
 			
 				*	First we run main IV regression including all FE, to use the uniform sample across different FE/specifications
 					cap	drop reg_sample	
-					ivreghdfe	`depvar'	 ${FSD_on_FS_X}	${timevars}	 (`endovar' = `IV')	[aw=wgt_long_fam_adj] if	income_below_200==1 &	inrange(year,1996,2013)	&	!mi(`IV'),	///
-						absorb(x11101ll	/*ib1997.year*/) robust	cluster(x11101ll) first  savefirst savefprefix(`IVname')	 
+					ivreghdfe	`depvar'	 ${FSD_on_FS_X}	${timevars}	 (`endovar' = `IV')	[aw=wgt_long_fam_adj] if	income_ever_below_200_9713==1 &	balanced_9713==1	&	!mi(`IV'),	///
+						absorb(x11101ll	/*ib1997.year*/) robust	cluster(x11101ll) //	first  savefirst savefprefix(`IVname')	 
 					gen	reg_sample=1 if e(sample)
 					lab	var	reg_sample "Sample in IV regression"		
 					
@@ -760,7 +808,7 @@
 						
 					*	Output OLS results
 						esttab	nofe_ols	yfe_ols	 mund_ols	yife_ols	using "${SNAP_outRaw}/PFS_index_OLS_only.csv", ///
-						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2 Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(rp_state_enum*)	///
+						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2 Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
 						title(PFS on FS dummy)		replace	
 					
 			
@@ -839,7 +887,7 @@
 												
 						*	1st stage
 						esttab	index_w_Z_nofe_1st 	index_w_Dhat_nofe_1st	index_w_ZDhat_nofe_1st	using "${SNAP_outRaw}/PFS_index_w_nofe_1st.csv", ///
-						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(rp_state_enum*)	///
+						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
 						title(PFS on FS dummy)		replace	
 													
 					
@@ -848,7 +896,7 @@
 													
 						*	SNAP index
 						esttab	yfe_ols	index_w_Z_nofe_2nd 	index_w_Dhat_nofe_2nd	index_w_ZDhat_nofe_2nd	using "${SNAP_outRaw}/PFS_index_w_nofe_2nd.csv", ///
-						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(rp_state_enum*)	///
+						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
 						title(PFS on FS dummy)		replace	
 						
 						/*
@@ -933,7 +981,7 @@
 												
 						*	1st stage
 						esttab	index_w_Z_yfe_1st 	index_w_Dhat_yfe_1st	index_w_ZDhat_yfe_1st	using "${SNAP_outRaw}/PFS_index_w_yfe_1st.csv", ///
-						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(rp_state_enum* year_enum* )	///
+						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/ year_enum* )	///
 						title(PFS on FS dummy)		replace	
 													
 					
@@ -942,7 +990,7 @@
 													
 						*	SNAP index
 						esttab	nofe_ols	index_w_Z_yfe_2nd 	index_w_Dhat_yfe_2nd	index_w_ZDhat_yfe_2nd	using "${SNAP_outRaw}/PFS_index_w_yfe_2nd.csv", ///
-						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(rp_state_enum* year_enum* )	///
+						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/ year_enum* )	///
 						title(PFS on FS dummy)		replace	
 						
 						/*
@@ -1116,7 +1164,7 @@
 												
 						*	1st stage
 						esttab	index_w_Z_mund_1st 	index_w_Dhat_mund_1st	index_w_ZDhat_mund_1st	using "${SNAP_outRaw}/PFS_index_w_mund_1st.csv", ///
-						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(rp_state_enum* year_enum*)	///
+						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/ year_enum*)	///
 						title(PFS on FS dummy)		replace	
 													
 					
@@ -1125,14 +1173,15 @@
 													
 						*	SNAP index
 						esttab	mund_ols	index_w_Z_mund_2nd 	index_w_Dhat_mund_2nd	index_w_ZDhat_mund_2nd	using "${SNAP_outRaw}/PFS_index_w_mund_2nd.csv", ///
-						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(rp_state_enum* year_enum* )	///
+						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/ year_enum* )	///
 						title(PFS on FS dummy)		replace	
 						
 						
 						
 			
 				*	with year- and individual- FE
-					
+				*	(2023-08-01) Since it did not work with the latest regression sample (ever below 200% PL, balanced 1997-2017) using unweighted index, I disable this part as well.
+				
 					*	IV
 					loc	depvar		PFS_glm
 					loc	endovar		FSdummy	//	FSamt_capita
@@ -1207,7 +1256,7 @@
 												
 						*	1st stage
 						esttab	index_w_Z_yife_1st 	index_w_Dhat_yife_1st	index_w_ZDhat_yife_1st	using "${SNAP_outRaw}/PFS_index_w_yife_1st.csv", ///
-						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(rp_state_enum* year_enum* )	///
+						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/ year_enum* )	///
 						title(PFS on FS dummy)		replace	
 													
 					
@@ -1216,7 +1265,7 @@
 													
 						*	SNAP index
 						esttab	yife_ols	index_w_Z_yife_2nd 	index_w_Dhat_yife_2nd	index_w_ZDhat_yife_2nd	using "${SNAP_outRaw}/PFS_index_w_yife_2nd.csv", ///
-						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(rp_state_enum* year_enum* )	///
+						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/ year_enum* )	///
 						title(PFS on FS dummy)		replace	
 						
 						/*
@@ -1232,14 +1281,14 @@
 					esttab	index_w_Z_nofe_1st	index_w_Dhat_nofe_1st	index_w_ZDhat_nofe_1st	index_w_Z_yfe_1st	index_w_Dhat_yfe_1st	index_w_ZDhat_yfe_1st	///
 							index_w_Z_mund_1st	index_w_Dhat_mund_1st	index_w_ZDhat_mund_1st	index_w_Z_yife_1st	index_w_Dhat_yife_1st	index_w_ZDhat_yife_1st			///
 						using "${SNAP_outRaw}/PFS_index_w_1st.csv", ///
-						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(rp_state_enum* year_enum*)	///
+						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/year_enum*)	///
 						title(PFS on FS dummy)		replace	
 				
 					*	2nd stage (Z, Dhat, Z and Dhat)
 					esttab	index_w_Z_nofe_2nd	index_w_Dhat_nofe_2nd	index_w_ZDhat_nofe_2nd	index_w_Z_yfe_2nd	index_w_Dhat_yfe_2nd	index_w_ZDhat_yfe_2nd	///
 							index_w_Z_mund_2nd	index_w_Dhat_mund_2nd	index_w_ZDhat_mund_2nd	index_w_Z_yife_2nd	index_w_Dhat_yife_2nd	index_w_ZDhat_yife_2nd			///
 						using "${SNAP_outRaw}/PFS_index_w_2nd.csv", ///
-						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2 Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(rp_state_enum* year_enum*)	///
+						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2 Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/ year_enum*)	///
 						title(PFS on FS dummy)		replace	
 				
 				
@@ -1378,7 +1427,149 @@
 								
 
 			*	Regressing FSD on predicted FS, using the model we find above
-								
+				
+				*	Benchmark regression; just change the outcome
+				*	IV specification used: SNAP weighted policy index, both Dhat and Z, Mundlak controls.
+
+					*	MLE in the first stage
+					*	We first construct fitted value of the endogenous variable from the first stage, to be used as an IV
+					loc	IV		SNAP_index_w
+					cap	drop	FSdummy_hat
+					logit	FSdummy	`IV'	${FSD_on_FS_X}	${timevars}	${Mundlak_vars} [pw=wgt_long_fam_adj] if	reg_sample==1, vce(cluster x11101ll) 
+					predict	FSdummy_hat
+					lab	var	FSdummy_hat	"Predicted SNAP participation"
+				
+					*	Generate lagged FSdummy_hat
+					cap	drop	l2_FSdummy_hat
+					cap	drop	l4_FSdummy_hat
+					gen	l2_FSdummy_hat=l2.FSdummy_hat
+					gen	l4_FSdummy_hat=l4.FSdummy_hat
+					lab	var	l2_FSdummy_hat	"Predicted SNAP participation (t-2)"
+					lab	var	l4_FSdummy_hat	"Predicted SNAP participation (t-4)"
+					
+					*	Generate lagged instrument
+					cap	drop	l2_SNAP_index_w
+					cap	drop	l4_SNAP_index_w
+					gen		l2_SNAP_index_w=l2.SNAP_index_w
+					gen		l4_SNAP_index_w=l4.SNAP_index_w
+					lab	var	l2_SNAP_index_w	"Weighted SNAP policy index (t-2)"
+					lab	var	l4_SNAP_index_w	"Weighted SNAP policy index (t-4)"
+					
+					
+					
+					*	IVregress
+					cap	drop	TFI0
+					cap	drop	CFI0
+					clonevar	TFI0	=	TFI_HCR
+					clonevar	CFI0	=	CFI_HCR
+					local	FSD	CFI0
+					
+					*	(i) RHS: treatment and controls at l4 only (FSD_t = a0 + a1*FS_t-4 + a2*X_t-4 + ...)
+						*	Since Mundlak in individual-level average over time, we don't need lag.
+					loc	depvar		`FSD'
+					loc	endovar		l4_FSdummy	//	SNAP in t-4
+					loc	IV			l4_SNAP_index_w	l4_FSdummy_hat		//	Z and Dhat in t-4
+					loc	IVname		l4
+				
+					
+					ivreghdfe	`depvar'	${FSD_on_FS_X_l4}	${timevars}	${Mundlak_vars} (`endovar' = `IV')	[aw=wgt_long_fam_adj] if	reg_sample==1, ///
+						/*absorb(x11101ll)*/	cluster (x11101ll)	first savefirst savefprefix(`IVname')	  partial(*_bar)
+					
+					est	store	`depvar'_`IVname'_2nd
+					scalar	Fstat_CD_`IVname'	=	e(cdf)
+					scalar	Fstat_KP_`IVname'	=	e(widstat)
+					estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
+					estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
+					est	store	`depvar'_`IVname'_2nd
+			
+					est	restore	`IVname'`endovar'
+					estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
+					estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
+					est	store	`depvar'_`IVname'_1st
+					est	drop	`IVname'`endovar'
+					
+		
+					*	(ii) RHS: treatment and controls at all periods. (t-4, t-2, t)
+					loc	depvar		`FSD'
+					loc	endovar		l4_FSdummy	l2_FSdummy	FSdummy	//	SNAP in t-4
+					loc	IV			l4_SNAP_index_w	l4_FSdummy_hat	l2_SNAP_index_w	l2_FSdummy_hat	SNAP_index_w	FSdummy_hat	//	Z and Dhat in t-4
+					loc	IVname		alllag
+					
+					ivreghdfe	`depvar'	${FSD_on_FS_X_l4l2}	${FSD_on_FS_X}	${timevars}	${Mundlak_vars} (`endovar' = `IV')	[aw=wgt_long_fam_adj] if	reg_sample==1, ///
+						/*absorb(x11101ll)*/	cluster (x11101ll)	first savefirst savefprefix(`IVname')	  partial(*_bar)
+					
+									
+					est	store	`depvar'_`IVname'_2nd
+					scalar	Fstat_CD_`IVname'	=	e(cdf)
+					scalar	Fstat_KP_`IVname'	=	e(widstat)
+					
+					estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname'
+					estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname'
+					est	store	`depvar'_`IVname'_2nd
+					
+					*	Retrieve first-stage F-stat for each endovar
+					*	Since there are multiple endogenous variable, we need to loop for each first-stage regression
+					loc	i=1	//	counter for retrieving weak IV stat
+					foreach	var	of	loc	endovar	{
+						
+						scalar	Fstat_SWF_`var'	=	e(first)[8,`i']
+						loc	i	=	`i'+1
+					}
+				
+					*	Save F-stat to each first-stage stored.		
+					*	NOTE: DO NOT combine the loop above (retireving F-stat) and the loop below (adding F-stat to stored estimate). It is because once estimate is restored, e(first) table will be gone.
+					foreach	var	of	loc	endovar	{
+						di	"endovar is `var'"
+						est	restore	`IVname'`var'
+						estadd	scalar	Fstat_SWF	=	Fstat_SWF_`var'
+						est	store	`depvar'_`IVname'`var'_1st
+						est	drop	`IVname'`var'
+					}
+				
+				
+				*	Export
+					
+					*	1st stage
+					esttab	`FSD'_l4_1st	`FSD'_alllagl4_FSdummy_1st	`FSD'_alllagl2_FSdummy_1st	`FSD'_alllagFSdummy_1st	///
+						using "${SNAP_outRaw}/`FSD'_1st.csv", ///
+						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2 Fstat_CD	Fstat_KP	Fstat_SWF, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/ year_enum*)	///
+						title(`FSD' on FS dummy)		replace	
+				
+					*	2nd stage (Z, Dhat, Z and Dhat)
+					esttab	`FSD'_l4_2nd	`FSD'_alllag_2nd	///
+						using "${SNAP_outRaw}/`FSD'_2nd.csv", ///
+						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2 Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/ year_enum*)	///
+						title(`FSD' on FS dummy)		replace	
+				
+				
+				
+				
+				
+				
+				
+				
+				
+				
+				
+				
+				
+				
+				
+				
+				
+				
+				
+				
+				
+				
+				
+				
+				
+				
+				
+				
+				
+				
 				*	Choose which endogeneous variable/IV to use
 				*	Make sure to turn on/off both variable and associated names.
 				global	endovar	FSdummy	//	participation dummy
