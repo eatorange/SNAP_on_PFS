@@ -1,7 +1,7 @@
 *	This do-file generates descriptive analyses for historical PFS data, from 1979 to 2019 (with some years missing)
 
 
- use	"${SNAP_dtInt}/SNAP_const", clear
+ use	"${SNAP_dtInt}/SNAP_long_PFS", clear
  
 	
 	*	Preamble
@@ -9,8 +9,35 @@
 		*	ssc install lgraph, replace
 		
 		*	Keep relevant study sample only
-		keep	if	!mi(PFS_glm)
+		keep	if	!mi(PFS_glm_noCOLI)
 		
+		*	Create a FI indicator using FSSS
+			
+			*	Treat marginally FS and FS
+			loc	var	FSSS_FI
+			cap	drop	`var'
+			gen		`var'=0	if	inrange(HFSM_cat,1,2)
+			replace	`var'=1	if	inrange(HFSM_cat,3,4)
+			lab	var	`var'	"Food insecure (FSSS)"
+			
+			*	Treat marginally FS and FI
+			loc	var	FSSS_FI_v2
+			cap	drop	`var'
+			gen		`var'=0	if	inrange(HFSM_cat,1,1)
+			replace	`var'=1	if	inrange(HFSM_cat,2,4)
+			lab	var	`var'	"Food insecure (FSSS) - ver2"
+		
+		
+
+		*	Construct spell length
+			**	IMPORANT NOTE: Since the PFS data has (1) gap period b/w 1988-1991 and (2) changed frequency since 1997, it is not clear how to define "spell"
+			**	Based on 2023-7-25 discussion, we decide to define spell as "the number of consecutive 'OBSERVATIONS' experiencing food insecurity", regardless of gap period and updated frequency
+				**	We can do robustness check with the updated spell (i) splitting pre-gap period and post-gap period, and (ii) Multiplying spell by 2 for post-1997
+				
+		cap drop	_seq	_spell	_end
+		tsspell, cond(year>=1979 & PFS_FI_glm_noCOLI==1)
+
+				
 		*	Additional cleaning
 		lab	var	fam_income_pc_real		"Annual family income per capita (Jan 2019 dollars)"
 		lab	var	foodexp_tot_exclFS_pc_real	"Monthly food expenditure per capita (Jan 2019 dollars)"
@@ -371,7 +398,16 @@
 	*************** Descriptive stats
 	use	"${SNAP_dtInt}/SNAP_descdta_1979_2019", clear
 	
-			
+		
+		*	(2023-08-08)
+		*	Fraction of ppl participating SNAP (1979-2019)
+		*	This fraction has nothing to do with our sample, as I use official # of SNAP ppl / population estimates
+		*	NOTE: This is NOT the official SNAP participation rate. I construct this number just to compare participation fraction in our sample and in totla U.S population
+		frame	put	year	part_num	US_est_pop, into(SNAP_rate)
+		frame	change	SNAP_rate
+		duplicates	drop
+		gen	frac_SNAP_person	=	(part_num*1000000)/US_est_pop
+		
 		*	Declare macros
 		*	Additional macros are added for summary stats
 		
@@ -532,10 +568,10 @@
 				*	Variablest to be collapsed
 				local	collapse_vars	foodexp_tot_exclFS_pc	foodexp_tot_inclFS_pc	foodexp_tot_exclFS_pc_real	foodexp_tot_inclFS_pc_real	foodexp_W_TFP_pc foodexp_W_TFP_pc_real	///	//	Food expenditure and TFP cost per capita (nominal and real)
 										rp_age	rp_age_below30 rp_age_over65	rp_female	rp_nonWhte	rp_HS	rp_somecol	rp_col	rp_disabled	famnum	FS_rec_wth	FS_rec_amt_capita	FS_rec_amt_capita_real	///	//	Gender, race, education, FS participation rate, FS amount
-										PFS_glm	NME	PFS_FI_glm	NME_below_1	//	Outcome variables	
+										PFS_glm	PFS_glm_noCOLI	NME	PFS_FI_glm	PFS_FI_glm_noCOLI	NME_below_1	FSSS_FI	FSSS_FI_v2	//	Outcome variables	
 				
 				*	All population
-					collapse (mean) `collapse_vars' [aw=wgt_long_fam_adj], by(year)
+					collapse (mean) `collapse_vars' [pw=wgt_long_fam_adj], by(year)
 					
 					lab	var	rp_female	"Female (RP)"
 					lab	var	rp_nonWhte	"Non-White (RP)"
@@ -563,6 +599,24 @@
 						
 			*	Import unemploymen rate (national)
 			merge	1:1	year	using	"${SNAP_dtInt}/Unemployment Rate_nation.dta", nogen assert(2 3) keep(3) // keep only study period.
+			
+			*	Manually plug in FI prevalence rate from the USDA report
+			loc	var	FSSS_FI_official
+			cap	drop	`var'
+			gen		`var'=.
+			replace	`var'=0.101	if	year==1999	// 1999: 10.1% are food insecure (7.1% are low food secure, 3.0% are very low food secure)
+			replace	`var'=0.107	if	year==2001	// 2001: 10.7% are food insecure (7.4% are low food secure, 3.3% are very low food secure)
+			replace	`var'=0.112	if	year==2003	// 2003: 11.2% are food insecure (7.7% are low food secure, 3.5% are very low food secure)
+			replace	`var'=0.110	if	year==2005	// 2005: 11.0% are food insecure (7.1% are low food secure, 3.9% are very low food secure)
+			replace	`var'=0.111	if	year==2007	// 2007: 11.1% are food insecure (7.0% are low food secure, 4.1% are very low food secure)
+			replace	`var'=0.147	if	year==2009	// 2009: 14.7% are food insecure (9.0% are low food secure, 5.7% are very low food secure)
+			replace	`var'=0.149	if	year==2011	// 2011: 14.9% are food insecure (9.2% are low food secure, 5.7% are very low food secure)
+			replace	`var'=0.143	if	year==2013	// 2013: 14.3% are food insecure (8.7% are low food secure, 5.6% are very low food secure)
+			replace	`var'=0.127	if	year==2015	// 2015: 12.7% are food insecure (7.7% are low food secure, 5.0% are very low food secure)
+			replace	`var'=0.118	if	year==2017	// 2017: 11.8% are food insecure (7.3% are low food secure, 4.5% are very low food secure)
+			replace	`var'=0.105	if	year==2019	// 2019: 10.5% are food insecure (6.6% are low food secure, 3.9% are very low food secure)
+			lab	var	`var'	"Official FI Prevalence"
+			
 			
 			sort	year
 			tempfile	annual_agg_all
@@ -683,17 +737,18 @@
 			graph	export	"${SNAP_outRaw}/FS_rate_amt_annual.png", replace	
 			graph	close	
 			
-		
 			
 			
-			*	PFS and NME dummies and dummy
-			graph	twoway	(line PFS_FI_glm	year, lpattern(dash_dot) xaxis(1 2) yaxis(1)  legend(label(1 "PFS < 0.5")))  ///
-							(line NME_below_1	year, /*lpattern(dash_dot)*/ xaxis(1 2) yaxis(1)  legend(label(2 "NME < 1"))),  ///
+			*	PFS and FSSS dummies with unemployment rate
+			graph	twoway	(line PFS_FI_glm_noCOLI	year, lpattern(dash_dot) xaxis(1 2) yaxis(1)  legend(label(1 "PFS < 0.5")))  ///
+							(line FSSS_FI_official	year, /*lpattern(dash_dot)*/ xaxis(1 2) yaxis(1)  legend(label(2 "By FSSS")))  ///
+							(line unemp_rate	year, lpattern(dot) xaxis(1 2) yaxis(2)  legend(label(3 "Unemployment Rate (%)"))),  ///
 							xline(1987 1992 2007, axis(1) lcolor(black) lpattern(solid))	///
 							xline(1989 1990, lwidth(10) lc(gs12)) xlabel(1980(10)2010 2007)  ///
+							/*xline(2007 2009, lwidth(28) lc(gs12)) xlabel(1980(10)2010 2007)*/  ///
 							xtitle(Year)	xtitle("", axis(2))	ytitle("Scale", axis(1)) 		///
-							title(PFS and NME Dummies)	bgcolor(white)	graphregion(color(white)) /*note(Source: USDA & BLS)*/	name(PFS_NME_annual, replace)
-			graph	export	"${SNAP_outRaw}/PFS_NME_dummies_annual.png", replace	
+							title(Food Insecurity with Unemployment Rate)	bgcolor(white)	graphregion(color(white)) /*note(Source: USDA & BLS)*/	name(PFS_FSSS_annual, replace)
+			graph	export	"${SNAP_outRaw}/PFS_FSSS_official_dummies_annual.png", replace	
 			graph	close	
 				
 			*graph	export	"${SNAP_outRaw}/foodexp_FSamt_byyear.png", replace
@@ -748,6 +803,8 @@
 				*	Due to the lack of data and change in survey frequency, the following year do not have the full 3 observations over 5-year reference period
 					*	1977, 1978, 1984-1987, 1994, 1996, 2017, 2019
 				*	We tag the years where full dynamics variable can be constructed
+				*	(2023-08-03) I no longer consider it, based on the discussion at the AAEA 2023
+				/*
 				loc	var	dyn_sample_5yr
 				cap	drop	`var'
 				gen		`var'=0	if	inlist(year,1977,1978,1984,1985,1986,1987,1994,1996,2017,2019)
@@ -757,11 +814,15 @@
 				replace	`var'=0	if	(mi(PFS_glm) | mi(f2.PFS_glm) | mi(f4.PFS_glm))
 				*	Missing if PFS is missing
 				replace	`var'=.	if	mi(PFS_glm)
+				*/
 				
 				*	Spell length (# of consecutive years experiencing FI)
 					
+					lgraph	
+					
+					
 					*	Overall
-					lgraph SL_5 year [aw=wgt_long_fam_adj] if PFS_FI_glm==1 & dyn_sample_5yr==1, separate(0.01)  ///
+					lgraph SL_5 year [aw=wgt_long_fam_adj] if PFS_FI_glm==1, separate(0.01)  ///
 					xline(1983 1992 2007, axis(1) lcolor(black) lpattern(solid))	///
 					xline(1987 1988, lwidth(23) lc(gs12)) xlabel(1980 1987 1992 2000 2007 2010)  ///
 					title(Spell length) ytitle(average length) note(spell length longer than 3 waves are capped at 3)
@@ -772,7 +833,7 @@
 					*	By gender
 					lab	define	rp_female	0	"Male"	1	"Female", replace
 					lab	val	rp_female	rp_female
-					lgraph SL_5 year rp_female [aw=wgt_long_fam_adj] if PFS_FI_glm==1 & dyn_sample_5yr==1, separate(0.01)  ///
+					lgraph SL_5 year rp_female [aw=wgt_long_fam_adj] if PFS_FI_glm==1, separate(0.01)  ///
 					xline(1983 1992 2007, axis(1) lcolor(black) lpattern(solid))	///
 					xline(1987 1988, lwidth(23) lc(gs12)) xlabel(1980 1987 1992 2000 2007 2010)  ///
 					title(Spell length by gender) ytitle(average length) note(spell length longer than 3 waves are capped at 3)
@@ -783,7 +844,7 @@
 					*	By race
 					lab	define	rp_nonWhte	0	"White"	1	"non-White", replace
 					lab	val	rp_nonWhte	rp_nonWhte
-					lgraph SL_5 year rp_nonWhte [aw=wgt_long_fam_adj] if PFS_FI_glm==1 & dyn_sample_5yr==1, separate(0.01)  ///
+					lgraph SL_5 year rp_nonWhte [aw=wgt_long_fam_adj] if PFS_FI_glm==1, separate(0.01)  ///
 					xline(1983 1992 2007, axis(1) lcolor(black) lpattern(solid))	///
 					xline(1987 1988, lwidth(23) lc(gs12)) xlabel(1980 1987 1992 2000 2007 2010)  ///
 					title(Spell length by race) ytitle(average length) note(spell length longer than 3 waves are capped at 3)
@@ -850,21 +911,55 @@
 		*	Regression
 		use	"${SNAP_dtInt}/SNAP_descdta_1979_2019", clear
 		
-		*	We do three different specifications; no FE at all, region and year FE, and region+year+indiv FE
-		*	We do three different outcomes: food expenditure, PFS and NME
-				local	outcome_foodexp	foodexp_tot_inclFS_pc_real
-				local	outcome_PFS		PFS_glm
-				local	outcome_NME		NME
+		lab	var	rp_married	"Married (RP)"
+		lab	var	rp_NoHS		"Less than HS (RP)"
+		lab	var	rp_HS		"High School (RP)"
+		lab	var	rp_somecol	"Some college (RP)"
+		lab	var	rp_col		"College (RP)"
+		lab	var	rp_employed	"Employed (RP)"
+		lab	var	rp_disabled	"Disabled (RP)"
 		
-			foreach	depvar	in	foodexp	PFS	NME	{
+		lab	var	age_ind		"Age (ind)"
+		lab	var	ind_NoHS	"Less than HS (ind)"
+		lab	var	ind_HS		"High School (ind)"
+		lab	var	ind_somecol	"Some college (ind)"
+		lab	var	ind_col		"College (ind)"
+		
+		*	We do three different outcomes: PFS, FSSS (re-scaled) and NME
+		lab	var	PFS_glm_noCOLI	"PFS (w/o COLI)"
+		lab	var	HFSM_scale		"FSSS (scaled)"
+		lab	var	NME				"Normalized Monetary Score"
+		*	For each variable, I will use two different verions; raw variable and standardized variable
+		
+			foreach	var	in		PFS_glm_noCOLI	HFSM_scale	NME	{
+			    
+				cap	drop	`var'_std
+				summ	`var'
+				gen	`var'_std	=	(`var'-r(mean))/r(sd)
+				
+				
+			}
+			
+		lab	var	PFS_glm_noCOLI_std	"PFS (w/o COLI) - standardized"
+		lab	var	HFSM_scale_std		"FSSS (scaled) - standardized"
+		lab	var	NME_std				"NME - standardized"
+		
+		*	We do three different specifications; year FE, year and state-FE, and region+year+indiv FE
+		loc	outcome_PFS		PFS_glm_noCOLI
+		loc	outcome_FSSS	HFSM_scale
+		loc	outcome_NME		NME
+		
+		global	indvars			/*ind_female*/ age_ind ind_NoHS ind_somecol ind_col /* ind_employed_dummy*/
+		
+			foreach	depvar	in	PFS	FSSS	NME	{
 			   
 				
-				*	No FE at all
+				*	Year FE
 					
 					*	OLS
-					reghdfe	`outcome_`depvar''	${statevars} ${demovars}	${eduvars} 	${empvars}	${healthvars}	${familyvars}	${econvars}		[pweight=wgt_long_fam_adj],	///
-						vce(cluster x11101ll) noabsorb
-					est	store	`depvar'_noFE_OLS
+					reghdfe	`outcome_`depvar''	/*${statevars}*/ ${demovars}	${eduvars} 	${empvars}	${healthvars}	${familyvars}	${econvars}	${indvars}	[pweight=wgt_long_fam_adj],	///
+						vce(cluster x11101ll) /*noabsorb*/	absorb(year)
+					est	store	`depvar'_yFE_OLS
 					
 					/*
 					*	Poisson quasi-MLE
@@ -883,9 +978,9 @@
 				*	State- and Year-FE
 					
 					*	OLS
-					reghdfe	`outcome_`depvar''	${statevars} ${demovars}	${eduvars} 	${empvars}	${healthvars}	${familyvars}	${econvars}		[pweight=wgt_long_fam_adj],	///
+					reghdfe	`outcome_`depvar''	/*${statevars}*/ ${demovars}	${eduvars} 	${empvars}	${healthvars}	${familyvars}	${econvars}	${indvars}			[pweight=wgt_long_fam_adj],	///
 						vce(cluster x11101ll)	absorb(rp_state year)
-						est	store	`depvar'_noindFE_OLS
+						est	store	`depvar'_ysFE_OLS
 					/*
 					*	MLE
 					qui	ppmlhdfe	`outcome_`depvar''	${statevars} ${demovars}	${eduvars} 	${empvars}	${healthvars}	${familyvars}	${econvars}		[pweight=wgt_long_fam_adj],	///
@@ -902,9 +997,9 @@
 				*	State-, Year- and Indiv-FE
 					
 					*	OLS
-					reghdfe	`outcome_`depvar''	${statevars} ${demovars}	${eduvars} 	${empvars}	${healthvars}	${familyvars}	${econvars}		[pweight=wgt_long_fam_adj],	///
+					reghdfe	`outcome_`depvar''	/*${statevars}*/ ${demovars}	${eduvars} 	${empvars}	${healthvars}	${familyvars}	${econvars}		${indvars}	[pweight=wgt_long_fam_adj],	///
 						vce(cluster x11101ll)	absorb(rp_state year x11101ll)
-						est	store	`depvar'_indFE_OLS
+						est	store	`depvar'_ysiFE_OLS
 					/*	
 					*	MLE
 					qui	ppmlhdfe	`outcome_`depvar''	${statevars} ${demovars}	${eduvars} 	${empvars}	${healthvars}	${familyvars}	${econvars}		[pweight=wgt_long_fam_adj],	///
@@ -924,7 +1019,7 @@
 					*	Regression coefficients
 						
 					*	OLS
-					esttab	`depvar'_noFE_OLS	`depvar'_noindFE_OLS		`depvar'_indFE_OLS	using "${SNAP_outRaw}/`depvar'_on_HH X_OLS.csv", ///
+					esttab	`depvar'_yFE_OLS	`depvar'_ysFE_OLS		`depvar'_ysiFE_OLS	using "${SNAP_outRaw}/`depvar'_on_HH X_OLS.csv", ///
 							cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
 							title(`depvar' on HH Characteristics)		replace	
 					/*
@@ -939,6 +1034,15 @@
 								title(`depvar' on HH Characteristics)		replace	
 								
 					*/
+			}
+			
+			*	Report output in an order I want
+			foreach	spec	in	yFE	ysFE	ysiFE	{
+			    
+				esttab	PFS_`spec'_OLS	FSSS_`spec'_OLS	NME_`spec'_OLS	using "${SNAP_outRaw}/outcomes_on_HH X_OLS_`spec'.csv", ///
+						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+						title(Food security indicators on HH Characteristics)		replace	
+				
 			}
 	
 	
