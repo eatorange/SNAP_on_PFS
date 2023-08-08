@@ -262,10 +262,18 @@
 			*gen beta1_foodexp_pc_glm	= e1_foodexp_sq_glm / mean1_foodexp_glm		//	scale parameter of Gamma (beta)
 			
 			*	Generate PFS by constructing CDF
-			global	TFP_threshold	foodexp_W_TFP_pc_real	/*IHS_TFP*/
-			gen PFS_glm = gammaptail(alpha1_foodexp_pc_glm, ${TFP_threshold}/beta1_foodexp_pc_glm)	//	gammaptail(a,(x-g)/b)=(1-gammap(a,(x-g)/b)) where g is location parameter (g=0 in this case)
-		
-			label	var	PFS_glm "PFS"
+			*	I create two versions - without COLI and with COLI.
+			
+				*	Without COLI adjustment (used for PFS descriptive paper)
+				global	TFP_threshold	foodexp_W_TFP_pc_real	/*IHS_TFP*/
+				gen PFS_glm_noCOLI = gammaptail(alpha1_foodexp_pc_glm, ${TFP_threshold}/beta1_foodexp_pc_glm)	//	gammaptail(a,(x-g)/b)=(1-gammap(a,(x-g)/b)) where g is location parameter (g=0 in this case)
+				label	var	PFS_glm_noCOLI "PFS (w/o COLI)"
+			
+				*	With COLI adjustment (main caufal inference)
+				global	TFP_threshold	foodexp_W_TFP_pc_COLI_real	/*IHS_TFP*/
+				gen PFS_glm	 = gammaptail(alpha1_foodexp_pc_glm, ${TFP_threshold}/beta1_foodexp_pc_glm)	//	gammaptail(a,(x-g)/b)=(1-gammap(a,(x-g)/b)) where g is location parameter (g=0 in this case)
+				label	var	PFS_glm "PFS"
+			
 			
 					
 			*	Normal (to show the robustness of the distributional assumption)
@@ -279,17 +287,22 @@
 		
 		*	Construct FI indicator based on PFS
 		*	For now we use threshold probability as 0.55, referred from Lee et al. (2021) where threshold varied from 0.55 to 0.6
-		loc	var	PFS_FI_glm
+		
+		loc	var	PFS_FI_glm	
 		cap	drop	`var'
 		gen		`var'=.
 		replace	`var'=0	if	!mi(PFS_glm)	&	!inrange(PFS_glm,0,0.5)
 		replace	`var'=1	if	!mi(PFS_glm)	&	inrange(PFS_glm,0,0.5)
+		lab	var	`var'	"HH is food insecure (PFS w/o COLI)"
+		
+		loc	var	PFS_FI_glm_noCOLI
+		cap	drop	`var'
+		gen		`var'=.
+		replace	`var'=0	if	!mi(PFS_glm_noCOLI)	&	!inrange(PFS_glm_noCOLI,0,0.5)
+		replace	`var'=1	if	!mi(PFS_glm_noCOLI)	&	inrange(PFS_glm_noCOLI,0,0.5)
 		lab	var	`var'	"HH is food insecure (PFS)"
-		
+
 		save    "${SNAP_dtInt}/SNAP_long_PFS",	replace
-		
-		
-		
 		
 		*	Regress PFS on characteristics
 		*	(2023-1-18) This one needs to be re-visited, considering what regression method we will use (svy prefix, weight, fixed effects, etc.)
@@ -297,7 +310,7 @@
 		
 			*	PFS, without region FE
 			local	depvar	PFS_glm
-			svy, subpop(if !mi(PFS_glm)):	///
+			svy, subpop(if !mi(`depvar')):	///
 				reg	`depvar'	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}
 			
 			reg	`depvar'	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars} [aweight=wgt_long_fam_adj]
@@ -314,7 +327,7 @@
 				reg	`depvar'	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	${foodvars}	${macrovars}					
 			est	store	PFS_FS_macro
 			
-		*	Food Security Indicators and Their Correlates (Table 4 of 2020/11/16 draft)
+		*	Food Security Indicators and Their Correlates
 			esttab	PFS_base	PFS_FS	PFS_FS_macro	using "${SNAP_outRaw}/Tab_3_PFS_association.csv", ///
 					cells(b(star fmt(3)) se(fmt(2) par)) stats(N_sub r2) label legend nobaselevels star(* 0.10 ** 0.05 *** 0.01)	/*drop(_cons)*/	///
 					title(Effect of Correlates on Food Security Status) replace
@@ -325,8 +338,6 @@
 					/*cells(b(nostar fmt(%8.3f)) & se(fmt(2) par)) stats(N_sub r2, fmt(%8.0fc %8.3fc)) incelldelimiter() label legend nobaselevels /*nostar star(* 0.10 ** 0.05 *** 0.01)*/	/*drop(_cons)*/	*/	///
 					title(Effect of Correlates on Food Security Status) replace
 		
-		
-
 	}
 	
 	/****************************************************************
@@ -346,20 +357,25 @@
 		*	Generate spell-related variables
 		cap drop	_seq	_spell	_end
 		tsspell, cond(year>=2 & PFS_FI_glm==1)
+		foreach	var	in	_seq	_spell	_end	{
+		    
+			replace	`var'=.	if	mi(PFS_FI_glm)
+			
+		}
 		
-		br	x11101ll	year	fam_income	incomePL		income_below_200	income_below_130	PFS_glm	PFS_FI_glm	_seq	_spell	_end
+		br	x11101ll	year	PFS_glm	PFS_FI_glm	_seq	_spell	_end
 		
 	
 		
 		
-		*	Before genering FSDs, generate the number of non-missing PFS values over the 5-year
+		*	Before genering FSDs, generate the number of non-missing PFS values over the 5-year (PFS_t, PFS_t-2, PFS_t-4)
 		*	It will vary from 0 to the full length of reference period (currently 3)
 		loc	var	num_nonmissing_PFS
 		cap	drop	`var'
 		gen	`var'=0
 		foreach time in 0 2 4	{
 			
-			replace	`var'	=	`var'+1	if	!mi(f`time'.PFS_glm)
+			replace	`var'	=	`var'+1	if	!mi(l`time'.PFS_glm)
 
 		}
 		lab	var	`var'	"# of non-missing PFS over 5 years"
@@ -369,21 +385,54 @@
 		*	Start with 5-year period (SL_5)
 		*	To utilize biennial data since 1997, I use observations in every two years
 			*	Many years lose observations due to data availability
+		*	(2023-08-01) I construct "backwardly", aggregating PFS_t, PFS_t-2, PFS_t-2. FSD = f(PFS_t, PFS_t-2, PFS_t-4)
+			*	Chris once mentioned that regression current redemption on future outcome may not make sense (Chris said something like that...)
+		*	(2023-08-02) I construct SL5 starting only from t-4. For instance, if individual is FS in t-4 but FI in t-2 and t, SL5=0
+		*	Need to think about how to deal with those cases
+		
 		loc	var	SL_5
 		cap	drop	`var'
 		gen		`var'=.
-		replace	`var'=0	if	!mi(PFS_FI_glm)
-		replace	`var'=1	if	PFS_FI_glm==1
+		replace	`var'=0	if	!mi(l4.PFS_FI_glm)	&	l4.PFS_FI_glm!=1	//	Food secure in t-4
+		replace	`var'=1	if	!mi(l4.PFS_FI_glm)	&	l4.PFS_FI_glm==1	//	Food secure in t-4
+		replace	`var'=2	if	l4.PFS_FI_glm==1	&	l2.PFS_FI_glm==1	//	Food insecure in t-4 AND t-2
+		replace	`var'=3	if	l4.PFS_FI_glm==1	&	l2.PFS_FI_glm==1	&	PFS_FI_glm==1	//	Food insecure in (t-4, t-2 AND t)
+		
+		/*	{	This code consideres FI in later periods. For example, if individual is FS in t-4 but FI in t-2 and t, SL5=2	
+			*	SL_5=1 if FI in any of the last 5 years (t, t-2 or t-4)
+		gen		`var'=.
+		replace	`var'=0	if	!mi(l4.PFS_FI_glm)	&	l4.PFS_FI_glm!=1	//	Food secure in t-4
+		replace	`var'=0	if	!mi(l2.PFS_FI_glm)	&	l2.PFS_FI_glm!=1	//	Food secure in t-2
+		replace	`var'=0	if	!mi(PFS_FI_glm)	&	PFS_FI_glm!=1			//	Food secure in t
+	
+		replace	`var'=1	if	!mi(l4.PFS_FI_glm)	&	l4.PFS_FI_glm==1	//	Food insecure in t-4
+		replace	`var'=1	if	!mi(l2.PFS_FI_glm)	&	l2.PFS_FI_glm==1	//	Food insecure in t-2
+		replace	`var'=1	if	!mi(PFS_FI_glm)	&	PFS_FI_glm==1			//	Food insecure in t
+	
+		*	SL_5=2	if	HH experience FI in "past" two consecutive rounds (t-4, t-2) or (t-2, t)
+		replace	`var'=2	if	l4.PFS_FI_glm==1	&	l2.PFS_FI_glm==1	//	Food insecure in t-4 AND t-2
+		replace	`var'=2	if	l2.PFS_FI_glm==1	&	PFS_FI_glm==1	//	Food insecure in t-2 AND t
+		
+		*	SL_5=3	if HH experience FI in "past" three consecutive rounds
+		replace	`var'=3	if	l4.PFS_FI_glm==1	&	l2.PFS_FI_glm==1	&	PFS_FI_glm==1	//	Food insecure in (t-4, t-2 AND t)
+		}	*/
+	
+		
+	
+		lab	var	`var'	"# of consecutive FI incidences over the past 5 years (0-3)"
+	
+		br	x11101ll	year	PFS_glm	PFS_FI_glm	_seq	_spell	_end SL_5
+		
+		/*
 		
 		*	SL_5=2	if	HH experience FI in two consecutive rounds
-		replace	`var'=2	if	PFS_FI_glm==1	&	f2.PFS_FI_glm==1	//	&	inrange(year,1997,1999)
+		replace	`var'=2	if	PFS_FI_glm==1	&	f2.PFS_FI_glm==1	//	Use "f2" to utilize the data with biennial frequency. For 1997 data, "f2" retrieves 1999 data.
 		
 		*	SL_5=3	if HH experience FI in three consecutive rounds
 		replace	`var'=3	if	PFS_FI_glm==1	&	f2.PFS_FI_glm==1	&	f4.PFS_FI_glm==1	
 		
 		lab	var	`var'	"# of consecutive FI incidences over the next 5 years (0-3)"
-		
-		/*
+	
 		*	SPL=4	if HH experience FI in four consecutive years
 		replace	`var'=4	if	PFS_FI_glm==1	&	f1.PFS_FI_glm==1	&	f2.PFS_FI_glm==1	&	f3.PFS_FI_glm==1	&	(inrange(year,1977,1984)	|	inrange(year,1990,1994))	//	For years with 4 consecutive years of observations available
 		*replace	`var'=4	if	PFS_FI_glm==1	&	f3.PFS_FI_glm==1	&	year==1987	//	If HH experienced FI in 1987 and 1990
@@ -400,22 +449,7 @@
 		
 	
 		
-			*	Construct SL_5 backwards, since regression current redemption on future outcome may not make sense (Chris said something like that...)
-			loc	var	SL_5_backward
-			cap	drop	`var'
-			gen		`var'=.
-			replace	`var'=0	if	!mi(PFS_FI_glm)
-			replace	`var'=1	if	PFS_FI_glm==1
 			
-			*	SL_5=2	if	HH experience FI in "past" two consecutive rounds
-			replace	`var'=2	if	PFS_FI_glm==1	&	l2.PFS_FI_glm==1	//	&	inrange(year,1997,1999)
-		
-			*	SL_5=3	if HH experience FI in "past" three consecutive rounds
-			replace	`var'=3	if	PFS_FI_glm==1	&	l2.PFS_FI_glm==1	&	l4.PFS_FI_glm==1	
-		
-			lab	var	`var'	"# of consecutive FI incidences over the past 5 years (0-3)"
-		
-			br	x11101ll	year	PFS_glm	PFS_FI_glm	_seq	_spell	_end SL_5	SL_5_backward
 		
 		*	Permanent approach (TFI and CFI)
 		
@@ -430,14 +464,15 @@
 			gen	PFS_glm_total		=	0
 			gen	PFS_FI_glm_total	=	0
 			
-			*	Add non-missing PFS of later periods, and add 0.5 to denominator 
+			*	Add non-missing PFS of later periods
 			foreach time in 0 2 4	{
 				
-				replace	PFS_glm_total		=	PFS_glm_total		+	f`time'.PFS_glm		if	!mi(f`time'.PFS_glm)
-				replace	PFS_FI_glm_total	=	PFS_FI_glm_total	+	f`time'.PFS_FI_glm	if	!mi(f`time'.PFS_FI_glm)
+				replace	PFS_glm_total		=	PFS_glm_total		+	l`time'.PFS_glm		if	!mi(l`time'.PFS_glm)
+				replace	PFS_FI_glm_total	=	PFS_FI_glm_total	+	l`time'.PFS_FI_glm	if	!mi(l`time'.PFS_FI_glm)
 				
 			}
 			
+			*	Replace aggregated value as missing, if all PFS values are missing over the 5-year period.
 			replace	PFS_glm_total=.		if	num_nonmissing_PFS==0
 			replace	PFS_FI_glm_total=.	if	num_nonmissing_PFS==0
 			
