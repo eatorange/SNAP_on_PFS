@@ -397,17 +397,47 @@
 		
 	*************** Descriptive stats
 	use	"${SNAP_dtInt}/SNAP_descdta_1979_2019", clear
-	
+	assert	!mi(PFS_glm_noCOLI)
 		
 		*	(2023-08-08)
 		*	Fraction of ppl participating SNAP (1979-2019)
 		*	This fraction has nothing to do with our sample, as I use official # of SNAP ppl / population estimates
 		*	NOTE: This is NOT the official SNAP participation rate. I construct this number just to compare participation fraction in our sample and in totla U.S population
-		frame	put	year	part_num	US_est_pop, into(SNAP_rate)
+		preserve
+			collapse	(mean)	SNAP_rate_sample=FS_rec_wth	[pw=wgt_long_fam_adj], by(year)
+			lab	var		SNAP_rate_sample	"SNAP participation rate in sample"
+			tempfile	SNAP_rate_sample
+			save		`SNAP_rate_sample'
+		restore
+		merge	m:1	year	using	`SNAP_rate_sample', assert(3) nogen
+		
+		cap	frame	change	default
+		cap	frame	drop	SNAP_rate
+		frame	put	year	part_num	US_est_pop	SNAP_rate_sample	pov_rate_national, into(SNAP_rate)
 		frame	change	SNAP_rate
 		duplicates	drop
-		gen	frac_SNAP_person	=	(part_num*1000000)/US_est_pop
+		isid	year
 		
+		loc	var	frac_SNAP_person
+		gen	`var'	=	(part_num*1000000)/US_est_pop
+		lab	var	`var'	"\% of ppl in US in SNAP"
+		replace	pov_rate_national	=	pov_rate_national/100
+		
+		
+		*	Graph
+		graph	twoway	(line SNAP_rate_sample 	year, lpattern(dash) xaxis(1) yaxis(1) legend(label(1 "SNAP - Sample")))	///
+						(line frac_SNAP_person	year, lpattern(dash_dot) xaxis(1) yaxis(1) legend(label(2 "SNAP - Census and USDA")))	///
+						(line pov_rate_national	year, lpattern(dot) xaxis(1 2) yaxis(1)  legend(label(3 "Poverty Rate"))),  ///
+						xline(1987 1992 2007, axis(1) lcolor(black) lpattern(dash))	///
+						xline(1989 1990, lwidth(10) lc(gs12)) xlabel(1980(10)2010 2007)  ///
+						xtitle(Year)	/*xtitle("", axis(1))*/	ytitle("Percent", axis(1)) ///
+						ytitle("Age", axis(1)) title(SNAP Participation and Poverty Rate)	bgcolor(white)	graphregion(color(white)) 	name(age_annual, replace)	///
+						note(Source: US Census and USDA.)
+		graph	export	"${SNAP_outRaw}/SNAP_rate_sample_Census_USDA.png", replace	
+		graph	close
+		
+			
+		frame	change	default
 		*	Declare macros
 		*	Additional macros are added for summary stats
 		
