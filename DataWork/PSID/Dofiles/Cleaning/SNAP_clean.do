@@ -2579,23 +2579,27 @@
 		}
 		
 		*	Temporary code observing the number of individuals with different family composition status
-		/*
-		preserve
-			drop *_1968	*_1969	*_1970	*_1971	*_1972	*_1973	*_1974	*_1975	*_1976
+		
+		local	status_chage_over_time=0	//	disable by default, but need it for in-text numbers
+		if		`status_chage_over_time'==1	{
+			preserve
+				drop *_1968	*_1969	*_1970	*_1971	*_1972	*_1973	*_1974	*_1975	*_1976
 
-			egen	count_seq_7719			=	anycount(xsqnr_1977-xsqnr_2019), values(1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20) //	# of waves an individual in HH (seq b/w 1 to 20)
-			egen	count_RP_7719			=	anycount(xsqnr_1977-xsqnr_2019), values(1)	//	# of waves an indivdiual being RP
-			egen	count_nochange_7719		=	anycount(change_famcomp1978-change_famcomp2019), values(0)	//	# of waves without any family comp change
-			egen	count_sameRP_7719		=	anycount(change_famcomp1978-change_famcomp2019), values(0,1,2) // # of waves with the same RP
-			
-			drop	if	count_seq_7719==0	//	Drop individuals that never appeared during the study period
-			
-			count	if	xsqnr_1977==1	//	# of ppl that are RP in 1977
-			tab	count_RP_7719	if	xsqnr_1977==1	//	# of waves an individual is RP over the study wave. only 11% of them are RP over the entire study period.
-			tab count_seq_7719	//	2,726 ppl appeared in all 32 waves (1977 to 2019)
-			count if count_seq_7719==count_sameRP_7719
-		restore
-		*/
+				egen	count_seq_7719			=	anycount(xsqnr_1977-xsqnr_2019), values(1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20) //	# of waves an individual in HH (seq b/w 1 to 20)
+				egen	count_RP_7719			=	anycount(xsqnr_1977-xsqnr_2019), values(1)	//	# of waves an indivdiual being RP
+				egen	count_nochange_7719		=	anycount(change_famcomp1978-change_famcomp2019), values(0)	//	# of waves without any family comp change
+				egen	count_sameRP_7719		=	anycount(change_famcomp1978-change_famcomp2019), values(0,1,2) // # of waves with the same RP
+				
+				drop	if	count_seq_7719==0	//	Drop individuals that never appeared during the study period
+				
+				count	if	xsqnr_1977==1	//	# of ppl that are RP in 1977
+				tab	count_RP_7719	if	xsqnr_1977==1, matcell(temp)	//	# of waves an individual is RP over the study wave. only 11% of them are RP over the entire study period.
+				scalar	share_rp_7719	=	temp[32,1] / r(N)
+				di	"Share of individuals being RP over 1977-2019 is" share_rp_7719
+				tab count_seq_7719	//	2,726 ppl appeared in all 32 waves (1977 to 2019)
+				count if count_seq_7719==count_sameRP_7719
+			restore
+		}
 		
 				
 		*	Drop years outside study sample	

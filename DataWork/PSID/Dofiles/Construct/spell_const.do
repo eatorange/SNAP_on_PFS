@@ -41,12 +41,7 @@ br	x11101ll	year	PFS_glm_noCOLI	PFS_FI_glm_noCOLI	_seq	_spell	_end
 	*	Scatterplot (x-axis: # of surveys. y-axis: # of SNAP redemption)
 	*	We do this by 2-step data collapse	
 		
-		
-			collapse	(count)	num_waves_in_sample=PFS_FI_glm_noCOLI	///	//	# of waves in sample
-						(sum)	total_SNAP_used=FS_rec_wth	///	# of SNAP redemption
-						(mean)	wgt_long_fam_adj_avg=wgt_long_fam_adj ///	//	weighted family wgt
-							if !mi(PFS_FI_glm_noCOLI), by(x11101ll)
-		
+	
 		*	First, collapse data to individual-level (should be unweighted)
 		preserve
 			collapse	(count)	num_waves_in_sample=PFS_FI_glm_noCOLI	///	//	# of waves in sample
@@ -152,7 +147,7 @@ br	x11101ll	year	PFS_glm_noCOLI	PFS_FI_glm_noCOLI	_seq	_spell	_end
 		svy, subpop(if _end==1): mean _seq
 		estat sd
 		mat	summstat_spell_length	=	e(N_sub), r(mean), r(sd)
-		mat	list	spell_lengh_summ
+		mat	list	summstat_spell_length
 
 		
 		*	By category (gender, race, education, region, disability)
@@ -238,8 +233,6 @@ br	x11101ll	year	PFS_glm_noCOLI	PFS_FI_glm_noCOLI	_seq	_spell	_end
 		
 	*preserve
 	
-	*	Summary table
-	
 	
 	*	Figures
 	
@@ -285,6 +278,173 @@ br	x11101ll	year	PFS_glm_noCOLI	PFS_FI_glm_noCOLI	_seq	_spell	_end
 			graph	close
 					
 	restore
+	
+	
+	*	 (2023-08-10) Transition matrix
+	
+		*	Generate FS variable (the opposite of FI)
+		foreach	var	in	glm	glm_noCOLI	{
+			
+			cap	drop	PFS_FS_`var'
+			clonevar	PFS_FS_`var'	=	PFS_FI_`var'
+			recode		PFS_FS_`var'	(1=0)	(0=1)
+			
+		}
+		
+		lab	var	PFS_FS_glm			"HH is food secure (PFS)"
+		lab	var	PFS_FS_glm_noCOLI	"HH is food secure (PFS w/o COLI)"
+		
+		*	Generate lagged PFS variable
+		foreach	var	in	PFS_FI_glm	PFS_FS_glm	PFS_FI_glm_noCOLI	PFS_FS_glm_noCOLI	{
+			
+			cap	drop	l1_`var'
+			local	label:	variable	label	`var'
+			di	"`label'"
+			gen	l1_`var'	=	l1.`var'
+			lab	var	l1_`var'	"Lagged `label'"
+			
+		}
+		*	Gender
+		
+		*	Declare macros for each categorical condition
+		local	female_cond	rp_female==1
+		local	male_cond	rp_female==0
+		
+		local	nonWhite_cond	rp_White==0
+		local	White_cond		rp_White==1
+		
+		local	NE_cond			rp_region_NE==1 
+		local	MidAt_cond		rp_region_MidAt==1
+		local	South_cond		rp_region_South==1
+		local	MidWest_cond	rp_region_MidWest==1
+		local	West_cond		rp_region_West==1
+		
+		local	NoHS_cond		rp_NoHS==1 
+		local	HS_cond			rp_HS==1
+		local	somecol_cond	rp_somecol==1 
+		local	col_cond		rp_col==1
+		
+		local	disab_cond		rp_disabled==1
+		local	nodisab_cond	rp_disabled==0
+		
+		local	SNAP_cond		FS_rec_wth==1
+		local	noSNAP_cond		FS_rec_wth==0
+		
+		lab	var	FS_rec_wth	"Received SNAP"
+		
+		loc	categories	female	male	nonWhite	White	NE	MidAt	South	MidWest	West	NoHS	HS	somecol	col	disab	nodisab	SNAP	noSNAP
+		
+		*	Loop over categories
+		*	NOTE: the joint tabulate command below generates the same relative frequency to the one using "svy:". I use this one for computation speed.
+		cap	mat	drop	trans_2by2_combined
+		mat	define	blankrow	=	J(1,7,.)
+		mat	rownames	blankrow	=	""
+		
+		foreach	cat	of	local	categories	{
+			
+		
+			*	Joint
+			tab		l1_PFS_FS_glm_noCOLI	PFS_FS_glm_noCOLI	[aw=wgt_long_fam_adj]		if	``cat'_cond', cell matcell(trans_2by2_joint_`cat')
+			scalar	samplesize_`cat'	=	trans_2by2_joint_`cat'[1,1] + trans_2by2_joint_`cat'[1,2] + trans_2by2_joint_`cat'[2,1] + trans_2by2_joint_`cat'[2,2]	//	calculate sample size by adding up all
+			mat trans_2by2_joint_`cat' = trans_2by2_joint_`cat'[1,1], trans_2by2_joint_`cat'[1,2], trans_2by2_joint_`cat'[2,1], trans_2by2_joint_`cat'[2,2]	//	Make it as a row matrix
+			mat trans_2by2_joint_`cat' = trans_2by2_joint_`cat'/samplesize_`cat'	//	Divide it by sample size to compute relative frequency
+			mat	list	trans_2by2_joint_`cat'	
+			
+			*	Marginal
+			tab		PFS_FS_glm_noCOLI	[aw=wgt_long_fam_adj]			if	l1_PFS_FS_glm_noCOLI==0	&	``cat'_cond', matcell(temp)	//	Previously FI
+			scalar	persistence_`cat'	=  temp[1,1] / (temp[1,1] + temp[2,1])	//	Persistence rate (FI, FI)
+			tab		PFS_FS_glm_noCOLI	[aw=wgt_long_fam_adj]			if	l1_PFS_FS_glm_noCOLI==1	&	``cat'_cond', matcell(temp)	//	Previously FS
+			scalar	entry_`cat'			=  temp[1,1] / (temp[1,1] + temp[2,1])	//	Persistence rate (FI, FI)
+				
+			*	Combined (Joint + marginal)
+			mat	trans_2by2_`cat'	=	samplesize_`cat',	trans_2by2_joint_`cat',	persistence_`cat',	entry_`cat'	
+			mat	rownames	trans_2by2_`cat'	=	"`cat'"
+			*	Acuumulate rows
+			
+			if	inlist("`cat'","female","nonWhite","NE","NoHS","disab","SNAP")	{
+				
+				mat		trans_2by2_combined	=	nullmat(trans_2by2_combined) \ 	blankrow	\	trans_2by2_`cat'	//	Add a blank row at the beginning of subcategory.
+				
+			}
+			else	{
+				
+				mat		trans_2by2_combined	=	nullmat(trans_2by2_combined) \ trans_2by2_`cat'	//	Add a blank row at the end of subcategory.
+				
+			}
+			
+		}
+		
+		mat	colnames	trans_2by2_combined	=	"N"	"Insecure in both rounds" "Insecure in 1st round only" "Insecure in 2nd round only" "Secure in both rounds" "Persistence" "Entry"
+		mat	list	trans_2by2_combined
+		
+		*	Export
+		putexcel	set "${SNAP_outRaw}/Trans_matrix_7919", sheet(Fig_3) replace /*modify*/
+		putexcel	A5	=	matrix(trans_2by2_combined), names overwritefmt nformat(number_d2)	//	3a
+		
+		/*	Equivalent, but takes longer time to run. I just leave it as a reference
+		svy, subpop(if rp_female==0):	tab	l1_PFS_FS_glm_noCOLI	PFS_FS_glm
+		mat	trans_2by2_joint_male = e(b)[1,1], e(b)[1,2], e(b)[1,3], e(b)[1,4]	
+		*/
+		
+			
+		
+			*	Race
+								
+			local	nonWhite_cond	rp_female==1
+			local	White_cond	rp_female==0
+			
+			*	Loop over categories
+			*	NOTE: the joint tabulate command below generates the same relative frequency to the one using "svy:". I use this one for computation speed.
+			foreach	cat	in	nonWhite	White	{
+					
+				*	Joint
+				tab		l1_PFS_FS_glm_noCOLI	PFS_FS_glm	[aw=wgt_long_fam_adj]		if	``cat'_cond', cell matcell(trans_2by2_joint_`cat')
+				scalar	samplesize_`cat'	=	trans_2by2_joint_`cat'[1,1] + trans_2by2_joint_`cat'[1,2] + trans_2by2_joint_`cat'[2,1] + trans_2by2_joint_`cat'[2,2]	//	calculate sample size by adding up all
+				mat trans_2by2_joint_`cat' = trans_2by2_joint_`cat'[1,1], trans_2by2_joint_`cat'[1,2], trans_2by2_joint_`cat'[2,1], trans_2by2_joint_`cat'[2,2]	//	Make it as a row matrix
+				mat trans_2by2_joint_`cat' = trans_2by2_joint_`cat'/samplesize_`cat'	//	Divide it by sample size to compute relative frequency
+				mat	list	trans_2by2_joint_`cat'	
+				
+				*	Marginal
+				tab		PFS_FS_glm_noCOLI	[aw=wgt_long_fam_adj]			if	l1_PFS_FS_glm_noCOLI==0	&	``cat'_cond', matcell(temp)	//	Previously FI
+				scalar	persistence_`cat'	=  temp[1,1] / (temp[1,1] + temp[2,1])	//	Persistence rate (FI, FI)
+				tab		PFS_FS_glm_noCOLI	[aw=wgt_long_fam_adj]			if	l1_PFS_FS_glm_noCOLI==1	&	``cat'_cond', matcell(temp)	//	Previously FS
+				scalar	entry_`cat'			=  temp[1,1] / (temp[1,1] + temp[2,1])	//	Persistence rate (FI, FI)
+					
+				*	Combined (Joint + marginal)
+				mat	trans_2by2_`cat'	=	samplesize_`cat',	trans_2by2_joint_`cat',	persistence_`cat',	entry_`cat'	
+			}
+				
+				mat	trans_2by2_gender	=	trans_2by2_male \ trans_2by2_female
+			/*	Equivalent, but takes longer time to run. I just leave it as a reference
+			svy, subpop(if rp_female==0):	tab	l1_PFS_FS_glm_noCOLI	PFS_FS_glm
+			mat	trans_2by2_joint_male = e(b)[1,1], e(b)[1,2], e(b)[1,3], e(b)[1,4]	
+			*/
+
+
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
 	
 	
 	
