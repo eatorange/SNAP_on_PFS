@@ -3703,7 +3703,7 @@
 			label	var		`var'	"=1 if Person Employed"
 			
 			
-			*	RP's education (family-level)
+			*	RP's employment (family-level)
 			*	Two different variables over time, and even single series changes variable over waves. Need to harmonize them.
 			loc	var	rp_employed
 			cap	drop	`var'
