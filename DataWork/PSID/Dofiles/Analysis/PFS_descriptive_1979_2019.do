@@ -1,64 +1,43 @@
-*	This do-file generates descriptive analyses for historical PFS data, from 1979 to 2019 (with some years missing)
+*	This do-file constructs spells and generates descriptive analyses for historical PFS data, from 1979 to 2019 (with some years missing)
 
 
- use	"${SNAP_dtInt}/SNAP_long_PFS", clear
- 
+	/****************************************************************
+		SECTION 1: Data prep		 									
+	****************************************************************/		 
 	
-	*	Preamble
+	use	"${SNAP_dtInt}/SNAP_long_PFS", clear
+ 
 
-		*	ssc install lgraph, replace
-		
-		*	Keep relevant study sample only
-		keep	if	!mi(PFS_glm_noCOLI)
-		
-		*	Create a FI indicator using FSSS
+	*	Keep relevant study sample only
+	keep	if	!mi(PFS_glm_noCOLI)
+	
+	
+	*	Construct spell length
+		**	IMPORANT NOTE: Since the PFS data has (1) gap period b/w 1988-1991 and (2) changed frequency since 1997, it is not clear how to define "spell"
+		**	Based on 2023-7-25 discussion, we decide to define spell as "the number of consecutive 'OBSERVATIONS' experiencing food insecurity", regardless of gap period and updated frequency
+			**	We can do robustness check with the updated spell (i) splitting pre-gap period and post-gap period, and (ii) Multiplying spell by 2 for post-1997		
+		cap drop	_seq	_spell	_end
+		tsspell, cond(year>=1979 & PFS_FI_glm_noCOLI==1)
+
+	*	Create additional indicators
+	
+		*	FI indicators using FSSS
 			
-			*	Treat marginally FS and FS
+			*	Treat marginally FS as FS
 			loc	var	FSSS_FI
 			cap	drop	`var'
 			gen		`var'=0	if	inrange(HFSM_cat,1,2)
 			replace	`var'=1	if	inrange(HFSM_cat,3,4)
 			lab	var	`var'	"Food insecure (FSSS)"
 			
-			*	Treat marginally FS and FI
+			*	Treat marginally FS as FI
 			loc	var	FSSS_FI_v2
 			cap	drop	`var'
 			gen		`var'=0	if	inrange(HFSM_cat,1,1)
 			replace	`var'=1	if	inrange(HFSM_cat,2,4)
 			lab	var	`var'	"Food insecure (FSSS) - ver2"
-		
-		
 
-		*	Construct spell length
-			**	IMPORANT NOTE: Since the PFS data has (1) gap period b/w 1988-1991 and (2) changed frequency since 1997, it is not clear how to define "spell"
-			**	Based on 2023-7-25 discussion, we decide to define spell as "the number of consecutive 'OBSERVATIONS' experiencing food insecurity", regardless of gap period and updated frequency
-				**	We can do robustness check with the updated spell (i) splitting pre-gap period and post-gap period, and (ii) Multiplying spell by 2 for post-1997
-				
-		cap drop	_seq	_spell	_end
-		tsspell, cond(year>=1979 & PFS_FI_glm_noCOLI==1)
-
-				
-		*	Additional cleaning
-		lab	var	fam_income_pc_real		"Annual family income per capita (Jan 2019 dollars)"
-		lab	var	foodexp_tot_exclFS_pc_real	"Monthly food expenditure per capita (Jan 2019 dollars)"
-		lab	var	FS_rec_amt_capita_real	"stamp amount received (Jan 2019 dollars)"
-		
-		*	Replace food stamp amount received with missing if didn't receive stamp (FS_rec_wth==0), for summary stats
-			*	There are only two obs with non-zero amount, so should be safe to clean.
-			*	This code can be integrated into "cleaning" part later (moved as of 2023/7/17)
-			*replace	FS_rec_amt_capita_real=.n	if	FS_rec_wth==0
-			*replace	FS_rec_amt_capita=.n	if	FS_rec_wth==0
-						
-		*	Label variables
-			lab	define	rp_female	0	"Male"	1	"Female", replace
-			lab	val	rp_female	rp_female
-			lab	define	rp_nonWhite	0	"White"	1	"Non-White", replace
-			lab	val	rp_nonWhte	rp_nonWhite
-			lab	define	rp_disabled	0	"NOT disabled"	1	"Disabled", replace
-			lab	val	rp_disabled	rp_disabled
-			
-		
-		*	Create individual-level variables
+		*	Create "unique" variable that has only one value for individual (need to generate individual-level summary stats)
 			
 			*	Gender
 			local	var	ind_female
@@ -115,6 +94,38 @@
 			label var	`var'		"\% of FS used throughouth the period"
 			label var	`var'_uniq	"\% of FS used throughouth the period"
 			
+	*	Re-scale annual income per capita
+		replace	fam_income_pc_real	=	fam_income_pc_real / 1000
+		lab	var	fam_income_pc_real		"Annual family income per capita (K) (Jan 2019 dollars)"
+	
+	*	Additional cleaning	
+		lab	var	foodexp_tot_exclFS_pc_real	"Monthly food expenditure per capita (Jan 2019 dollars)"
+		lab	var	FS_rec_amt_capita_real	"SNAP benefit amount (Jan 2019 dollars)"
+		lab	var	FS_rec_wth				"Received SNAP"
+		
+		*	Replace food stamp amount received with missing if didn't receive stamp (FS_rec_wth==0), for summary stats
+			*	There are only two obs with non-zero amount, so should be safe to clean.
+			*	This code can be integrated into "cleaning" part later (moved as of 2023/7/17)
+			*replace	FS_rec_amt_capita_real=.n	if	FS_rec_wth==0
+			*replace	FS_rec_amt_capita=.n	if	FS_rec_wth==0
+						
+		
+		
+		*	Label variables
+			lab	define	rp_female	0	"Male"	1	"Female", replace
+			lab	val	rp_female	rp_female
+			
+			lab	var	ind_female	"Female (ind)"
+			label	value	ind_female	rp_female
+			
+			lab	define	rp_nonWhite	0	"White"	1	"Non-White", replace
+			lab	val	rp_nonWhte	rp_nonWhite
+			
+			lab	define	rp_disabled	0	"NOT disabled"	1	"Disabled", replace
+			lab	val	rp_disabled	rp_disabled
+			
+			
+
 			/*
 			*	RP age group (to compare with the Census data)
 			*	(Moved to clean.do file as of 2023/7/17)
@@ -132,13 +143,14 @@
 				replace	`var'=1	if	inrange(rp_age,66,120)
 				lab	var	`var'	"RP age over 65"
 			*/
-				
+			
+			/*
 			*	4-year college degree
 			*	Current variable (rp_col) also set value to 1 if RP said "yes" to "do you have a college degree?" and has less than 16 years of education.
 			*	This could imply that community college degree (2-year) is also included, which might be the reason for sudden jump in 2009
 			*	So I create a separate variable recognizing 4-year college degree only
 			*	Disabled as of 2023/7/17, as we cannot distinguish whether people has 16-year education and college degree ans 2-year degree or 4-year degree.
-			/*
+			
 			loc	var	rp_col_4yr
 			cap	drop	`var'
 			gen		`var'=.
@@ -158,290 +170,32 @@
 		*	Save
 		save	"${SNAP_dtInt}/SNAP_descdta_1979_2019", replace	//	Inermediate descriptive data for 1979-2019
 
-	
-	*	Importing Census data for comparsion
-	*	Note: this section should be moved to the original "SNAP_clean.do" file later.
-	*	(2023-7-17) Moved to "clean.do" file, so disable it here.
-	/*
+
 		
-		*	Household by type (gender of householder, family/non-family)
-			*	Family: 2 or more people related by marriage/birth/adoption/etc live together
-			*	Non-family: Single-person HH, or people unrelated live together.
-			import	excel	"${clouldfolder}/DataWork/Census/Historical Household Tables/hh1.xls", sheet(Table HH-1) firstrow	cellrange(A15:K61)	clear
-			
-			rename	(A B C D F G I J K)	///
-					(year total_HH	total_family_HH married_HH family_oth_maleHH family_oth_femaleHH total_nonfamily_HH nonfamily_maleHH nonfamily_femaleHH)
-			drop	E H
-		
-			*	Use the revised record
-			*drop	if	year=="2021"
-			drop	if	year=="2011"
-			drop	if	year=="1993"
-			drop	if	year=="1988"
-			drop	if	year=="1984"
-			drop	if	year=="1980"
-			*replace	year="2021" if	year=="2021r"
-			replace	year="2014"	if	year=="2014s"
-			replace	year="2011" if	year=="2011r"
-			replace	year="2001"	if	year=="2001e"
-			replace	year="1993"	if	year=="1993r"
-			replace	year="1988"	if	year=="1988a"
-			replace	year="1984"	if	year=="1984b"
-			replace	year="1980"	if	year=="1980c"
-			destring	year, replace
-			
-			*	Label variables
-			lab	var	year				"Year"
-			lab	var	total_HH			"Total # of HH"
-			lab	var	total_family_HH		"Total # of family HH"
-			lab	var	married_HH			"Total # of married couples"
-			lab	var	family_oth_maleHH	"Total # of other family HH - male householder"
-			lab	var	family_oth_femaleHH	"Total # of other family HH - female householder"
-			lab	var	total_nonfamily_HH	"Total # of nonfamily HH"
-			lab	var	nonfamily_maleHH	"Total # of nonfamily HH - male householder"
-			lab	var	nonfamily_femaleHH	"Total # of nonfamily HH - female householder"
-			
-			*	Generate the share of female-headed HH
-			*	Note: In Census, "Married couple" does not say whether householder is male or female, so I cannot figure it out from the data
-			*	In this practice, I regard all married couple as male householder, to be consistent with the PSID policy that treats male partner as the reference person.
-			loc	var	pct_rp_female_Census
-			cap	drop	`var'
-			gen	`var'	=	(family_oth_femaleHH + nonfamily_femaleHH) / total_HH
-			lab	var	`var'	"\% of female-headed householder (RP) - Census"
-			
-			*	Save
-			save	"${SNAP_dtInt}/HH_type_census.dta", replace
-		
-		
-		*	HH by race
-		import	excel	"${clouldfolder}/DataWork/Census/Historical Household Tables/hh2.xls", sheet(Table HH-2) firstrow	cellrange(A14:H56)	clear
-		
-			*	According to the detailed 2022 data, race has the following categories: (1) White alone (2) Black alone (3) Asian alone (4) Any other single-race or combination of races
-			*	However, in this historical data, (4) is not available, and I cannot figure out how to impute it from historical data
-			*	Thus, I only keep the following variables (1) Total HH (2) White-alone (3) Black-alone.
-				*	Non-White is defined as "(1) - (2)"
-			keep A B C E
-			rename	(A B C E) (year total_HH White_HH Black_HH)
-			
-			*	Use revised record
-			drop	if	year=="2011"
-			
-			replace	year="2014"	if	year=="2014s"
-			replace	year="2011"	if	year=="2011r"
-			replace	year="1980"	if	year=="1980r"
-			destring	year, replace
-			
-			*	Variable label
-			lab	var	year	"Year"
-			lab	var	total_HH	"Total \# of HH"
-			lab	var	White_HH	"Total \# of White householder"
-			lab	var	Black_HH	"Total \# of Black householder"
-			
-			*	Generate percentage indicator
-			loc	var	pct_rp_White_Census
-			cap	drop	`var'
-			gen	`var'	=	(White_HH / total_HH)
-			lab	var	`var'	"\% of White householder (RP) - Census"
-			
-			loc	var	pct_rp_nonWhite_Census
-			cap	drop	`var'
-			gen	`var'	=	(total_HH - White_HH) / total_HH
-			lab	var	`var'	"\% of non-White householder (RP) - Census"
-			
-			*	Save
-			save	"${SNAP_dtInt}/HH_race_census.dta", replace
+	/****************************************************************
+		SECTION 2: Annual trend (including comparison with the census data)
+	****************************************************************/		 
 			
 		
-		*	Householder age
-		import	excel	"${clouldfolder}/DataWork/Census/Historical Household Tables/hh3.xls", sheet(Table HH-3) firstrow	cellrange(A14:K57)	clear
-		
-			rename	(A-K)	(year	total_HH	HH_age_below_25	HH_age_25_29	HH_age_30_34	HH_age_35_44	///
-								HH_age_45_54	HH_age_55_64	HH_age_65_74	HH_age_above_75	HH_age_median_Census)
-								
-			*	Keep revised record only
-			drop	if	year=="2011"
-			drop	if	year=="1993"
-			
-			replace	year="2014"	if	year=="2014s"
-			replace	year="2011"	if	year=="2011r"
-			replace	year="1993"	if	year=="1993r"
-			destring	year,	replace
-			
-			*	Variable label
-			lab	var	year	"Year"
-			lab	var	total_HH	"Total \# of HH"
-			lab	var	HH_age_below_25	"# of HH - householder age below 25"
-			lab	var	HH_age_25_29	"# of HH - householder age 25-29"
-			lab	var	HH_age_30_34	"# of HH - householder age 30-34"
-			lab	var	HH_age_35_44	"# of HH - householder age 35-44"
-			lab	var	HH_age_45_54	"# of HH - householder age 45-54"
-			lab	var	HH_age_55_64	"# of HH - householder age 55-64"
-			lab	var	HH_age_65_74	"# of HH - householder age 65-74"
-			lab	var	HH_age_above_75	"# of HH - householder age 65-74"
-			lab	var	HH_age_median_Census	"Median householder age"
-		
-		*	Generate additional variables
-		
-			*	Median age as intenger
-			gen	HH_age_median_Census_int	=	int(HH_age_median_Census)
-			
-			*	Householder age 30 or below
-			loc	var	HH_age_below_30_Census
-			cap	drop	`var'
-			egen	`var'	=	rowtotal(HH_age_below_25	HH_age_25_29)
-			lab	var	`var'	"# of HH - householder age below 30 - Census"
-			
-			loc	var	pct_HH_age_below_30_Census
-			cap	drop	`var'
-			gen	`var'	=	(HH_age_below_30_Census) / total_HH
-			lab	var	`var'	"\% of HH - householder age below 30 - Census"
-			
-			*	Save
-			save	"${SNAP_dtInt}/HH_age_census.dta", replace
-			
-	
-		*	HH size
-		import	excel	"${clouldfolder}/DataWork/Census/Historical Household Tables/hh4.xls", sheet(Table HH-4) firstrow	cellrange(A13:J56)	clear
-		
-			rename	(A B)	(year total_HH)
-			rename	(C-H)	HH_size_#, addnumber
-			rename	I		HH_size_7_above
-			rename	J		HH_size_avg_Census
-			
-			*	Keep modified record only
-			drop	if	year=="2011"
-			drop	if	year=="1993"
-			
-			replace	year="2014"	if	year=="2014s"
-			replace	year="2011"	if	year=="2011r"
-			replace	year="1993"	if	year=="1993r"
-			destring	year, replace
-			
-			*	Variable label
-			lab	var	year	"Year"
-			lab	var	total_HH	"Total \# of HH"
-			forval	i=1/6	{
-				lab	var	HH_size_`i'	"HH size: `i'"
-			}
-			lab	var	HH_size_7_above	"HH size: 7+"
-			lab	var	HH_size_avg_Census	"Average HH size: Census"
-			
-			*	Save
-			save	"${SNAP_dtInt}/HH_size_census.dta", replace
-			
-		*	Educational attainment (individual-level)
-		import	excel	"${clouldfolder}/DataWork/Census/CPS Historical Time Series Tables/taba-1.xlsx", sheet(hst_attain01) firstrow	cellrange(A10:H51)	clear
-		
-			rename	(A-H)	(year	tot_pop	elem_0to4	elem_5to8	HS_1to3	HS_4	col_1to3	col_4)
-			lab	var	year		"Year"
-			lab	var	tot_pop		"Population - 25+ years old (K)"
-			lab	var	elem_0to4	"Elementary school - 0 to 4 years (K)"
-			lab	var	elem_5to8	"Elementary school - 5 to 8 years (K)"
-			lab	var	HS_1to3		"High school - 1 to 3 years (K)"
-			lab	var	HS_4		"High school - 4 years (K)"
-			lab	var	col_1to3	"College - 1 to 3 years (K)"
-			lab	var	col_4		"College - 4 years (K)"
-			
-			*	Generate indicators
-			loc	var	pct_noHS_Census
-			cap	drop	`var'
-			gen	`var'	=	(elem_0to4 + elem_5to8 +	HS_1to3) / tot_pop
-			lab	var	`var'	"\% of population less than HS"
-			
-			loc	var	pct_HS_Census
-			cap	drop	`var'
-			gen	`var'	=	(HS_4) / tot_pop
-			lab	var	`var'	"\% of population HS"
-			
-			loc	var	pct_somecol_Census
-			cap	drop	`var'
-			gen	`var'	=	(col_1to3) / tot_pop
-			lab	var	`var'	"\% of population with 1-3 college years"
-			
-			loc	var	pct_col_Census
-			cap	drop	`var'
-			gen	`var'	=	(col_4) / tot_pop
-			lab	var	`var'	"\% of population with 4-year college"
-			
-			*	Save
-			save	"${SNAP_dtInt}/ind_education_CPS.dta", replace
-		
-		
-		*	Poverty status
-		import	excel	"${clouldfolder}/DataWork/Census/hstpov2.xlsx", sheet(pov02) firstrow	cellrange(A10:D53)	clear
-		
-			*	Keep modified record only
-			keep	A	D	
-			rename	(A	D)	(year	pov_rate_national)
-			
-			drop	if	year=="2013 (4)"
-			drop	if	year=="2017"
-			
-			replace	year=substr(year,1,4)
-			lab	var	year	"Year"
-			lab	var	pov_rate_national	"Poverty rate (national)"
-			destring	year, replace
-			
-			*	Save
-			save	"${SNAP_dtInt}/pov_rate_1979_2019.dta", replace
-		
-		*	Merge Census HH data
-		use	"${SNAP_dtInt}/HH_type_census.dta", clear
-		merge	1:1	year	using	"${SNAP_dtInt}/HH_race_census.dta", nogen assert(3)
-		merge	1:1	year	using	"${SNAP_dtInt}/HH_age_census.dta", nogen assert(3)
-		merge	1:1	year	using	"${SNAP_dtInt}/HH_size_census.dta", nogen assert(3)
-		merge	1:1	year	using	"${SNAP_dtInt}/ind_education_CPS.dta", nogen assert(3)
-		merge	1:1	year	using	"${SNAP_dtInt}/pov_rate_1979_2019.dta", nogen assert(3)
-		save	"${SNAP_dtInt}/HH_census_1979_2019.dta", replace
-		*/
-		
-	*************** Descriptive stats
 	use	"${SNAP_dtInt}/SNAP_descdta_1979_2019", clear
 	assert	!mi(PFS_glm_noCOLI)
 		
-		*	(2023-08-08)
-		*	Fraction of ppl participating SNAP (1979-2019)
-		*	This fraction has nothing to do with our sample, as I use official # of SNAP ppl / population estimates
-		*	NOTE: This is NOT the official SNAP participation rate. I construct this number just to compare participation fraction in our sample and in totla U.S population
-		preserve
-			collapse	(mean)	SNAP_rate_sample=FS_rec_wth	[pw=wgt_long_fam_adj], by(year)
-			lab	var		SNAP_rate_sample	"SNAP participation rate in sample"
-			tempfile	SNAP_rate_sample
-			save		`SNAP_rate_sample'
-		restore
-		merge	m:1	year	using	`SNAP_rate_sample', assert(3) nogen
-		
-		cap	frame	change	default
-		cap	frame	drop	SNAP_rate
-		frame	put	year	part_num	US_est_pop	SNAP_rate_sample	pov_rate_national, into(SNAP_rate)
-		frame	change	SNAP_rate
-		duplicates	drop
-		isid	year
-		
-		loc	var	frac_SNAP_person
-		gen	`var'	=	(part_num*1000000)/US_est_pop
-		lab	var	`var'	"\% of ppl in US in SNAP"
-		replace	pov_rate_national	=	pov_rate_national/100
-		
-		
-		*	Graph
-		graph	twoway	(line SNAP_rate_sample 	year, lpattern(dash) xaxis(1) yaxis(1) legend(label(1 "SNAP - Sample")))	///
-						(line frac_SNAP_person	year, lpattern(dash_dot) xaxis(1) yaxis(1) legend(label(2 "SNAP - Census and USDA")))	///
-						(line pov_rate_national	year, lpattern(dot) xaxis(1 2) yaxis(1)  legend(label(3 "Poverty Rate"))),  ///
-						xline(1987 1992 2007, axis(1) lcolor(black) lpattern(dash))	///
-						xline(1989 1990, lwidth(10) lc(gs12)) xlabel(1980(10)2010 2007)  ///
-						xtitle(Year)	/*xtitle("", axis(1))*/	ytitle("Percent", axis(1)) ///
-						ytitle("Age", axis(1)) title(SNAP Participation and Poverty Rate)	bgcolor(white)	graphregion(color(white)) 	name(age_annual, replace)	///
-						note(Source: US Census and USDA.)
-		graph	export	"${SNAP_outRaw}/SNAP_rate_sample_Census_USDA.png", replace	
-		graph	close
-		
+	*	Basic sample information
+		di	_N	// # of observations (non-missing PFS)
+		distinct	year	//	26 waves
 			
-		frame	change	default
-		*	Declare macros
+		*	Number of individuals
+			distinct	x11101ll	//	# of unique individuals in sample
+			distinct	x11101ll	if	baseline_indiv==1	//	# of baseline individuals
+			distinct	x11101ll	if	splitoff_indiv==1	//	# of splitoff individuals
+	
+	
+	
+	*	Summary stats, pooled
+
 		*	Additional macros are added for summary stats
 		
-		global	indvars			ind_female	num_waves_in_FU_uniq	FS_ever_used_uniq	total_FS_used_uniq	share_FS_used_uniq	baseline_indiv	splitoff_indiv	//	Individual-level variables
+		global	indvars			ind_female	baseline_indiv	splitoff_indiv	num_waves_in_FU_uniq	FS_ever_used_uniq	total_FS_used_uniq	share_FS_used_uniq	//	Individual-level variables
 		
 		*global	statevars		l2_foodexp_tot_inclFS_pc_1_real l2_foodexp_inclFS_pc_2_real_K
 		global	demovars		rp_age /*rp_age_sq*/	rp_female	rp_nonWhte	rp_married	
@@ -465,40 +219,304 @@
 		*	Set of macros used to generate summary stats
 		global	summvars_obs		${demovars}	${eduvars_all}	${empvars}	${healthvars}	${familyvars}	${regionvars}	${foodvars}	${econvars}	${foodamtvars}	${outcomevars}
 		
-	
-	
-	
-		*	We start with basic sample information
-			di	_N	// # of observations (non-missing PFS)
-			count if 	income_below_200==1			//	# of observations, with income below 200% PL
-			count if 	income_below_200==1		&	baseline_indiv==1	//	Baseline individual in sapmle
-			count if 	income_below_200==1		&	splitoff_indiv==1	//	Splitoff individual in sapmle
-				
-			*	Number of individuals
-				distinct	x11101ll	//	# of unique individuals in sample
-				distinct	x11101ll	if	baseline_indiv==1	//	# of baseline individuals
-				distinct	x11101ll	if	splitoff_indiv==1	//	# of splitoff individuals
-
-			*	Number of waves
-			distinct	year	//	26 waves
-			
 		
-		*	Summary stats, pooled
+		*	Individual-vars
+		estpost tabstat	${indvars}	[aw=wgt_long_fam_adj]	if	!mi(num_waves_in_FU_uniq),	statistics(count	mean	sd	min		/*median	p95*/	max) columns(statistics)		// save
+		est	store	sumstat_ind
+		*estpost tabstat	${indvars}	[aw=wgt_long_fam_adj]	if	!mi(num_waves_in_FU_uniq) & income_below_200==1,	statistics(count	mean	sd	min	median	p95	max) columns(statistics)		// save
+		*est	store	sumstat_ind_incbelow200
+		
+		*	Ind-year vars (observation level)
+		estpost tabstat	${summvars_obs}	[aw=wgt_long_fam_adj],	statistics(count	mean	sd	min	median	/*p95*/	max) columns(statistics)		// save
+		est	store	sumstat_indyear
+
+		
+		esttab	sumstat_ind	sumstat_indyear	using	"${SNAP_outRaw}/Sumstats_desc_7919.csv",  ///
+				cells("count(fmt(%12.0f)) mean(fmt(%12.2f)) sd(fmt(%12.2f)) min(fmt(%12.2f)) p50(fmt(%12.2f)) max(fmt(%12.2f))") label	title("Summary Statistics") noobs 	  replace
+		
+		
+		
+		*	Scatter plot of survey waves and SNAP frequency
+		
+		*	First, collapse data to individual-level (should be unweighted)
+		preserve
+			collapse	(count)	num_waves_in_sample=PFS_FI_glm_noCOLI	///	//	# of waves in sample
+						(sum)	total_SNAP_used=FS_rec_wth	///	# of SNAP redemption
+						(mean)	wgt_long_fam_adj_avg=wgt_long_fam_adj ///	//	weighted family wgt
+							if !mi(PFS_FI_glm_noCOLI), by(x11101ll)
+			lab	var	num_waves_in_sample	"# of waves in sample"
+			lab	var	total_SNAP_used		"# of SNAP participation in sample"
+			lab	var	wgt_long_fam_adj_avg	"Avg longitudinal family wgt - adjusted"
 			
-			*	Individual-vars
-			estpost tabstat	${indvars}	[aw=wgt_long_fam_adj]	if	!mi(num_waves_in_FU_uniq),	statistics(count	mean	sd	min	median	/*p95*/	max) columns(statistics)		// save
-			est	store	sumstat_ind_all
-			*estpost tabstat	${indvars}	[aw=wgt_long_fam_adj]	if	!mi(num_waves_in_FU_uniq) & income_below_200==1,	statistics(count	mean	sd	min	median	p95	max) columns(statistics)		// save
-			*est	store	sumstat_ind_incbelow200
+			tempfile	col1
+			save	`col1', replace
 			
-			*	Ind-year vars (observation level)
-			estpost tabstat	${summvars_obs}	[aw=wgt_long_fam_adj],	statistics(count	mean	sd	min	median	/*p95*/	max) columns(statistics)		// save
-			est	store	sumstat_obs_all
-			estpost tabstat	${summvars_obs}	[aw=wgt_long_fam_adj]	if	income_below_200==1,	statistics(count	mean	sd	min	median	/*p95*/	max) columns(statistics)		// save
-			est	store	sumstat_obs_lowinc
+		*	Second, collapse data into (# of waves x # of SNAP) level. This can be weighted or unweighted (NOT sure which one is correct)
 			
-			esttab	sumstat_ind_all	sumstat_obs_all		sumstat_obs_lowinc	using	"${SNAP_outRaw}/Sumstats_desc.csv",  ///
-					cells("count(fmt(%12.0f)) mean(fmt(%12.2f)) sd(fmt(%12.2f)) min(fmt(%12.2f)) p50(fmt(%12.2f)) max(fmt(%12.2f))") label	title("Summary Statistics") noobs 	  replace
+			*	weighted
+			collapse	(count) wgt_long_fam_adj_avg [pw=wgt_long_fam_adj_avg], by(num_waves_in_sample total_SNAP_used)
+			
+			*twoway	contour	wgt_long_fam_adj_avg	total_SNAP_used	num_waves_in_sample // contour plot - looks very odd
+			
+			twoway	(scatter total_SNAP_used num_waves_in_sample [pw=wgt_long_fam_adj_avg], msymbol(circle_hollow)),	///
+				title(Joint distribution of survey waves and SNAP participation)	///
+				note(Weighted by longitudinal individual survey weight.)
+			graph	export	"${SNAP_outRaw}/joint_waves_SNAP_w.png", replace	
+			graph	close
+			
+			twoway	(scatter total_SNAP_used num_waves_in_sample [pw=wgt_long_fam_adj_avg] if total_SNAP_used>=1, msymbol(circle_hollow)),	///
+				title(Joint distribution of survey waves and SNAP participation)	///
+				note(Weighted by longitudinal individual survey weight. Zero SNAP participation excluded.)
+			graph	export	"${SNAP_outRaw}/joint_waves_SNAP_w_nozero.png", replace	
+			graph	close
+			
+			*	Unweighted
+			use	`col1', clear
+			
+			collapse	(count) wgt_long_fam_adj_avg /*[pw=wgt_long_fam_adj_avg]*/, by(num_waves_in_sample total_SNAP_used)
+			
+			*twoway	contour	wgt_long_fam_adj_avg	total_SNAP_used	num_waves_in_sample // contour plot - still looks very odd
+			twoway	(scatter total_SNAP_used num_waves_in_sample [pw=wgt_long_fam_adj_avg], msymbol(circle_hollow)),	///
+				title(Joint distribution of survey waves and SNAP participation)	///
+				note(Unweighted.)
+			graph	export	"${SNAP_outRaw}/joint_waves_SNAP_uw.png", replace	
+			graph	close
+			
+			twoway	(scatter total_SNAP_used num_waves_in_sample [pw=wgt_long_fam_adj_avg] if total_SNAP_used>=1, msymbol(circle_hollow)),	///
+				title(Joint distribution of survey waves and SNAP participation)	///
+				note(Zero SNAP participation excluded. Unweighted)
+			graph	export	"${SNAP_outRaw}/joint_waves_SNAP_uw_nozero.png", replace	
+			graph	close
+	restore
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	*	Aggregate data into yearly-level
+
+				
+		*	Variablest to be collapsed
+		local	collapse_vars	foodexp_tot_exclFS_pc	foodexp_tot_inclFS_pc	foodexp_tot_exclFS_pc_real	foodexp_tot_inclFS_pc_real	foodexp_W_TFP_pc foodexp_W_TFP_pc_real	///	//	Food expenditure and TFP cost per capita (nominal and real)
+								rp_age	rp_age_below30 rp_age_over65	rp_female	rp_nonWhte	rp_HS	rp_somecol	rp_col	rp_disabled	famnum	FS_rec_wth	FS_rec_amt_capita	FS_rec_amt_capita_real	part_num	///	//	Gender, race, education, FS participation rate, FS amount
+								PFS_glm	PFS_glm_noCOLI	NME	PFS_FI_glm	PFS_FI_glm_noCOLI	NME_below_1	FSSS_FI	FSSS_FI_v2	//	Outcome variables	
+		
+		*	All population
+			collapse (mean) `collapse_vars' (median)	rp_age_med=rp_age	[pw=wgt_long_fam_adj], by(year)
+			
+			lab	var	rp_female	"Female (RP)"
+			lab	var	rp_nonWhte	"Non-White (RP)"
+			*lab	var	rp_HS_GED	"HS or GED (RP)"
+			lab	var	rp_col		"College degree (RP)"
+			*lab	var	rp_col_4yr	"4-year College degree (RP)"
+			lab	var	rp_disabled	"Disabled (RP)"
+			lab	var	FS_rec_wth	"FS received"
+			lab	var	PFS_glm		"PFS"
+			lab	var	NME			"NME"
+			lab	var	PFS_FI_glm	"PFS < 0.5"
+			lab	var	NME_below_1	"NME < 1"
+			lab	var	foodexp_W_TFP_pc		"Monthly TFP cost per capita"
+			lab	var	foodexp_W_TFP_pc_real	"Monthly TFP cost per capita (Jan 2019 dollars)"
+			lab	var	foodexp_tot_exclFS_pc		"Monthly Food exp per capita (w/o FS)"
+			lab	var	foodexp_tot_inclFS_pc		"Monthly Food exp per capita (with FS)"
+			lab	var	foodexp_tot_exclFS_pc_real	"Monthly Food exp per capita (w/o FS)	(Jan 2019 dollars) "
+			lab	var	foodexp_tot_inclFS_pc_real	"Monthly Food exp per capita (with FS)	(Jan 2019 dollars) "
+			lab	var	FS_rec_amt_capita			"Monthly FS amount per capita"
+			lab	var	FS_rec_amt_capita_real		"Monthly FS amount per capita (Jan 2019 dollars)"
+		
+			
+		*	Import Census data
+		merge	1:1	year	using	"${SNAP_dtInt}/HH_census_1979_2019.dta", nogen assert(2 3) // Missing years in the PSID data will be imported
+					
+		*	Import unemploymen rate (national)
+		merge	1:1	year	using	"${SNAP_dtInt}/Unemployment Rate_nation.dta", nogen assert(2 3) keep(3) // keep only study period.
+		
+				
+		*	Fraction of population in SNAP
+		**	NOTE: This is NOT the same as the official SNAP participation rate issued by the USDA
+		loc	var	frac_SNAP_person
+		gen	`var'	=	(part_num*1000000)/US_est_pop
+		lab	var	`var'	"\% of ppl in US in SNAP"
+		
+		*	Additional cleaning
+		replace	pov_rate_national	=	pov_rate_national/100	//	re-scale poverty rate to vary from 0 to 1
+	
+		
+	
+		
+		*	Manually plug in FI prevalence rate from the USDA report
+		loc	var	FSSS_FI_official
+		cap	drop	`var'
+		gen		`var'=.
+		replace	`var'=0.101	if	year==1999	// 1999: 10.1% are food insecure (7.1% are low food secure, 3.0% are very low food secure)
+		replace	`var'=0.107	if	year==2001	// 2001: 10.7% are food insecure (7.4% are low food secure, 3.3% are very low food secure)
+		replace	`var'=0.112	if	year==2003	// 2003: 11.2% are food insecure (7.7% are low food secure, 3.5% are very low food secure)
+		replace	`var'=0.110	if	year==2005	// 2005: 11.0% are food insecure (7.1% are low food secure, 3.9% are very low food secure)
+		replace	`var'=0.111	if	year==2007	// 2007: 11.1% are food insecure (7.0% are low food secure, 4.1% are very low food secure)
+		replace	`var'=0.147	if	year==2009	// 2009: 14.7% are food insecure (9.0% are low food secure, 5.7% are very low food secure)
+		replace	`var'=0.149	if	year==2011	// 2011: 14.9% are food insecure (9.2% are low food secure, 5.7% are very low food secure)
+		replace	`var'=0.143	if	year==2013	// 2013: 14.3% are food insecure (8.7% are low food secure, 5.6% are very low food secure)
+		replace	`var'=0.127	if	year==2015	// 2015: 12.7% are food insecure (7.7% are low food secure, 5.0% are very low food secure)
+		replace	`var'=0.118	if	year==2017	// 2017: 11.8% are food insecure (7.3% are low food secure, 4.5% are very low food secure)
+		replace	`var'=0.105	if	year==2019	// 2019: 10.5% are food insecure (6.6% are low food secure, 3.9% are very low food secure)
+		lab	var	`var'	"Official FI Prevalence"
+		
+		sort	year
+		
+		*	Save	
+		compress
+		save	"${SNAP_dtInt}/SNAP_1979_2019_census_annual", replace
+		
+
+
+	*	Annual plots
+	use	"${SNAP_dtInt}/SNAP_1979_2019_census_annual", clear
+	
+		*	Gender (RP) 
+		graph	twoway	(line rp_female 			year, lpattern(dash) xaxis(1) yaxis(1) legend(label(1 "Study Sample (PSID)")))	///
+						(line pct_rp_female_Census	year, lpattern(dash_dot) xaxis(1) yaxis(1) legend(label(2 "Census"))),	///
+						/*(line rp_disabled	year, lpattern(dash_dot) xaxis(1 2) yaxis(1)  legend(label(3 "Disabled"))), */ ///
+						xline(1987 1992 /*2007*/, axis(1) lcolor(black) lpattern(dash))	///
+						xline(1989 1990, lwidth(10) lc(gs12)) xlabel(1980(10)2010 2019)  ///
+						xtitle(Year)	/*xtitle("", axis(1))*/	ytitle("Fraction", axis(1)) ///
+						ytitle("Percentage", axis(1)) title(Female)	bgcolor(white)	graphregion(color(white)) 	name(gender_annual, replace)	
+						/*note("Source: U.S. Census." "All married couple households in the Census are treated as male householder")*/
+		
+		graph	export	"${SNAP_outRaw}/gender_annual.png", replace	
+		graph	close	
+		
+		*	Race (RP)
+		graph	twoway	(line rp_nonWhte 			year, lpattern(dash) xaxis(1) yaxis(1) legend(label(1 "Study Sample (PSID)")))	///
+						(line pct_rp_nonWhite_Census	year, lpattern(dash_dot) xaxis(1) yaxis(1) legend(label(2 "Census"))),	///
+						/*(line rp_disabled	year, lpattern(dash_dot) xaxis(1 2) yaxis(1)  legend(label(3 "Disabled"))), */ ///
+						xline(1987 1992 /*2007*/, axis(1) lcolor(black) lpattern(dash))	///
+						xline(1989 1990, lwidth(10) lc(gs12)) xlabel(1980(10)2010 2019)  ///
+						xtitle(Year)	/*xtitle("", axis(1))*/	ytitle("Fraction", axis(1)) ///
+						ytitle("Percentage", axis(1)) title(non-White)	bgcolor(white)	graphregion(color(white)) 	name(race_annual, replace)	
+						/*note("Source: U.S. Census." "Shaded region (1988-1991) are missing in the sample" "All households without White householder are treated as non-White in Census")*/
+		
+		graph	export	"${SNAP_outRaw}/race_annual.png", replace	
+		graph	close	
+		
+		
+		grc1leg gender_annual race_annual, rows(1) cols(2) legendfrom(gender_annual)	graphregion(color(white)) position(6)	graphregion(color(white))	///
+				title(Gender and Racial Composition of Reference Person) name(gender_race, replace) 	///
+				note("Source: U.S. Census" "Shaded region (1988-1991) are missing in the sample" 	"All married couple households are treated as male RP in Census" ///
+					"All households without White RP are treated as non-White in Census")  
+				
+		graph display gender_race, ysize(4) xsize(9.0)
+		graph	export	"${SNAP_outRaw}/gender_race_annual.png", as(png) replace
+		graph	close
+		
+		*	Age (RP)
+		*	Since Census data does NOT release average age, we use the median age instead	
+		graph	twoway	(line rp_age_med			year, lpattern(dash) xaxis(1) yaxis(1) legend(label(1 "Study Sample (PSID)")))	///
+						(line HH_age_median_Census_int	year, lpattern(dash_dot) xaxis(1) yaxis(1) legend(label(2 "Census"))),	///
+						/*(line rp_disabled	year, lpattern(dash_dot) xaxis(1 2) yaxis(1)  legend(label(3 "Disabled"))), */ ///
+						xline(1987 1992 2007, axis(1) lcolor(black) lpattern(dash))	///
+						xline(1989 1990, lwidth(10) lc(gs12)) xlabel(1980(10)2010 2007)  ///
+						xtitle(Year)	/*xtitle("", axis(1))*/	ytitle("Percent", axis(1)) ///
+						ytitle("Age", axis(1)) title(Median of RP age)	bgcolor(white)	graphregion(color(white)) 	name(age_annual, replace)	///
+						note(Source: U.S. Census. Median age in Census is rounded up to integer.)
+		graph	export	"${SNAP_outRaw}/age_annual.png", replace	
+		graph	close
+		
+		*	Share of HH RP age below 30.
+		graph	twoway	(line rp_age_below30 			year, lpattern(dash) xaxis(1) yaxis(1) legend(label(1 "Sample")))	///
+					(line pct_HH_age_below_30_Census	year, lpattern(dash_dot) xaxis(1) yaxis(1) legend(label(2 "Census"))),	///	///
+					/*(line rp_disabled	year, lpattern(dash_dot) xaxis(1 2) yaxis(1)  legend(label(3 "Disabled"))), */ ///
+					xline(1987 1992 2007, axis(1) lcolor(black) lpattern(dash))	///
+					xline(1989 1990, lwidth(10) lc(gs12)) xlabel(1980(10)2010 2007)  ///
+					xtitle(Year)	ytitle("Percentage", axis(1)) title(Percentage of RP age below 30) ///
+					bgcolor(white)	graphregion(color(white)) 	name(college_annual, replace)	///
+					note(Source: U.S. Census.)
+		graph	export	"${SNAP_outRaw}/age_below30_annual.png", replace	
+		graph	close
+		
+		*	HH size (RP)
+		graph	twoway	(line famnum 			year, lpattern(dash) xaxis(1) yaxis(1) legend(label(1 "Study Sample (PSID)")))	///
+						(line HH_size_avg_Census	year, lpattern(dash_dot) xaxis(1) yaxis(1) legend(label(2 "Census"))),	///
+						/*(line rp_disabled	year, lpattern(dash_dot) xaxis(1 2) yaxis(1)  legend(label(3 "Disabled"))), */ ///
+						xline(1987 1992 2007, axis(1) lcolor(black) lpattern(dash))	///
+						xline(1989 1990, lwidth(10) lc(gs12)) xlabel(1980(10)2010 2007)  ///
+						xtitle(Year)	/*xtitle("", axis(1))*/	ytitle("Percent", axis(1)) ///
+						ytitle("Percentage", axis(1)) title(Aveage Household Size)	bgcolor(white)	graphregion(color(white)) 	name(hhsize_annual, replace)	///
+						note(Source: U.S. Census.)
+		
+		graph	export	"${SNAP_outRaw}/hhsize_annual.png", replace	
+		graph	close
+		
+		*	Educational attainment (college degree) and share of HH
+		graph	twoway	(line rp_col 			year, lpattern(dash) xaxis(1) yaxis(1) legend(label(1 "Sample; RP")))	///
+						(line pct_col_Census	year, lpattern(dash_dot) xaxis(1) yaxis(1) legend(label(2 "Census; population"))),	///
+						/*(line rp_disabled	year, lpattern(dash_dot) xaxis(1 2) yaxis(1)  legend(label(3 "Disabled"))), */ ///
+						xline(1987 1992 2007, axis(1) lcolor(black) lpattern(dash))	///
+						xline(1989 1990, lwidth(10) lc(gs12)) xlabel(1980(10)2010 2007)  ///
+						xtitle(Year)	/*xtitle("", axis(1))*/	ytitle("Percentage (college)", axis(1)) ///
+						ytitle("Percentage (age)", axis(1)) title(Educational attainment - college degree )	bgcolor(white)	graphregion(color(white)) 	name(college_annual, replace)	///
+						note(Source: U.S. Census. In Census I treat 'completed 4-year of college' as college degree)
+
+		graph	export	"${SNAP_outRaw}/college_annual.png", replace	
+		graph	close
+		
+		
+		*	SNAP participation rate and poverty rate
+		graph	twoway	(line FS_rec_wth	 	year, lpattern(dash) xaxis(1) yaxis(1) legend(label(1 "SNAP - Sample")))	///
+						(line frac_SNAP_person	year, lpattern(dash_dot) xaxis(1) yaxis(1) legend(label(2 "SNAP - Census and USDA")))	///
+						(line pov_rate_national	year, lpattern(dot) xaxis(1 2) yaxis(1)  legend(label(3 "Poverty Rate"))),  ///
+						xline(1987 1992 /*2007*/, axis(1) lcolor(black) lpattern(dash))	///
+						xline(1989 1990, lwidth(20) lc(gs12)) xlabel(1980(10)2010 2019)  ///
+						xtitle(Year)	/*xtitle("", axis(1))*/	ytitle("Percent", axis(1)) ///
+						ytitle("Age", axis(1)) title(SNAP Participation and Poverty Rate)	bgcolor(white)	graphregion(color(white)) 	name(snap_annual, replace)	///
+						note("Source: US Census and USDA." "SNAP - Census and USDA is imputed by dividing the population estimates (Census) by the population in SNAP (USDA)")
+		graph display snap_annual, ysize(4) xsize(9.0)
+		graph	export	"${SNAP_outRaw}/SNAP_rate_sample_Census_USDA.png", replace	
+		graph	close
+		
+					   
+		*	Food expenditure per capita (including stamp benefit), TFP cost (real)
+		graph	twoway	(line foodexp_tot_inclFS_pc_real	year, lpattern(dash) xaxis(1 2) yaxis(1)  legend(label(1 "Food exp")))  ///
+						(line foodexp_W_TFP_pc_real			year, lpattern(dash_dot) xaxis(1 2) yaxis(1)  legend(label(2 "TFP cost"))),	///						
+						xline(1987 1992 2007, axis(1) lcolor(black) lpattern(dash))	///
+						xline(1989 1990, lwidth(10) lc(gs12)) xlabel(1980(10)2010 2007)  ///
+						xtitle(Year)	xtitle("", axis(2))	ytitle("Food exp with stamp benefit ($)", axis(1)) ///
+						/*ytitle("Stamp benefit ($)", axis(2))*/ title(Food expenditure and TFP cost (monthly per capita))	bgcolor(white)	graphregion(color(white)) /*note(Source: USDA & BLS)*/	name(foodexp_TFP_annual, replace)
+		
+		graph	export	"${SNAP_outRaw}/foodexp_TFP_annual.png", replace	
+		graph	close	
+		
+		
+		*	PFS and FSSS dummies with unemployment rate
+		graph	twoway	(line PFS_FI_glm_noCOLI	year, lpattern(dash_dot) xaxis(1 2) yaxis(1)  legend(label(1 "PFS < 0.5")))  ///
+						(line FSSS_FI_official	year, /*lpattern(dash_dot)*/ xaxis(1 2) yaxis(1)  legend(label(2 "By FSSS")))  ///
+						(line unemp_rate	year, lpattern(dot) xaxis(1 2) yaxis(2)  legend(label(3 "Unemployment Rate (%)"))),  ///
+						xline(1987 1992 2007, axis(1) lcolor(black) lpattern(solid))	///
+						xline(1989 1990, lwidth(10) lc(gs12)) xlabel(1980(10)2010 2007)  ///
+						/*xline(2007 2009, lwidth(28) lc(gs12)) xlabel(1980(10)2010 2007)*/  ///
+						xtitle(Year)	xtitle("", axis(2))	ytitle("Scale", axis(1)) 		///
+						title(Food Insecurity with Unemployment Rate)	bgcolor(white)	graphregion(color(white)) /*note(Source: USDA & BLS)*/	name(PFS_FSSS_annual, replace)
+		graph	export	"${SNAP_outRaw}/PFS_FSSS_official_dummies_annual.png", replace	
+		graph	close	
+			
+		*graph	export	"${SNAP_outRaw}/foodexp_FSamt_byyear.png", replace
+		*graph	close	
+
+
+
+
+
+
+
+
+	
+	
+		
+		
+		
 					
 		*	Outcomes over different categories
 		
@@ -588,201 +606,7 @@
 			replace	newly_RP=1	if	inrange(year,1999,2019)	&	l2.RP!=1 & RP==1
 			lab	var	newly_RP	"Newly became RP"
 	
-	*	Prepare annually-aggregated data for annual trend plot
-	
-	use	"${SNAP_dtInt}/SNAP_descdta_1979_2019", clear
-		
-		*	We aggregate data for two different populations: (1) All population  (2) Income below 200%
-				*	For now I construct all population sample only
-						
-				*	Variablest to be collapsed
-				local	collapse_vars	foodexp_tot_exclFS_pc	foodexp_tot_inclFS_pc	foodexp_tot_exclFS_pc_real	foodexp_tot_inclFS_pc_real	foodexp_W_TFP_pc foodexp_W_TFP_pc_real	///	//	Food expenditure and TFP cost per capita (nominal and real)
-										rp_age	rp_age_below30 rp_age_over65	rp_female	rp_nonWhte	rp_HS	rp_somecol	rp_col	rp_disabled	famnum	FS_rec_wth	FS_rec_amt_capita	FS_rec_amt_capita_real	///	//	Gender, race, education, FS participation rate, FS amount
-										PFS_glm	PFS_glm_noCOLI	NME	PFS_FI_glm	PFS_FI_glm_noCOLI	NME_below_1	FSSS_FI	FSSS_FI_v2	//	Outcome variables	
-				
-				*	All population
-					collapse (mean) `collapse_vars' [pw=wgt_long_fam_adj], by(year)
-					
-					lab	var	rp_female	"Female (RP)"
-					lab	var	rp_nonWhte	"Non-White (RP)"
-					*lab	var	rp_HS_GED	"HS or GED (RP)"
-					lab	var	rp_col		"College degree (RP)"
-					*lab	var	rp_col_4yr	"4-year College degree (RP)"
-					lab	var	rp_disabled	"Disabled (RP)"
-					lab	var	FS_rec_wth	"FS received"
-					lab	var	PFS_glm		"PFS"
-					lab	var	NME			"NME"
-					lab	var	PFS_FI_glm	"PFS < 0.5"
-					lab	var	NME_below_1	"NME < 1"
-					lab	var	foodexp_W_TFP_pc		"Monthly TFP cost per capita"
-					lab	var	foodexp_W_TFP_pc_real	"Monthly TFP cost per capita (Jan 2019 dollars)"
-					lab	var	foodexp_tot_exclFS_pc		"Monthly Food exp per capita (w/o FS)"
-					lab	var	foodexp_tot_inclFS_pc		"Monthly Food exp per capita (with FS)"
-					lab	var	foodexp_tot_exclFS_pc_real	"Monthly Food exp per capita (w/o FS)	(Jan 2019 dollars) "
-					lab	var	foodexp_tot_inclFS_pc_real	"Monthly Food exp per capita (with FS)	(Jan 2019 dollars) "
-					lab	var	FS_rec_amt_capita			"Monthly FS amount per capita"
-					lab	var	FS_rec_amt_capita_real		"Monthly FS amount per capita (Jan 2019 dollars)"
-			
-				
-			*	Import Census data
-			merge	1:1	year	using	"${SNAP_dtInt}/HH_census_1979_2019.dta", nogen assert(2 3) // Missing years in the PSID data will be imported
-						
-			*	Import unemploymen rate (national)
-			merge	1:1	year	using	"${SNAP_dtInt}/Unemployment Rate_nation.dta", nogen assert(2 3) keep(3) // keep only study period.
-			
-			*	Manually plug in FI prevalence rate from the USDA report
-			loc	var	FSSS_FI_official
-			cap	drop	`var'
-			gen		`var'=.
-			replace	`var'=0.101	if	year==1999	// 1999: 10.1% are food insecure (7.1% are low food secure, 3.0% are very low food secure)
-			replace	`var'=0.107	if	year==2001	// 2001: 10.7% are food insecure (7.4% are low food secure, 3.3% are very low food secure)
-			replace	`var'=0.112	if	year==2003	// 2003: 11.2% are food insecure (7.7% are low food secure, 3.5% are very low food secure)
-			replace	`var'=0.110	if	year==2005	// 2005: 11.0% are food insecure (7.1% are low food secure, 3.9% are very low food secure)
-			replace	`var'=0.111	if	year==2007	// 2007: 11.1% are food insecure (7.0% are low food secure, 4.1% are very low food secure)
-			replace	`var'=0.147	if	year==2009	// 2009: 14.7% are food insecure (9.0% are low food secure, 5.7% are very low food secure)
-			replace	`var'=0.149	if	year==2011	// 2011: 14.9% are food insecure (9.2% are low food secure, 5.7% are very low food secure)
-			replace	`var'=0.143	if	year==2013	// 2013: 14.3% are food insecure (8.7% are low food secure, 5.6% are very low food secure)
-			replace	`var'=0.127	if	year==2015	// 2015: 12.7% are food insecure (7.7% are low food secure, 5.0% are very low food secure)
-			replace	`var'=0.118	if	year==2017	// 2017: 11.8% are food insecure (7.3% are low food secure, 4.5% are very low food secure)
-			replace	`var'=0.105	if	year==2019	// 2019: 10.5% are food insecure (6.6% are low food secure, 3.9% are very low food secure)
-			lab	var	`var'	"Official FI Prevalence"
-			
-			
-			sort	year
-			tempfile	annual_agg_all
-			save		`annual_agg_all'
-		
 
-		*	Annual plots
-		use	`annual_agg_all', clear
-		
-			*	Gender (RP) 
-			graph	twoway	(line rp_female 			year, lpattern(dash) xaxis(1) yaxis(1) legend(label(1 "Study Sample (PSID)")))	///
-							(line pct_rp_female_Census	year, lpattern(dash_dot) xaxis(1) yaxis(1) legend(label(2 "Census"))),	///
-							/*(line rp_disabled	year, lpattern(dash_dot) xaxis(1 2) yaxis(1)  legend(label(3 "Disabled"))), */ ///
-							xline(1987 1992 2007, axis(1) lcolor(black) lpattern(solid))	///
-							xline(1989 1990, lwidth(10) lc(gs12)) xlabel(1980(10)2010 2007)  ///
-							xtitle(Year)	/*xtitle("", axis(1))*/	ytitle("Percent", axis(1)) ///
-							ytitle("Percentage", axis(1)) title(Percentage of female RP)	bgcolor(white)	graphregion(color(white)) 	name(gender_annual, replace)	///
-							note(Source: U.S. Census. All married couple households in the Census are treated as male householder)
-			
-			graph	export	"${SNAP_outRaw}/gender_annual.png", replace	
-			graph	close	
-			
-			*	Race (RP)
-			graph	twoway	(line rp_nonWhte 			year, lpattern(dash) xaxis(1) yaxis(1) legend(label(1 "Study Sample (PSID)")))	///
-							(line pct_rp_nonWhite_Census	year, lpattern(dash_dot) xaxis(1) yaxis(1) legend(label(2 "Census"))),	///
-							/*(line rp_disabled	year, lpattern(dash_dot) xaxis(1 2) yaxis(1)  legend(label(3 "Disabled"))), */ ///
-							xline(1987 1992 2007, axis(1) lcolor(black) lpattern(dash))	///
-							xline(1989 1990, lwidth(10) lc(gs12)) xlabel(1980(10)2010 2007)  ///
-							xtitle(Year)	/*xtitle("", axis(1))*/	ytitle("Percent", axis(1)) ///
-							ytitle("Percentage", axis(1)) title(Percentage of non-White RP)	bgcolor(white)	graphregion(color(white)) 	name(race_annual, replace)	///
-							note(Source: U.S. Census. All households without White householder are treated as non-White in Census)
-			
-			graph	export	"${SNAP_outRaw}/race_annual.png", replace	
-			graph	close	
-			
-			
-			*	Age (RP)
-			*	Since Census data does NOT release average age, we use the median age instead	
-			*use	"${SNAP_dtInt}/SNAP_descdta_1979_2019", clear
-			*collapse (median) rp_age [aw=wgt_long_fam_adj], by(year)
-			*merge	1:1	year	using	"${SNAP_dtInt}/HH_age_census.dta", keepusing(HH_age_median_Census)
-			*gen	HH_age_median_Census_int	=	int(HH_age_median_Census)
-			sort	year	
-			
-			graph	twoway	(line rp_age 			year, lpattern(dash) xaxis(1) yaxis(1) legend(label(1 "Study Sample (PSID)")))	///
-							(line HH_age_median_Census_int	year, lpattern(dash_dot) xaxis(1) yaxis(1) legend(label(2 "Census"))),	///
-							/*(line rp_disabled	year, lpattern(dash_dot) xaxis(1 2) yaxis(1)  legend(label(3 "Disabled"))), */ ///
-							xline(1987 1992 2007, axis(1) lcolor(black) lpattern(dash))	///
-							xline(1989 1990, lwidth(10) lc(gs12)) xlabel(1980(10)2010 2007)  ///
-							xtitle(Year)	/*xtitle("", axis(1))*/	ytitle("Percent", axis(1)) ///
-							ytitle("Age", axis(1)) title(Median of RP age)	bgcolor(white)	graphregion(color(white)) 	name(age_annual, replace)	///
-							note(Source: U.S. Census. Median age in Census is rounded up to integer.)
-			graph	export	"${SNAP_outRaw}/age_annual.png", replace	
-			graph	close
-			
-				*	Share of HH RP age below 30.
-				use	`annual_agg_all', clear
-				graph	twoway	(line rp_age_below30 			year, lpattern(dash) xaxis(1) yaxis(1) legend(label(1 "Sample")))	///
-							(line pct_HH_age_below_30_Census	year, lpattern(dash_dot) xaxis(1) yaxis(1) legend(label(2 "Census"))),	///	///
-							/*(line rp_disabled	year, lpattern(dash_dot) xaxis(1 2) yaxis(1)  legend(label(3 "Disabled"))), */ ///
-							xline(1987 1992 2007, axis(1) lcolor(black) lpattern(dash))	///
-							xline(1989 1990, lwidth(10) lc(gs12)) xlabel(1980(10)2010 2007)  ///
-							xtitle(Year)	ytitle("Percentage", axis(1)) title(Percentage of RP age below 30) ///
-							bgcolor(white)	graphregion(color(white)) 	name(college_annual, replace)	///
-							note(Source: U.S. Census.)
-				graph	export	"${SNAP_outRaw}/age_below30_annual.png", replace	
-				graph	close
-			
-			*	HH size (RP)
-			graph	twoway	(line famnum 			year, lpattern(dash) xaxis(1) yaxis(1) legend(label(1 "Study Sample (PSID)")))	///
-							(line HH_size_avg_Census	year, lpattern(dash_dot) xaxis(1) yaxis(1) legend(label(2 "Census"))),	///
-							/*(line rp_disabled	year, lpattern(dash_dot) xaxis(1 2) yaxis(1)  legend(label(3 "Disabled"))), */ ///
-							xline(1987 1992 2007, axis(1) lcolor(black) lpattern(dash))	///
-							xline(1989 1990, lwidth(10) lc(gs12)) xlabel(1980(10)2010 2007)  ///
-							xtitle(Year)	/*xtitle("", axis(1))*/	ytitle("Percent", axis(1)) ///
-							ytitle("Percentage", axis(1)) title(Aveage Household Size)	bgcolor(white)	graphregion(color(white)) 	name(hhsize_annual, replace)	///
-							note(Source: U.S. Census.)
-			
-			graph	export	"${SNAP_outRaw}/hhsize_annual.png", replace	
-			graph	close
-			
-			*	Educational attainment (college degree) and share of HH
-			graph	twoway	(line rp_col 			year, lpattern(dash) xaxis(1) yaxis(1) legend(label(1 "Sample; RP")))	///
-							(line pct_col_Census	year, lpattern(dash_dot) xaxis(1) yaxis(1) legend(label(2 "Census; population"))),	///
-							/*(line rp_disabled	year, lpattern(dash_dot) xaxis(1 2) yaxis(1)  legend(label(3 "Disabled"))), */ ///
-							xline(1987 1992 2007, axis(1) lcolor(black) lpattern(dash))	///
-							xline(1989 1990, lwidth(10) lc(gs12)) xlabel(1980(10)2010 2007)  ///
-							xtitle(Year)	/*xtitle("", axis(1))*/	ytitle("Percentage (college)", axis(1)) ///
-							ytitle("Percentage (age)", axis(1)) title(Educational attainment - college degree )	bgcolor(white)	graphregion(color(white)) 	name(college_annual, replace)	///
-							note(Source: U.S. Census. In Census I treat 'completed 4-year of college' as college degree)
-
-			graph	export	"${SNAP_outRaw}/college_annual.png", replace	
-			graph	close
-			
-				   
-			*	Food expenditure per capita (including stamp benefit), TFP cost (real)
-			graph	twoway	(line foodexp_tot_inclFS_pc_real	year, lpattern(dash) xaxis(1 2) yaxis(1)  legend(label(1 "Food exp")))  ///
-							(line foodexp_W_TFP_pc_real			year, lpattern(dash_dot) xaxis(1 2) yaxis(1)  legend(label(2 "TFP cost"))),	///						
-							xline(1987 1992 2007, axis(1) lcolor(black) lpattern(dash))	///
-							xline(1989 1990, lwidth(10) lc(gs12)) xlabel(1980(10)2010 2007)  ///
-							xtitle(Year)	xtitle("", axis(2))	ytitle("Food exp with stamp benefit ($)", axis(1)) ///
-							/*ytitle("Stamp benefit ($)", axis(2))*/ title(Food expenditure and TFP cost (monthly per capita))	bgcolor(white)	graphregion(color(white)) /*note(Source: USDA & BLS)*/	name(foodexp_TFP_annual, replace)
-			
-			graph	export	"${SNAP_outRaw}/foodexp_TFP_annual.png", replace	
-			graph	close	
-			
-			
-			
-			*	FS participation rate and unemployment rate
-			graph	twoway	(line FS_rec_wth 	year, lpattern(dash) xaxis(1 2) yaxis(1) legend(label(1 "FS participation (%)")))	///
-							(line unemp_rate	year, lpattern(dot) xaxis(1 2) yaxis(2)  legend(label(2 "Unemployment Rate (%)")))  ///
-							(line pov_rate_national	year, lpattern(dash_dot) xaxis(1 2) yaxis(2)  legend(label(3 "Poverty Rate"))),  ///
-							xline(1987 1992 2007, axis(1) lcolor(black) lpattern(solid))	///
-							xline(1989 1990, lwidth(10) lc(gs12)) xlabel(1980(10)2010 2007)  ///
-							xtitle(Year)	xtitle("", axis(2))	ytitle("Fraction", axis(1)) 	ytitle("Percentage (%)", axis(2)) ///
-							title(FS participation and monthly benefit amount)	bgcolor(white)	graphregion(color(white)) /*note(Source: USDA & BLS)*/	name(FS_rate_amt_annual, replace)
-							
-			graph	export	"${SNAP_outRaw}/FS_rate_amt_annual.png", replace	
-			graph	close	
-			
-			
-			
-			*	PFS and FSSS dummies with unemployment rate
-			graph	twoway	(line PFS_FI_glm_noCOLI	year, lpattern(dash_dot) xaxis(1 2) yaxis(1)  legend(label(1 "PFS < 0.5")))  ///
-							(line FSSS_FI_official	year, /*lpattern(dash_dot)*/ xaxis(1 2) yaxis(1)  legend(label(2 "By FSSS")))  ///
-							(line unemp_rate	year, lpattern(dot) xaxis(1 2) yaxis(2)  legend(label(3 "Unemployment Rate (%)"))),  ///
-							xline(1987 1992 2007, axis(1) lcolor(black) lpattern(solid))	///
-							xline(1989 1990, lwidth(10) lc(gs12)) xlabel(1980(10)2010 2007)  ///
-							/*xline(2007 2009, lwidth(28) lc(gs12)) xlabel(1980(10)2010 2007)*/  ///
-							xtitle(Year)	xtitle("", axis(2))	ytitle("Scale", axis(1)) 		///
-							title(Food Insecurity with Unemployment Rate)	bgcolor(white)	graphregion(color(white)) /*note(Source: USDA & BLS)*/	name(PFS_FSSS_annual, replace)
-			graph	export	"${SNAP_outRaw}/PFS_FSSS_official_dummies_annual.png", replace	
-			graph	close	
-				
-			*graph	export	"${SNAP_outRaw}/foodexp_FSamt_byyear.png", replace
-			*graph	close	
 			
 			
 			
@@ -847,8 +671,6 @@
 				*/
 				
 				*	Spell length (# of consecutive years experiencing FI)
-					
-					lgraph	
 					
 					
 					*	Overall
