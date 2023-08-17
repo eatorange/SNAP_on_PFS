@@ -275,14 +275,15 @@
 				gen		l2_`var'	=	l2.`var'
 				gen		l4_`var'	=	l4.`var'
 				
-				global	FSD_on_FS_X_l4l2	${FSD_on_FS_X_l2l4}	l2_`var'	l4_`var'
+				global	FSD_on_FS_X_l4l2	${FSD_on_FS_X_l4l2}	l2_`var'	l4_`var'
 				global	FSD_on_FS_X_l2		${FSD_on_FS_X_l2}	l2_`var'
 				global	FSD_on_FS_X_l4		${FSD_on_FS_X_l4}	l4_`var'
 			}
 			
-			di "${FSD_on_FS_X_l4l2}"
-			di "${FSD_on_FS_X_l2}"
-			di "${FSD_on_FS_X_l4}"			
+			di	"${FSD_on_FS_X}"
+			di	"${FSD_on_FS_X_l4l2}"
+			di	"${FSD_on_FS_X_l2}"
+			di	"${FSD_on_FS_X_l4}"			
 				
 			
 			*	Unweighted Policy index
