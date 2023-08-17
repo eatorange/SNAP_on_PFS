@@ -6,10 +6,6 @@ use	"${SNAP_dtInt}/SNAP_long_PFS", clear
 keep	if	!mi(PFS_glm_noCOLI)
 
 
-*	Declare survey structure
-svyset	sampcls [pweight=wgt_long_fam_adj] ,strata(sampstr)   singleunit(scaled)	
-		
-
 *	Generate spell-related variables
 **	IMPORANT NOTE: Since the PFS data has (1) gap period b/w 1988-1991 and (2) changed frequency since 1997, it is not clear how to define "spell"
 **	Based on 2023-7-25 discussion, we decide to define spell as "the number of consecutive 'OBSERVATIONS' experiencing food insecurity", regardless of gap period and updated frequency
@@ -41,57 +37,6 @@ br	x11101ll	year	PFS_glm_noCOLI	PFS_FI_glm_noCOLI	_seq	_spell	_end
 	*	Scatterplot (x-axis: # of surveys. y-axis: # of SNAP redemption)
 	*	We do this by 2-step data collapse	
 		
-	
-		*	First, collapse data to individual-level (should be unweighted)
-		preserve
-			collapse	(count)	num_waves_in_sample=PFS_FI_glm_noCOLI	///	//	# of waves in sample
-						(sum)	total_SNAP_used=FS_rec_wth	///	# of SNAP redemption
-						(mean)	wgt_long_fam_adj_avg=wgt_long_fam_adj ///	//	weighted family wgt
-							if !mi(PFS_FI_glm_noCOLI), by(x11101ll)
-			lab	var	num_waves_in_sample	"# of waves in sample"
-			lab	var	total_SNAP_used		"# of SNAP participation in sample"
-			lab	var	wgt_long_fam_adj_avg	"Avg longitudinal family wgt - adjusted"
-			
-			tempfile	col1
-			save	`col1', replace
-			
-		*	Second, collapse data into (# of waves x # of SNAP) level. This can be weighted or unweighted (NOT sure which one is correct)
-			
-			*	weighted
-			collapse	(count) wgt_long_fam_adj_avg [pw=wgt_long_fam_adj_avg], by(num_waves_in_sample total_SNAP_used)
-			
-			*twoway	contour	wgt_long_fam_adj_avg	total_SNAP_used	num_waves_in_sample // contour plot - looks very odd
-			
-			twoway	(scatter total_SNAP_used num_waves_in_sample [pw=wgt_long_fam_adj_avg], msymbol(circle_hollow)),	///
-				title(Joint distribution of survey waves and SNAP participation)	///
-				note(Weighted by longitudinal individual survey weight.)
-			graph	export	"${SNAP_outRaw}/joint_waves_SNAP_w.png", replace	
-			graph	close
-			
-			twoway	(scatter total_SNAP_used num_waves_in_sample [pw=wgt_long_fam_adj_avg] if total_SNAP_used>=1, msymbol(circle_hollow)),	///
-				title(Joint distribution of survey waves and SNAP participation)	///
-				note(Weighted by longitudinal individual survey weight. Zero SNAP participation excluded.)
-			graph	export	"${SNAP_outRaw}/joint_waves_SNAP_w_nozero.png", replace	
-			graph	close
-			
-			*	Unweighted
-			use	`col1', clear
-			
-			collapse	(count) wgt_long_fam_adj_avg /*[pw=wgt_long_fam_adj_avg]*/, by(num_waves_in_sample total_SNAP_used)
-			
-			*twoway	contour	wgt_long_fam_adj_avg	total_SNAP_used	num_waves_in_sample // contour plot - still looks very odd
-			twoway	(scatter total_SNAP_used num_waves_in_sample [pw=wgt_long_fam_adj_avg], msymbol(circle_hollow)),	///
-				title(Joint distribution of survey waves and SNAP participation)	///
-				note(Unweighted.)
-			graph	export	"${SNAP_outRaw}/joint_waves_SNAP_uw.png", replace	
-			graph	close
-			
-			twoway	(scatter total_SNAP_used num_waves_in_sample [pw=wgt_long_fam_adj_avg] if total_SNAP_used>=1, msymbol(circle_hollow)),	///
-				title(Joint distribution of survey waves and SNAP participation)	///
-				note(Zero SNAP participation excluded. Unweighted)
-			graph	export	"${SNAP_outRaw}/joint_waves_SNAP_uw_nozero.png", replace	
-			graph	close
-	restore
 	
 	/*
 	*	First, we construct the variables to be used in X and Y
@@ -388,43 +333,7 @@ br	x11101ll	year	PFS_glm_noCOLI	PFS_FI_glm_noCOLI	_seq	_spell	_end
 		
 			
 		
-			*	Race
-								
-			local	nonWhite_cond	rp_female==1
-			local	White_cond	rp_female==0
-			
-			*	Loop over categories
-			*	NOTE: the joint tabulate command below generates the same relative frequency to the one using "svy:". I use this one for computation speed.
-			foreach	cat	in	nonWhite	White	{
-					
-				*	Joint
-				tab		l1_PFS_FS_glm_noCOLI	PFS_FS_glm	[aw=wgt_long_fam_adj]		if	``cat'_cond', cell matcell(trans_2by2_joint_`cat')
-				scalar	samplesize_`cat'	=	trans_2by2_joint_`cat'[1,1] + trans_2by2_joint_`cat'[1,2] + trans_2by2_joint_`cat'[2,1] + trans_2by2_joint_`cat'[2,2]	//	calculate sample size by adding up all
-				mat trans_2by2_joint_`cat' = trans_2by2_joint_`cat'[1,1], trans_2by2_joint_`cat'[1,2], trans_2by2_joint_`cat'[2,1], trans_2by2_joint_`cat'[2,2]	//	Make it as a row matrix
-				mat trans_2by2_joint_`cat' = trans_2by2_joint_`cat'/samplesize_`cat'	//	Divide it by sample size to compute relative frequency
-				mat	list	trans_2by2_joint_`cat'	
-				
-				*	Marginal
-				tab		PFS_FS_glm_noCOLI	[aw=wgt_long_fam_adj]			if	l1_PFS_FS_glm_noCOLI==0	&	``cat'_cond', matcell(temp)	//	Previously FI
-				scalar	persistence_`cat'	=  temp[1,1] / (temp[1,1] + temp[2,1])	//	Persistence rate (FI, FI)
-				tab		PFS_FS_glm_noCOLI	[aw=wgt_long_fam_adj]			if	l1_PFS_FS_glm_noCOLI==1	&	``cat'_cond', matcell(temp)	//	Previously FS
-				scalar	entry_`cat'			=  temp[1,1] / (temp[1,1] + temp[2,1])	//	Persistence rate (FI, FI)
-					
-				*	Combined (Joint + marginal)
-				mat	trans_2by2_`cat'	=	samplesize_`cat',	trans_2by2_joint_`cat',	persistence_`cat',	entry_`cat'	
-			}
-				
-				mat	trans_2by2_gender	=	trans_2by2_male \ trans_2by2_female
-			/*	Equivalent, but takes longer time to run. I just leave it as a reference
-			svy, subpop(if rp_female==0):	tab	l1_PFS_FS_glm_noCOLI	PFS_FS_glm
-			mat	trans_2by2_joint_male = e(b)[1,1], e(b)[1,2], e(b)[1,3], e(b)[1,4]	
-			*/
 
-
-	
-	
-	
-	
 	
 	
 	
