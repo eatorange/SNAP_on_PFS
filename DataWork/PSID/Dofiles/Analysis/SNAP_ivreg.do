@@ -285,7 +285,7 @@
 			di	"${FSD_on_FS_X_l2}"
 			di	"${FSD_on_FS_X_l4}"			
 				
-			
+				
 			*	Unweighted Policy index
 				
 				*	Setup
@@ -312,7 +312,25 @@
 					}
 					qui	ds	*_bar
 					global	Mundlak_vars	`r(varlist)'
-			
+					
+					
+					
+				*	Reduced form	(regress PFS on policy index)
+				loc	IV			SNAP_index_uw	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
+				loc	IVname		index_uw	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
+				reghdfe		PFS_glm	 `IV' ${FSD_on_FS_X}	 [aw=wgt_long_fam_adj] if	reg_sample==1,	vce(cluster x11101ll) noabsorb	//	no FE
+				est	store	`IVname'_red_nofe
+				reghdfe		PFS_glm	 `IV' ${FSD_on_FS_X}	${timevars}	 [aw=wgt_long_fam_adj] if	reg_sample==1,	vce(cluster x11101ll) noabsorb // year FE
+				est	store	`IVname'_red_yfe
+				reghdfe		PFS_glm	 `IV' ${FSD_on_FS_X}	${timevars}	${Mundlak_vars}	 [aw=wgt_long_fam_adj] if	reg_sample==1,	vce(cluster x11101ll) noabsorb // absorb(ib1997.year)
+				est	store	`IVname'_red_Mundlak
+				reghdfe		PFS_glm	 `IV' ${FSD_on_FS_X}	${timevars} [aw=wgt_long_fam_adj] if	reg_sample==1,	vce(cluster x11101ll) absorb(/*ib1997.year*/ x11101ll)
+				est	store	`IVname'_red_yife
+				
+				esttab	`IVname'_red_nofe	`IVname'_red_yfe	 `IVname'_red_Mundlak	`IVname'_red_yife	using "${SNAP_outRaw}/PFS_`IVname'_reduced.csv", ///
+				cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2 Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+				title(PFS on FS dummy)		replace	
+		
 				*	OLS
 				
 					*	no FE
@@ -1735,6 +1753,10 @@
 		 
 		use	"${SNAP_dtInt}/SNAP_const", clear
 		
+		
+	
+		
+		
 		*	Keep 1977-2015 data (where citizen ideology is available)
 		*	(2023-1-15) Maybe I shouldn't do it, because even if IV is available till 2015, we still use PFS in 2017 and 2019
 		*keep	if	inrange(year,1977,2015)
@@ -1810,8 +1832,8 @@
 		*	Earlier years have very high PFS, need to think of why it is happening...
 		preserve
 			keep	if	reg_sample==1 
-			collapse	(mean) PFS_glm HFSM_rescale [aw=wgt_long_fam_adj], by(year)
-			graph	twoway	(line PFS_glm year) (line HFSM_rescale year)
+			collapse	(mean) PFS_glm FSSS_rescale [aw=wgt_long_fam_adj], by(year)
+			graph	twoway	(line PFS_glm year) (line FSSS_rescale year)
 		restore
 		
 		*	Individual-level stats
