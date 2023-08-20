@@ -69,14 +69,14 @@
 		local	fam_agg			0	//	Aggregate family-level variables across waves
 		
 		*	SECTION 2: Prepare external data
-		local	ext_data		0	//	Prepare external data (CPI, TFP, etc.)
+		local	ext_data		1	//	Prepare external data (CPI, TFP, etc.)
 		
 		*	SECTION 3: Construct PSID panel data and import external data
 		local	cr_panel		0	//	Create panel structure from ID variable
 			local	panel_view	0	//	Create an excel file showing the change of certain clan over time (for internal data-check only)
-		local	merge_data		0	//	Merge ind- and family- variables and import it into ID variable
-			local	raw_reshape	1		//	Merge raw variables and reshape into long data (takes time)
-			local	add_clean	1		//	Do additional cleaning and import external data (CPI, TFP)
+		local	merge_data		1	//	Merge ind- and family- variables and import it into ID variable
+			local	raw_reshape	0		//	Merge raw variables and reshape into long data (takes time)
+			local	add_clean	0		//	Do additional cleaning and import external data (CPI, TFP)
 			local	import_dta	1		//	Import aggregated variables and external data into ID data. 
 		
 		*	SECTION 4: Clean data and save it
@@ -1969,8 +1969,7 @@
 			*	Family: 2 or more people related by marriage/birth/adoption/etc live together
 			*	Non-family: Single-person HH, or people unrelated live together.
 			import	excel	"${clouldfolder}/DataWork/Census/Historical Household Tables/hh1.xls", sheet(Table HH-1) firstrow	cellrange(A15:K61)	clear
-			keep	
-					
+							
 			rename	(A B C D F G I J K)	///
 					(year total_HH	total_family_HH married_HH family_oth_maleHH family_oth_femaleHH total_nonfamily_HH nonfamily_maleHH nonfamily_femaleHH)
 			drop	E H
