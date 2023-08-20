@@ -9,6 +9,31 @@
 		*	(2022-05-01) For now, we use IV to predict T(FS participation) and use it to predict W (food expenditure per capita) (previously I used it to predict PFS in the second stage)
 		use	"${SNAP_dtInt}/SNAP_const", clear
 		
+		*	Summary stats of PFS (with and w/o COLI)
+		summ 	PFS_glm  	[aw=wgt_long_fam_adj]	if !mi(PFS_glm) & !mi(PFS_glm_noCOLI) & inrange(year,1990,2015)
+		scalar	mean_PFS	=	r(mean)
+		summ	PFS_glm_noCOLI	[aw=wgt_long_fam_adj]	if !mi(PFS_glm) & !mi(PFS_glm_noCOLI) & inrange(year,1990,2015)
+		scalar	mean_PFS_noCOLI	=	r(mean)
+		di	(mean_PFS-mean_PFS_noCOLI)/mean_PFS
+		
+		loc	var	diff_PFS_COLI_noCOLI
+		cap	drop	`var'
+		gen	`var'	=	abs(PFS_glm-PFS_glm_noCOLI)
+		summ	`var'	[aw=wgt_long_fam_adj]	if	inrange(year,1990,2015),d
+		di r(mean)/mean_PFS
+		
+			
+		graph twoway 	(kdensity PFS_glm  			if !mi(PFS_glm) & !mi(PFS_glm_noCOLI) & inrange(year,1990,2015), graphregion(fcolor(white)) 	legend(label(1 "PFS (non-COLI)")))	///
+						(kdensity PFS_glm_noCOLI 	if !mi(PFS_glm) & !mi(PFS_glm_noCOLI) & inrange(year,1990,2015), graphregion(fcolor(white)) 	legend(label(2 "PFS (COLI adjusted)"))),	///
+						title(Distribution of PFS - with and w/o COLI)	note(COLI is available since 1990)
+		graph	export	"${SNAP_outRaw}/Dist_PFS_COLI.png", as(png) replace
+		graph	close
+		
+		*	Use "PFS_noCOLI" as base PFS variable
+		drop	PFS_glm
+		rename	PFS_glm_noCOLI	PFS_glm
+		lab	var	PFS_glm	"PFS"
+		
 		*	Construct an indicator with balanced sample from 1997-2013
 			*	For dynamic treatment effect, each endogenous treatment should be instrumented, meaning I can use observations when IV is available (1997-2013)
 			*	If we aggregate PFS over 3 waves (PFS_t, PFS_t-2, PFS_t-4), we can have FSD variables over three waves (FSD_2001, ..., FSD_2013)
@@ -24,8 +49,16 @@
 		*keep	if	inrange(year,1977,2015) & !mi(citi6016)
 		
 		*	Change variable label (will be imported into clean.do later)
-		lab	var	FS_rec_wth	"Received FS"
+		lab	var	FS_rec_wth	"SNAP received"
 		*lab	var	FSdummy	"Received FS"
+		lab	var	inst6017_nom	"State government ideology"
+		
+		*	Individual age squared
+		loc	var		age_ind_sq
+		cap	drop	`var'
+		gen	`var'	=	(age_ind)^2
+		lab	var	`var'	"Age squared (Ind)"
+		
 			
 		*	Outcome variables
 		summ	PFS_glm	PFS_FI_glm
@@ -68,7 +101,7 @@
 		global	regionvars		rp_state_enum2-rp_state_enum31 rp_state_enum33-rp_state_enum50 	//	Excluding NY (rp_state_enum32) and outside 48 states (1, 52, 53). The latter should be excluded when running regression
 		*global	timevars		year_enum4-year_enum11 year_enum14-year_enum30 //	Exclude year_enum3 (1978) as base category. year_enum12 (1990)  and year_enum13 (1991) are excluded due to lack of lagged data.
 		global	timevars		year_enum19-year_enum26	//	Using year_enum18 (1996) as a base year, when regressing with SNAP index IV (1996-2013)
-		global	indvars			/*ind_female*/ age_ind ind_NoHS ind_somecol ind_col /* ind_employed_dummy*/
+		global	indvars			/*ind_female*/ age_ind	age_ind_sq ind_NoHS ind_somecol ind_col /* ind_employed_dummy*/
 		
 
 		label	var	FS_rec_wth	"FS last month"
@@ -783,6 +816,26 @@
 				qui	ds	*_bar
 				global	Mundlak_vars	`r(varlist)'
 			
+			
+			*	Reduced form	(regress PFS on policy index)
+				loc	IV			SNAP_index_w	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
+				loc	IVname		index_w	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
+				reghdfe		PFS_glm	 `IV' ${FSD_on_FS_X}	 [aw=wgt_long_fam_adj] if	reg_sample==1,	vce(cluster x11101ll) noabsorb	//	no FE
+				est	store	`IVname'_red_nofe
+				reghdfe		PFS_glm	 `IV' ${FSD_on_FS_X}	${timevars}	 [aw=wgt_long_fam_adj] if	reg_sample==1,	vce(cluster x11101ll) noabsorb // year FE
+				est	store	`IVname'_red_yfe
+				reghdfe		PFS_glm	 `IV' ${FSD_on_FS_X}	${timevars}	${Mundlak_vars}	 [aw=wgt_long_fam_adj] if	reg_sample==1,	vce(cluster x11101ll) noabsorb // absorb(ib1997.year)
+				est	store	`IVname'_red_Mundlak
+				reghdfe		PFS_glm	 `IV' ${FSD_on_FS_X}	${timevars} [aw=wgt_long_fam_adj] if	reg_sample==1,	vce(cluster x11101ll) absorb(/*ib1997.year*/ x11101ll)
+				est	store	`IVname'_red_yife
+				
+				esttab	`IVname'_red_nofe	`IVname'_red_yfe	 `IVname'_red_Mundlak	`IVname'_red_yife	using "${SNAP_outRaw}/PFS_`IVname'_reduced.csv", ///
+				cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2 Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+				title(PFS on FS dummy)		replace	
+		
+			
+			
+			
 				*	OLS
 				
 					*	no FE
@@ -830,6 +883,24 @@
 						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2 Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
 						title(PFS on FS dummy)		replace	
 					
+			
+			
+			*	Reduced form	(regress PFS on policy index)
+				loc	IV			SNAP_index_w	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
+				loc	IVname		index_w	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
+				reghdfe		PFS_glm	 `IV' ${FSD_on_FS_X}	 [aw=wgt_long_fam_adj] if	reg_sample==1,	vce(cluster x11101ll) noabsorb	//	no FE
+				est	store	`IVname'_red_nofe
+				reghdfe		PFS_glm	 `IV' ${FSD_on_FS_X}	${timevars}	 [aw=wgt_long_fam_adj] if	reg_sample==1,	vce(cluster x11101ll) noabsorb // year FE
+				est	store	`IVname'_red_yfe
+				reghdfe		PFS_glm	 `IV' ${FSD_on_FS_X}	${timevars}	${Mundlak_vars}	 [aw=wgt_long_fam_adj] if	reg_sample==1,	vce(cluster x11101ll) noabsorb // absorb(ib1997.year)
+				est	store	`IVname'_red_Mundlak
+				reghdfe		PFS_glm	 `IV' ${FSD_on_FS_X}	${timevars} [aw=wgt_long_fam_adj] if	reg_sample==1,	vce(cluster x11101ll) absorb(/*ib1997.year*/ x11101ll)
+				est	store	`IVname'_red_yife
+				
+				esttab	`IVname'_red_nofe	`IVname'_red_yfe	 `IVname'_red_Mundlak	`IVname'_red_yife	using "${SNAP_outRaw}/PFS_`IVname'_reduced.csv", ///
+				cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2 Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+				title(PFS on FS dummy)		replace	
+		
 			
 					
 				*	IV		
@@ -1166,6 +1237,7 @@
 						
 						ivreghdfe	PFS_glm	${FSD_on_FS_X}	${timevars}	${Mundlak_vars} (FSdummy = `IV')	[aw=wgt_long_fam_adj] if	reg_sample==1, ///
 							/*absorb(x11101ll)*/	cluster (x11101ll)	first savefirst savefprefix(`IVname')	  partial(*_bar)
+						di	"p-value of J-statistics is `e(jp)'"
 						
 						est	store	`IVname'_mund_2nd
 						scalar	Fstat_CD_`IVname'	=	 e(cdf)
@@ -1183,7 +1255,7 @@
 												
 						*	1st stage
 						esttab	index_w_Z_mund_1st 	index_w_Dhat_mund_1st	index_w_ZDhat_mund_1st	using "${SNAP_outRaw}/PFS_index_w_mund_1st.csv", ///
-						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/ year_enum*)	///
+						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2c Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/ year_enum*)	///
 						title(PFS on FS dummy)		replace	
 													
 					
@@ -1192,7 +1264,7 @@
 													
 						*	SNAP index
 						esttab	mund_ols	index_w_Z_mund_2nd 	index_w_Dhat_mund_2nd	index_w_ZDhat_mund_2nd	using "${SNAP_outRaw}/PFS_index_w_mund_2nd.csv", ///
-						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/ year_enum* )	///
+						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2c Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/ year_enum* )	///
 						title(PFS on FS dummy)		replace	
 						
 						
@@ -1448,7 +1520,7 @@
 			*	Regressing FSD on predicted FS, using the model we find above
 				
 				*	Benchmark regression; just change the outcome
-				*	IV specification used: SNAP weighted policy index, both Dhat and Z, Mundlak controls.
+				*	IV specification used: SNAP weighted policy index, Dhat only, Mundlak controls.
 
 					*	MLE in the first stage
 					*	We first construct fitted value of the endogenous variable from the first stage, to be used as an IV
