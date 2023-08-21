@@ -8,6 +8,7 @@
 		*	Weak IV test 
 		*	(2022-05-01) For now, we use IV to predict T(FS participation) and use it to predict W (food expenditure per capita) (previously I used it to predict PFS in the second stage)
 		use	"${SNAP_dtInt}/SNAP_const", clear
+		lab	var	FS_rec_wth	"SNAP received"
 		
 		*	Summary stats of PFS (with and w/o COLI)
 		summ 	PFS_glm  	[aw=wgt_long_fam_adj]	if !mi(PFS_glm) & !mi(PFS_glm_noCOLI) & inrange(year,1990,2015)
@@ -34,6 +35,11 @@
 		rename	PFS_glm_noCOLI	PFS_glm
 		lab	var	PFS_glm	"PFS"
 		
+		
+		*	(2023-08-20)	Keep non-missing PFS obs only.
+		keep	if	!mi(PFS_glm)
+		assert	income_ever_below_200==1
+	
 		*	Construct an indicator with balanced sample from 1997-2013
 			*	For dynamic treatment effect, each endogenous treatment should be instrumented, meaning I can use observations when IV is available (1997-2013)
 			*	If we aggregate PFS over 3 waves (PFS_t, PFS_t-2, PFS_t-4), we can have FSD variables over three waves (FSD_2001, ..., FSD_2013)
@@ -41,7 +47,7 @@
 		cap	drop	balanced_9713
 		bys	x11101ll: egen num_nomiss_9713 = count(PFS_glm) if inrange(year,1997,2013)
 		gen	balanced_9713	=	1	if	inrange(year,1997,2013)	&	num_nomiss_9713	==	9	// should be 11 non-missing PFS over 1997-2017
-		lab	var	balanced_9713	"PFS balanced b/w 1997-2017"
+		lab	var	balanced_9713	"PFS balanced b/w 1997-2013"
 		drop	num_nomiss_9713
 		
 		*	Keep only observations where citizen ideology IV is available (1977-2015)
@@ -100,7 +106,7 @@
 		global	macrovars		unemp_rate	CPI
 		global	regionvars		rp_state_enum2-rp_state_enum31 rp_state_enum33-rp_state_enum50 	//	Excluding NY (rp_state_enum32) and outside 48 states (1, 52, 53). The latter should be excluded when running regression
 		*global	timevars		year_enum4-year_enum11 year_enum14-year_enum30 //	Exclude year_enum3 (1978) as base category. year_enum12 (1990)  and year_enum13 (1991) are excluded due to lack of lagged data.
-		global	timevars		year_enum19-year_enum26	//	Using year_enum18 (1996) as a base year, when regressing with SNAP index IV (1996-2013)
+		global	timevars		year_enum4-year_enum11 year_enum14-year_enum30	//	Using year_enum18 (1996) as a base year, when regressing with SNAP index IV (1996-2013)
 		global	indvars			/*ind_female*/ age_ind	age_ind_sq ind_NoHS ind_somecol ind_col /* ind_employed_dummy*/
 		
 
@@ -153,8 +159,8 @@
 			clonevar	FSamtcp			=	FS_rec_amt_capita_real
 			
 			gen			FSamtK	=	FSamt/1000
-			lab	var		FSamtK	"Stamp benefit (USD) (K)"
-			lab	var		FSamtcp	"FS/SNAP benefit amount per capita"
+			lab	var		FSamtK	"SNAP benefit (USD) (K)"
+			lab	var		FSamtcp	"SNAP benefit amount per capita"
 			
 			cap	drop	FS_amt_real
 			cap	drop	FS_amt_realK
@@ -164,9 +170,9 @@
 			gen			FS_amt_realK		=	FS_rec_amt_real	/	1000
 			clonevar	FS_amt_cap_real		=	FS_rec_amt_capita_real
 			gen			FS_amt_cap_realK	=	FS_rec_amt_capita_real / 1000
-			lab	var		FS_amt_real			"FS/SNAP benefit"
-			lab	var		FS_amt_realK		"FS/SNAP benefit (K)"
-			lab	var		FS_amt_cap_realK	"FS/SNAP benefit per capita (K)"
+			lab	var		FS_amt_real			"SNAP benefit"
+			lab	var		FS_amt_realK		"SNAP benefit (K)"
+			lab	var		FS_amt_cap_realK	"SNAP benefit per capita (K)"
 	
 		*	Temporarily rescale SSI and share variables (0-1 to 1-100)
 		qui	ds	share_edu_exp_sl-SSI_GDP_s
@@ -318,1215 +324,275 @@
 			di	"${FSD_on_FS_X_l2}"
 			di	"${FSD_on_FS_X_l4}"			
 				
-				
-			*	Unweighted Policy index
+			
+						
+			*	IV - Switch between Weighted Policy index, CIM and GIM
 				
 				*	Setup
-				loc	depvar		PFS_glm
-				loc	endovar		FSdummy	//	FSamt_capita
-				loc	IV			SNAP_index_uw	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
-				loc	IVname		index_uw
+				global	depvar		PFS_glm
+				global	endovar		FSdummy	//	FSamt_capita
+				global	IV			citi6016	//	inst6017_nom	//	citi6016	//	SNAP_index_w	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
+				global	IVname		CIM	//	index_w
 	
-			
-				*	First we run main IV regression including all FE, to use the uniform sample across different FE/specifications
-				*	Sample restricted to (i) Income always below 200% through 97
-					cap	drop reg_sample	
-					ivreghdfe	`depvar'	 ${FSD_on_FS_X}	 ${timevars}	(`endovar' = `IV')	[aw=wgt_long_fam_adj] ///
-						if	income_ever_below_200_9713==1 &	balanced_9713==1	&	!mi(`IV'),	///
-						absorb(x11101ll	/*ib1996.year*/)  robust	cluster(x11101ll) //first  savefirst savefprefix(`IVname')	 
-					gen	reg_sample=1 if e(sample)
-					lab	var	reg_sample "Sample in IV regression"		
-					
-					*	Impute individual-level average covariates over time, using regression sample only (to comply with Wooldridge (2019))
-					cap	drop	*_bar
-					ds	${FSD_on_FS_X} ${timevars}
-					foreach	var	in	`r(varlist)'	{
-						bys	x11101ll:	egen	`var'_bar	=	mean(`var')	if	reg_sample==1
-					}
-					qui	ds	*_bar
-					global	Mundlak_vars	`r(varlist)'
-					
-					
-					
-				*	Reduced form	(regress PFS on policy index)
-				loc	IV			SNAP_index_uw	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
-				loc	IVname		index_uw	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
-				reghdfe		PFS_glm	 `IV' ${FSD_on_FS_X}	 [aw=wgt_long_fam_adj] if	reg_sample==1,	vce(cluster x11101ll) noabsorb	//	no FE
-				est	store	`IVname'_red_nofe
-				reghdfe		PFS_glm	 `IV' ${FSD_on_FS_X}	${timevars}	 [aw=wgt_long_fam_adj] if	reg_sample==1,	vce(cluster x11101ll) noabsorb // year FE
-				est	store	`IVname'_red_yfe
-				reghdfe		PFS_glm	 `IV' ${FSD_on_FS_X}	${timevars}	${Mundlak_vars}	 [aw=wgt_long_fam_adj] if	reg_sample==1,	vce(cluster x11101ll) noabsorb // absorb(ib1997.year)
-				est	store	`IVname'_red_Mundlak
-				reghdfe		PFS_glm	 `IV' ${FSD_on_FS_X}	${timevars} [aw=wgt_long_fam_adj] if	reg_sample==1,	vce(cluster x11101ll) absorb(/*ib1997.year*/ x11101ll)
-				est	store	`IVname'_red_yife
 				
-				esttab	`IVname'_red_nofe	`IVname'_red_yfe	 `IVname'_red_Mundlak	`IVname'_red_yife	using "${SNAP_outRaw}/PFS_`IVname'_reduced.csv", ///
-				cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2 Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
-				title(PFS on FS dummy)		replace	
-		
-				*	OLS
+				lab	var	age_ind		"Age (ind)"
+				lab	var	age_ind_sq	"Age$^2$ (ind)"
+				lab	var	FS_rec_wth	"SNAP received"
 				
-					*	no FE
-					reghdfe		PFS_glm	 FSdummy ${FSD_on_FS_X}	 [aw=wgt_long_fam_adj] if	reg_sample==1,	vce(cluster x11101ll) noabsorb
-					*reg		`depvar'	`endovar'	${FSD_on_FS_X}	[aw=wgt_long_fam_adj]	if	income_below_200==1,	robust	//cluster(x11101ll) // first savefirst savefprefix(`IVname')
-					est	store	nofe_ols	
+				*	First we run main IV regression, to use the uniform sample across different FE/specifications
 					
-						/*
-						*	With 1996-2015 only (SNAP index)
-						reghdfe		PFS_glm	 FSdummy ${FSD_on_FS_X}	 [aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(reg_sample)	&	!mi(SNAP_index_w),	vce(robust) noabsorb
-						est	store	nofesub_ols
-						*/
+					*	All sample (1979-2015)
+					global	Z	${IV}
 					
-					*	year FE
-					*reg		`depvar'	`endovar'	${FSD_on_FS_X}	${regionvars}	[aw=wgt_long_fam_adj]	if	income_below_200==1,	robust	// cluster(x11101ll) // first savefirst savefprefix(`IVname') ///
-					reghdfe		PFS_glm	 FSdummy ${FSD_on_FS_X}	${timevars}	 [aw=wgt_long_fam_adj] if	reg_sample==1,	vce(cluster x11101ll) noabsorb // absorb(ib1997.year)
-					est	store	yfe_ols
+					cap	drop reg_sample_all
+					ivreghdfe	${depvar}	 ${FSD_on_FS_X}	${timevars}	 (${endovar} = ${Z})	[aw=wgt_long_fam_adj] if	income_ever_below_200==1	&	!mi(${IV}),	///
+						absorb(/*x11101ll	ib1997.year*/) robust	cluster(x11101ll) //	first  savefirst savefprefix(${IVname})	 
+					gen	reg_sample_all=1 if e(sample)
+					lab	var	reg_sample_all "Sample in IV regression (1979-2015)"		
 					
-						/*
-						*	With 1996-2015 only (SNAP index)
-						reghdfe		PFS_glm	 FSdummy ${FSD_on_FS_X}	 [aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(reg_sample) & !mi(SNAP_index_w),	vce(robust) absorb(ib31.rp_state)
-						est	store	stfesub_ols
-						*/
-						
-					*	Mundlak controls
-					reghdfe		PFS_glm	 FSdummy ${FSD_on_FS_X}	${timevars}	${Mundlak_vars}	 [aw=wgt_long_fam_adj] if	reg_sample==1,	vce(cluster x11101ll) noabsorb // absorb(ib1997.year)
-					est	store	mund_ols
+					*	Balanced 1997-2013 sample (for SNAP index)
+					global	Z	${IV}
 					
-					*	year and individual FE
-					reghdfe		PFS_glm	 FSdummy ${FSD_on_FS_X}	${timevars} [aw=wgt_long_fam_adj] if	reg_sample==1,	vce(cluster x11101ll) absorb(/*ib1997.year*/ x11101ll)
-					est	store	yife_ols
-					
-						/*
-						*	With 1996-2015 only (SNAP index)
-						reghdfe		PFS_glm	 FSdummy ${FSD_on_FS_X}	 [aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(reg_sample) & !mi(SNAP_index_w),	vce(robust) absorb(ib31.rp_state x11101ll)
-						est	store	fesub_ols
-						*/
-						
-					*	Output OLS results
-						esttab	nofe_ols	yfe_ols	 mund_ols	yife_ols	using "${SNAP_outRaw}/PFS_index_OLS_only.csv", ///
-						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2 Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
-						title(PFS on FS dummy)		replace	
-					
-				*	IV		
-				loc	depvar		PFS_glm
-				loc	endovar		FSdummy	//	FSamt_capita
-				loc	IV			SNAP_index_uw	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
-				loc	IVname		index_uw_Z
-							
-					
-					*	w/o FE		
-						
-						*	OLS in the first stage (classic 2SLS)
-						ivreghdfe	PFS_glm	${FSD_on_FS_X}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	reg_sample==1, cluster (x11101ll)	first savefirst savefprefix(`IVname')	 
-						est	store	`IVname'_nofe_2nd
-						scalar	Fstat_CD_`IVname'	=	 e(cdf)
-						scalar	Fstat_KP_`IVname'	=	e(widstat)
-					
-						est	restore	`IVname'`endovar'
-						estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
-						estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
-
-						est	store	`IVname'_nofe_1st
-						est	drop	`IVname'`endovar'
-						
-						*	MLE in the first stage
-						*	We first construct fitted value of the endogenous variable from the first stage, to be used as an IV
-						loc	depvar		PFS_glm
-						loc	endovar		FSdummy	//	FSamt_capita
-						loc	IV			SNAP_index_uw	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
-						loc	IVname		index_uw_Dhat
-						
-						cap	drop	FSdummy_hat
-						logit	FSdummy	`IV'	${FSD_on_FS_X}	[pw=wgt_long_fam_adj] if	reg_sample==1, vce(cluster x11101ll) 
-						predict	FSdummy_hat, p
-		
-						*	IVregress with the predicted value (Dhat)
-						loc	IV		FSdummy_hat	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
-						ivreghdfe	PFS_glm	${FSD_on_FS_X}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	reg_sample==1, cluster (x11101ll)	first savefirst savefprefix(`IVname')	 
-						
-						est	store	`IVname'_nofe_2nd
-						scalar	Fstat_CD_`IVname'	=	 e(cdf)
-						scalar	Fstat_KP_`IVname'	=	e(widstat)
-					
-						est	restore	`IVname'`endovar'
-						estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
-						estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
-
-						est	store	`IVname'_nofe_1st
-						est	drop	`IVname'`endovar'
-						
-						*	IVregress with BOTH Z and Dhat
-						loc	depvar		PFS_glm
-						loc	endovar		FSdummy	//	FSamt_capita
-						loc	IV			SNAP_index_uw	FSdummy_hat	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
-						loc	IVname		index_uw_ZDhat
-						
-						ivreghdfe	PFS_glm	${FSD_on_FS_X}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	reg_sample==1, cluster (x11101ll)	first savefirst savefprefix(`IVname')	 
-						
-						est	store	`IVname'_nofe_2nd
-						scalar	Fstat_CD_`IVname'	=	 e(cdf)
-						scalar	Fstat_KP_`IVname'	=	e(widstat)
-					
-						est	restore	`IVname'`endovar'
-						estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
-						estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
-
-						est	store	`IVname'_nofe_1st
-						est	drop	`IVname'`endovar'
-		
-				
-				*	Tabulate results comparing OLS and IV
-				
-												
-						*	1st stage
-						esttab	index_uw_Z_nofe_1st 	index_uw_Dhat_nofe_1st	index_uw_ZDhat_nofe_1st	using "${SNAP_outRaw}/PFS_index_IV_nofe_1st.csv", ///
-						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
-						title(PFS on FS dummy)		replace	
-													
-					
-					*	2nd stage (OLS with and w/o FE, IV with and w/o FE)
-						
-													
-						*	SNAP index
-						esttab	nofe_ols	index_uw_Z_nofe_2nd 	index_uw_Dhat_nofe_2nd	index_uw_ZDhat_nofe_2nd	using "${SNAP_outRaw}/PFS_index_IV_nofe_2nd.csv", ///
-						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
-						title(PFS on FS dummy)		replace	
-						
-						/*
-						esttab	nofe_ols	index_uw_Z_nofe_2nd 	index_uw_Dhat_nofe_2nd	index_uw_ZDhat_nofe_2nd	using "${SNAP_outRaw}/PFS_index_IV_nofe_2nd.tex", ///
-						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(rp_state_enum*)	///
-						title(PFS on FS dummy)		replace	
-						*/					
-				
-				
-				*	with year FE only	
-					
-					*	IV
-					loc	depvar		PFS_glm
-					loc	endovar		FSdummy	//	FSamt_capita
-					loc	IV			SNAP_index_uw	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
-					loc	IVname		index_uw_Z
-	
-						
-						*	OLS in the first stage (classic 2SLS)
-						ivreghdfe	PFS_glm	${FSD_on_FS_X}	${timevars}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	reg_sample==1, ///
-							cluster (x11101ll)	/*absorb(year)*/		first savefirst savefprefix(`IVname')	 
-						est	store	`IVname'_yfe_2nd
-						scalar	Fstat_CD_`IVname'	=	 e(cdf)
-						scalar	Fstat_KP_`IVname'	=	e(widstat)
-					
-						est	restore	`IVname'`endovar'
-						estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
-						estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
-
-						est	store	`IVname'_yfe_1st
-						est	drop	`IVname'`endovar'
-						
-						*	MLE in the first stage
-						*	We first construct fitted value of the endogenous variable from the first stage, to be used as an IV
-						loc	depvar		PFS_glm
-						loc	endovar		FSdummy	//	FSamt_capita
-						loc	IV			SNAP_index_uw	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
-						loc	IVname		index_uw_Dhat
-						
-						cap	drop	FSdummy_hat
-						logit	FSdummy	`IV'	${FSD_on_FS_X}	${timevars} [pw=wgt_long_fam_adj] if	reg_sample==1, vce(cluster x11101ll) 
-						predict	FSdummy_hat
-		
-						*	IVregress with the predicted value (Dhat)
-						loc	IV		FSdummy_hat	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
-						ivreghdfe	PFS_glm	${FSD_on_FS_X}	${timevars}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	reg_sample==1, cluster (x11101ll)	first savefirst savefprefix(`IVname')	 
-						
-						est	store	`IVname'_yfe_2nd
-						scalar	Fstat_CD_`IVname'	=	 e(cdf)
-						scalar	Fstat_KP_`IVname'	=	e(widstat)
-					
-						est	restore	`IVname'`endovar'
-						estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
-						estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
-
-						est	store	`IVname'_yfe_1st
-						est	drop	`IVname'`endovar'
-						
-						*	IVregress with BOTH Z and Dhat
-						loc	depvar		PFS_glm
-						loc	endovar		FSdummy	//	FSamt_capita
-						loc	IV			SNAP_index_uw	FSdummy_hat	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
-						loc	IVname		index_uw_ZDhat
-						
-						ivreghdfe	PFS_glm	${FSD_on_FS_X}	${timevars}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	reg_sample==1, cluster (x11101ll)	first savefirst savefprefix(`IVname')	 
-						
-						est	store	`IVname'_yfe_2nd
-						scalar	Fstat_CD_`IVname'	=	 e(cdf)
-						scalar	Fstat_KP_`IVname'	=	e(widstat)
-					
-						est	restore	`IVname'`endovar'
-						estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
-						estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
-
-						est	store	`IVname'_yfe_1st
-						est	drop	`IVname'`endovar'
+					cap	drop reg_sample_9713
+					ivreghdfe	${depvar}	 ${FSD_on_FS_X}	${timevars}	 (${endovar} = ${Z})	[aw=wgt_long_fam_adj] if	income_ever_below_200_9713==1 &	balanced_9713==1	&	!mi(${IV}),	///
+						absorb(/*x11101ll	ib1997.year*/) robust	cluster(x11101ll) //	first  savefirst savefprefix(${IVname})	 
+					gen	reg_sample_9713=1 if e(sample)
+					lab	var	reg_sample_9713 "Sample in IV regression (1997-2013)"	
 					
 					
-					*	Tabulate results comparing OLS and IV
-										
-						*	1st stage
-						esttab	index_uw_Z_yfe_1st 	index_uw_Dhat_yfe_1st	index_uw_ZDhat_yfe_1st	using "${SNAP_outRaw}/PFS_index_IV_yfe_1st.csv", ///
-						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/ year_enum*)	///
-						title(PFS on FS dummy)		replace	
-													
-					
-					*	2nd stage (OLS with and w/o FE, IV with and w/o FE)
-						
-													
-						*	SNAP index
-						esttab	yfe_ols	index_uw_Z_yfe_2nd 	index_uw_Dhat_yfe_2nd	index_uw_ZDhat_yfe_2nd	using "${SNAP_outRaw}/PFS_index_IV_yfe_2nd.csv", ///
-						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/ year_enum*)	///
-						title(PFS on FS dummy)		replace	
-						
-				
-				
-				*	With Mundlak controls (which include year-FE) (Wooldridge 2019)
-				
-						*	IV
-					loc	depvar		PFS_glm
-					loc	endovar		FSdummy	//	FSamt_capita
-					loc	IV			SNAP_index_uw	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
-					loc	IVname		index_uw_Z
-	
-						
-						*	OLS in the first stage (classic 2SLS)
-						ivreghdfe	PFS_glm	${FSD_on_FS_X}	${timevars}	${Mundlak_vars}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	reg_sample==1, ///
-							cluster (x11101ll)	/*absorb(year)*/	first savefirst savefprefix(`IVname') partial(*_bar)
-						est	store	`IVname'_mund_2nd
-						scalar	Fstat_CD_`IVname'	=	 e(cdf)
-						scalar	Fstat_KP_`IVname'	=	e(widstat)
-					
-						est	restore	`IVname'`endovar'
-						estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
-						estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
-
-						est	store	`IVname'_mund_1st
-						est	drop	`IVname'`endovar'
-						
-						*	MLE in the first stage
-						*	We first construct fitted value of the endogenous variable from the first stage, to be used as an IV
-						loc	depvar		PFS_glm
-						loc	endovar		FSdummy	//	FSamt_capita
-						loc	IV			SNAP_index_uw	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
-						loc	IVname		index_uw_Dhat
-						
-						cap	drop	FSdummy_hat
-						logit	FSdummy	`IV'	${FSD_on_FS_X}	${timevars}	${Mundlak_vars} [pw=wgt_long_fam_adj] if	reg_sample==1, vce(cluster x11101ll) 
-						predict	FSdummy_hat
-		
-						*	IVregress with the predicted value (Dhat)
-						loc	IV		FSdummy_hat	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
-						ivreghdfe	PFS_glm	${FSD_on_FS_X}	${timevars}	${Mundlak_vars}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	reg_sample==1, cluster (x11101ll)	first savefirst savefprefix(`IVname')	 partial(*_bar)
-						
-						est	store	`IVname'_mund_2nd
-						scalar	Fstat_CD_`IVname'	=	 e(cdf)
-						scalar	Fstat_KP_`IVname'	=	e(widstat)
-					
-						est	restore	`IVname'`endovar'
-						estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
-						estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
-
-						est	store	`IVname'_mund_1st
-						est	drop	`IVname'`endovar'
-						
-						*	IVregress with BOTH Z and Dhat
-						loc	depvar		PFS_glm
-						loc	endovar		FSdummy	//	FSamt_capita
-						loc	IV			SNAP_index_uw	FSdummy_hat	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
-						loc	IVname		index_uw_ZDhat
-						
-						ivreghdfe	PFS_glm	${FSD_on_FS_X}	${timevars}	${Mundlak_vars}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	reg_sample==1, cluster (x11101ll)	first savefirst savefprefix(`IVname')	 partial(*_bar)
-						
-						est	store	`IVname'_mund_2nd
-						scalar	Fstat_CD_`IVname'	=	 e(cdf)
-						scalar	Fstat_KP_`IVname'	=	e(widstat)
-					
-						est	restore	`IVname'`endovar'
-						estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
-						estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
-
-						est	store	`IVname'_mund_1st
-						est	drop	`IVname'`endovar'
-					
-					
-					*	Tabulate results comparing OLS and IV								
-						
-						*	1st stage
-						esttab	index_uw_Z_mund_1st 	index_uw_Dhat_mund_1st	index_uw_ZDhat_mund_1st	using "${SNAP_outRaw}/PFS_index_IV_mund_1st.csv", ///
-						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/ year_enum*)	///
-						title(PFS on FS dummy)		replace	
-													
-					
-					*	2nd stage (OLS with and w/o FE, IV with and w/o FE)		
-													
-						*	SNAP index
-						esttab	mund_ols	index_uw_Z_mund_2nd 	index_uw_Dhat_mund_2nd	index_uw_ZDhat_mund_2nd	using "${SNAP_outRaw}/PFS_index_IV_mund_2nd.csv", ///
-						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/ year_enum*)	///
-						title(PFS on FS dummy)		replace	
-				
-			
-				*	with year- and individual- FE
-				*	(2023-08-01) NOTE: It does not work with the latest sample (balanced individuals whose income is ever below 200% PL) due to unexpeded errors seems to be related with the perfect collinearity
-					*	(source: https://github.com/sergiocorreia/ivreghdfe/issues/24)
-				*	I will disable it for now.
-					*	When I manually run without displaying the first stage, the second stage effect goes crazy (0.55), so should be OK to ignore it.
-					
-					*	IV
-					loc	depvar		PFS_glm
-					loc	endovar		FSdummy	//	FSamt_capita
-					loc	IV			SNAP_index_uw	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
-					loc	IVname		index_uw_Z
-	
-						
-						*	OLS in the first stage (classic 2SLS)
-						ivreghdfe	PFS_glm	${FSD_on_FS_X}	${timevars} 		(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	reg_sample==1, ///
-							absorb(x11101ll)		cluster (x11101ll)  		first  savefirst savefprefix(`IVname')
-							
-						est	store	`IVname'_yife_2nd
-						scalar	Fstat_CD_`IVname'	=	 e(cdf)
-						scalar	Fstat_KP_`IVname'	=	e(widstat)
-					
-						est	restore	`IVname'`endovar'
-						estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
-						estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
-
-						est	store	`IVname'_yife_1st
-						est	drop	`IVname'`endovar'
-						
-						*	MLE in the first stage
-						*	We first construct fitted value of the endogenous variable from the first stage, to be used as an IV
-						loc	depvar		PFS_glm
-						loc	endovar		FSdummy	//	FSamt_capita
-						loc	IV			SNAP_index_uw	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
-						loc	IVname		index_uw_Dhat
-						
-						cap	drop	FSdummy_hat
-						clogit	FSdummy	`IV'	${FSD_on_FS_X}	${timevars}  if	reg_sample==1, group(x11101ll)
-						predict	FSdummy_hat, p
-		
-						*	IVregress with the predicted value (Dhat)
-						loc	IV		FSdummy_hat	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
-						ivreghdfe	PFS_glm	${FSD_on_FS_X}	${timevars}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	reg_sample==1, ///
-							absorb(x11101ll)	cluster (x11101ll)	first savefirst savefprefix(`IVname')	 
-						
-						est	store	`IVname'_yife_2nd
-						scalar	Fstat_CD_`IVname'	=	 e(cdf)
-						scalar	Fstat_KP_`IVname'	=	e(widstat)
-					
-						est	restore	`IVname'`endovar'
-						estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
-						estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
-
-						est	store	`IVname'_yife_1st
-						est	drop	`IVname'`endovar'
-						
-						*	IVregress with BOTH Z and Dhat
-						loc	depvar		PFS_glm
-						loc	endovar		FSdummy	//	FSamt_capita
-						loc	IV			SNAP_index_uw	FSdummy_hat	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
-						loc	IVname		index_uw_ZDhat
-						
-						ivreghdfe	PFS_glm	${FSD_on_FS_X}	${timevars}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	reg_sample==1, ///
-							absorb(x11101ll)	cluster (x11101ll)	first savefirst savefprefix(`IVname')	 
-						
-						est	store	`IVname'_yife_2nd
-						scalar	Fstat_CD_`IVname'	=	 e(cdf)
-						scalar	Fstat_KP_`IVname'	=	e(widstat)
-					
-						est	restore	`IVname'`endovar'
-						estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
-						estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
-
-						est	store	`IVname'_yife_1st
-						est	drop	`IVname'`endovar'
-					
-					
-					*	Tabulate results comparing OLS and IV
-				
-												
-						*	1st stage
-						esttab	index_uw_Z_yife_1st 	index_uw_Dhat_yife_1st	index_uw_ZDhat_yife_1st	using "${SNAP_outRaw}/PFS_index_IV_yife_1st.csv", ///
-						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/ year_enum*)	///
-						title(PFS on FS dummy)		replace	
-													
-					
-					*	2nd stage (OLS with and w/o FE, IV with and w/o FE)
-						
-													
-						*	SNAP index
-						esttab	yife_ols	index_uw_Z_yife_2nd 	index_uw_Dhat_yife_2nd	index_uw_ZDhat_yife_2nd	using "${SNAP_outRaw}/PFS_index_IV_yife_2nd.csv", ///
-						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/ year_enum*)	///
-						title(PFS on FS dummy)		replace	
-						
-						/*
-						esttab	nofe_ols	index_uw_Z_nofe_2nd 	index_uw_Dhat_nofe_2nd	index_uw_ZDhat_nofe_2nd	using "${SNAP_outRaw}/PFS_index_IV_nofe_2nd.tex", ///
-						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(rp_state_enum*)	///
-						title(PFS on FS dummy)		replace	
-						*/		
-			
-				
-					*	Output in the order I want
-					
-					*	1st stage (Z, Dhat, Z and Dhat)
-					esttab	index_uw_Z_nofe_1st	index_uw_Dhat_nofe_1st	index_uw_ZDhat_nofe_1st	index_uw_Z_yfe_1st	index_uw_Dhat_yfe_1st	index_uw_ZDhat_yfe_1st	///
-							index_uw_Z_mund_1st	index_uw_Dhat_mund_1st	index_uw_ZDhat_mund_1st	index_uw_Z_yife_1st	index_uw_Dhat_yife_1st	index_uw_ZDhat_yife_1st			///
-						using "${SNAP_outRaw}/PFS_index_uw_1st.csv", ///
-						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/ year_enum*)	///
-						title(PFS on FS dummy)		replace	
-				
-					*	2nd stage (Z, Dhat, Z and Dhat)
-					esttab	index_uw_Z_nofe_2nd	index_uw_Dhat_nofe_2nd	index_uw_ZDhat_nofe_2nd	index_uw_Z_yfe_2nd	index_uw_Dhat_yfe_2nd	index_uw_ZDhat_yfe_2nd	///
-							index_uw_Z_mund_2nd	index_uw_Dhat_mund_2nd	index_uw_ZDhat_mund_2nd	index_uw_Z_yife_2nd	index_uw_Dhat_yife_2nd	index_uw_ZDhat_yife_2nd			///
-						using "${SNAP_outRaw}/PFS_index_uw_2nd.csv", ///
-						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2 Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/ year_enum*)	///
-						title(PFS on FS dummy)		replace	
-				
-				
-				
-				
-						
-			*	Weighted Policy index
-				
-				*	Setup
-				loc	depvar		PFS_glm
-				loc	endovar		FSdummy	//	FSamt_capita
-				loc	IV			SNAP_index_w	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
-				loc	IVname		index_w
-	
-			
-				*	First we run main IV regression including all FE, to use the uniform sample across different FE/specifications
-					cap	drop reg_sample	
-					ivreghdfe	`depvar'	 ${FSD_on_FS_X}	${timevars}	 (`endovar' = `IV')	[aw=wgt_long_fam_adj] if	income_ever_below_200_9713==1 &	balanced_9713==1	&	!mi(`IV'),	///
-						absorb(x11101ll	/*ib1997.year*/) robust	cluster(x11101ll) //	first  savefirst savefprefix(`IVname')	 
-					gen	reg_sample=1 if e(sample)
-					lab	var	reg_sample "Sample in IV regression"		
+					*	Mean value of PFS in each sapmle
+					summ	${depvar}	[aw=wgt_long_fam_adj] if	reg_sample_all==1
+					summ	${depvar}	[aw=wgt_long_fam_adj] if	reg_sample_9713==1
 					
 				*	Impute individual-level average covariates over time, using regression sample only (to comply with Wooldridge (2019))
-				cap	drop	*_bar
-				ds	${FSD_on_FS_X} ${timevars}
-				foreach	var	in	`r(varlist)'	{
-					bys	x11101ll:	egen	`var'_bar	=	mean(`var')	if	reg_sample==1
-				}
-				qui	ds	*_bar
-				global	Mundlak_vars	`r(varlist)'
-			
-			
-			*	Reduced form	(regress PFS on policy index)
-				loc	IV			SNAP_index_w	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
-				loc	IVname		index_w	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
-				reghdfe		PFS_glm	 `IV' ${FSD_on_FS_X}	 [aw=wgt_long_fam_adj] if	reg_sample==1,	vce(cluster x11101ll) noabsorb	//	no FE
-				est	store	`IVname'_red_nofe
-				reghdfe		PFS_glm	 `IV' ${FSD_on_FS_X}	${timevars}	 [aw=wgt_long_fam_adj] if	reg_sample==1,	vce(cluster x11101ll) noabsorb // year FE
-				est	store	`IVname'_red_yfe
-				reghdfe		PFS_glm	 `IV' ${FSD_on_FS_X}	${timevars}	${Mundlak_vars}	 [aw=wgt_long_fam_adj] if	reg_sample==1,	vce(cluster x11101ll) noabsorb // absorb(ib1997.year)
-				est	store	`IVname'_red_Mundlak
-				reghdfe		PFS_glm	 `IV' ${FSD_on_FS_X}	${timevars} [aw=wgt_long_fam_adj] if	reg_sample==1,	vce(cluster x11101ll) absorb(/*ib1997.year*/ x11101ll)
-				est	store	`IVname'_red_yife
-				
-				esttab	`IVname'_red_nofe	`IVname'_red_yfe	 `IVname'_red_Mundlak	`IVname'_red_yife	using "${SNAP_outRaw}/PFS_`IVname'_reduced.csv", ///
-				cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2 Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
-				title(PFS on FS dummy)		replace	
-		
-			
+				*	(2023-08-20) Let's think carefully the right way to aggregate time dumies
+					
+					*	Mundlak var of time dummy					
+					foreach	samp	in	all	9713	{
+					
+						*	All sample
+						cap	drop	*_bar`samp'
+						ds	${FSD_on_FS_X} ${timevars}
+						foreach	var	in	`r(varlist)'	{
+							bys	x11101ll:	egen	`var'_bar`samp'	=	mean(`var')	if	reg_sample_`samp'==1
+						}
+						qui	ds	*_bar`samp'
+						global	Mundlak_vars_`samp'	`r(varlist)'
+					
+					}
 			
 			
 				*	OLS
-				
-					*	no FE
-					reghdfe		PFS_glm	 FSdummy ${FSD_on_FS_X}	 [aw=wgt_long_fam_adj] if	reg_sample==1,	vce(cluster x11101ll) noabsorb
-					*reg		`depvar'	`endovar'	${FSD_on_FS_X}	[aw=wgt_long_fam_adj]	if	income_below_200==1,	robust	//cluster(x11101ll) // first savefirst savefprefix(`IVname')
-					est	store	nofe_ols	
 					
-						/*
-						*	With 1996-2015 only (SNAP index)
-						reghdfe		PFS_glm	 FSdummy ${FSD_on_FS_X}	 [aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(reg_sample)	&	!mi(SNAP_index_w),	vce(robust) noabsorb
-						est	store	nofesub_ols
-						*/
-					
-					*	year FE
-					*reg		`depvar'	`endovar'	${FSD_on_FS_X}	${regionvars}	[aw=wgt_long_fam_adj]	if	income_below_200==1,	robust	// cluster(x11101ll) // first savefirst savefprefix(`IVname') ///
-					reghdfe		PFS_glm	 FSdummy ${FSD_on_FS_X}	${timevars}	 [aw=wgt_long_fam_adj] if	reg_sample==1,	vce(cluster x11101ll) noabsorb	//	absorb(ib1997.year)
-					est	store	yfe_ols
-					
-						/*
-						*	With 1996-2015 only (SNAP index)
-						reghdfe		PFS_glm	 FSdummy ${FSD_on_FS_X}	 [aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(reg_sample) & !mi(SNAP_index_w),	vce(robust) absorb(ib31.rp_state)
-						est	store	stfesub_ols
-						*/
+					foreach	samp	in	all	9713	{
 						
-					*	Individual fixed effects with macro-economic variables
-					*reghdfe		PFS_glm	 FSdummy ${FSD_on_FS_X}	${macrovars}	 [aw=wgt_long_fam_adj] if	reg_sample==1,	vce(cluster x11101ll) absorb(x11101ll)
-					*est	store	macro_ols
-					
-					*	Mundlak controls
-					reghdfe		PFS_glm	 FSdummy ${FSD_on_FS_X}	${timevars}	${Mundlak_vars}	 [aw=wgt_long_fam_adj] if	reg_sample==1,	vce(cluster x11101ll) noabsorb // absorb(ib1997.year)
-					est	store	mund_ols
-					
-					*	year and individual FE
-					reghdfe		PFS_glm	 FSdummy ${FSD_on_FS_X}	${timevars} [aw=wgt_long_fam_adj] if	reg_sample==1,	vce(cluster x11101ll) absorb(/*ib1997.year*/ x11101ll)
-					est	store	yife_ols
-					
-						/*
-						*	With 1996-2015 only (SNAP index)
-						reghdfe		PFS_glm	 FSdummy ${FSD_on_FS_X}	 [aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(reg_sample) & !mi(SNAP_index_w),	vce(robust) absorb(ib31.rp_state x11101ll)
-						est	store	fesub_ols
-						*/
-						
-					*	Output OLS results
-						esttab	nofe_ols	yfe_ols	 mund_ols	yife_ols	using "${SNAP_outRaw}/PFS_index_OLS_only.csv", ///
-						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2 Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
-						title(PFS on FS dummy)		replace	
-					
-			
-			
-			*	Reduced form	(regress PFS on policy index)
-				loc	IV			SNAP_index_w	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
-				loc	IVname		index_w	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
-				reghdfe		PFS_glm	 `IV' ${FSD_on_FS_X}	 [aw=wgt_long_fam_adj] if	reg_sample==1,	vce(cluster x11101ll) noabsorb	//	no FE
-				est	store	`IVname'_red_nofe
-				reghdfe		PFS_glm	 `IV' ${FSD_on_FS_X}	${timevars}	 [aw=wgt_long_fam_adj] if	reg_sample==1,	vce(cluster x11101ll) noabsorb // year FE
-				est	store	`IVname'_red_yfe
-				reghdfe		PFS_glm	 `IV' ${FSD_on_FS_X}	${timevars}	${Mundlak_vars}	 [aw=wgt_long_fam_adj] if	reg_sample==1,	vce(cluster x11101ll) noabsorb // absorb(ib1997.year)
-				est	store	`IVname'_red_Mundlak
-				reghdfe		PFS_glm	 `IV' ${FSD_on_FS_X}	${timevars} [aw=wgt_long_fam_adj] if	reg_sample==1,	vce(cluster x11101ll) absorb(/*ib1997.year*/ x11101ll)
-				est	store	`IVname'_red_yife
-				
-				esttab	`IVname'_red_nofe	`IVname'_red_yfe	 `IVname'_red_Mundlak	`IVname'_red_yife	using "${SNAP_outRaw}/PFS_`IVname'_reduced.csv", ///
-				cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2 Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
-				title(PFS on FS dummy)		replace	
-		
-			
-					
-				*	IV		
-				loc	depvar		PFS_glm
-				loc	endovar		FSdummy	//	FSamt_capita
-			
+						*	Mundlak controls, all sample
+						reghdfe		PFS_glm	 FSdummy ${FSD_on_FS_X}	${timevars}	${Mundlak_vars}	 [aw=wgt_long_fam_adj] if	reg_sample_`samp'==1,	vce(cluster x11101ll) noabsorb // absorb(ib1997.year)
+						est	store	mund_ols_`samp'
+						estadd	local	yearFE	"Y"
 							
-					*	w/o FE		
-						
-						*	OLS in the first stage (classic 2SLS)
-						loc	IV			SNAP_index_w	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
-						loc	IVname		index_w_Z
-						
-						ivreghdfe	PFS_glm	${FSD_on_FS_X}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	reg_sample==1, cluster (x11101ll)	first savefirst savefprefix(`IVname')	 
-						est	store	`IVname'_nofe_2nd
-						scalar	Fstat_CD_`IVname'	=	 e(cdf)
-						scalar	Fstat_KP_`IVname'	=	e(widstat)
+					}
 					
-						est	restore	`IVname'`endovar'
-						estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
-						estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
-
-						est	store	`IVname'_nofe_1st
-						est	drop	`IVname'`endovar'
-						
-						*	MLE in the first stage
-						*	We first construct fitted value of the endogenous variable from the first stage, to be used as an IV
-						loc	depvar		PFS_glm
-						loc	endovar		FSdummy	//	FSamt_capita
-						loc	IV			SNAP_index_w	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
-						loc	IVname		index_w_Dhat
-						
-						cap	drop	FSdummy_hat
-						logit	FSdummy	`IV'	${FSD_on_FS_X}	[pw=wgt_long_fam_adj] if	reg_sample==1, vce(cluster x11101ll) 
-						predict	FSdummy_hat, p
-		
-						*	IVregress with the predicted value (Dhat)
-						loc	IV		FSdummy_hat	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
-						ivreghdfe	PFS_glm	${FSD_on_FS_X}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	reg_sample==1, cluster (x11101ll)	first savefirst savefprefix(`IVname')	 
-						
-						est	store	`IVname'_nofe_2nd
-						scalar	Fstat_CD_`IVname'	=	 e(cdf)
-						scalar	Fstat_KP_`IVname'	=	e(widstat)
+				*	Output OLS results
+					esttab	mund_ols_all	mund_ols_9713	using "${SNAP_outRaw}/PFS_${IVname}_OLS.csv", ///
+					cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2 yearFE, fmt(0 2) label("N" "R2" "Year FE")) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	///
+					drop(year_enum*)	title(PFS on SNAP status)		replace	
 					
-						est	restore	`IVname'`endovar'
-						estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
-						estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
-
-						est	store	`IVname'_nofe_1st
-						est	drop	`IVname'`endovar'
-						
-						*	IVregress with BOTH Z and Dhat
-						loc	depvar		PFS_glm
-						loc	endovar		FSdummy	//	FSamt_capita
-						loc	IV			SNAP_index_w	FSdummy_hat	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
-						loc	IVname		index_w_ZDhat
-						
-						ivreghdfe	PFS_glm	${FSD_on_FS_X}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	reg_sample==1, cluster (x11101ll)	first savefirst savefprefix(`IVname')	 
-						
-						est	store	`IVname'_nofe_2nd
-						scalar	Fstat_CD_`IVname'	=	 e(cdf)
-						scalar	Fstat_KP_`IVname'	=	e(widstat)
+				*	Reduced form
+					foreach	samp	in	all	9713	{
 					
-						est	restore	`IVname'`endovar'
-						estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
-						estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
-
-						est	store	`IVname'_nofe_1st
-						est	drop	`IVname'`endovar'
-		
-				
-				*	Tabulate results comparing OLS and IV
-				
-												
-						*	1st stage
-						esttab	index_w_Z_nofe_1st 	index_w_Dhat_nofe_1st	index_w_ZDhat_nofe_1st	using "${SNAP_outRaw}/PFS_index_w_nofe_1st.csv", ///
-						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
-						title(PFS on FS dummy)		replace	
-													
+						reghdfe		PFS_glm	 ${IV} ${FSD_on_FS_X}	${timevars}	${Mundlak_vars}	 [aw=wgt_long_fam_adj] if	reg_sample_`samp'==1,	vce(cluster x11101ll) noabsorb // absorb(ib1997.year)
+						est	store	mund_red_${IVname}_`samp'
 					
-					*	2nd stage (OLS with and w/o FE, IV with and w/o FE)
-						
-													
-						*	SNAP index
-						esttab	yfe_ols	index_w_Z_nofe_2nd 	index_w_Dhat_nofe_2nd	index_w_ZDhat_nofe_2nd	using "${SNAP_outRaw}/PFS_index_w_nofe_2nd.csv", ///
-						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
-						title(PFS on FS dummy)		replace	
-						
-						/*
-						esttab	nofe_ols	index_w_Z_nofe_2nd 	index_w_Dhat_nofe_2nd	index_w_ZDhat_nofe_2nd	using "${SNAP_outRaw}/PFS_index_IV_nofe_2nd.tex", ///
-						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(rp_state_enum*)	///
-						title(PFS on FS dummy)		replace	
-						*/					
-				
-				
-				*	with year FE only	
-					
-					*	IV
-					loc	depvar		PFS_glm
-					loc	endovar		FSdummy	//	FSamt_capita
-
-						
-						*	OLS in the first stage (classic 2SLS)
-						loc	IV			SNAP_index_w	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
-						loc	IVname		index_w_Z
-						
-						ivreghdfe	PFS_glm	${FSD_on_FS_X}	${timevars}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	reg_sample==1, ///
-							cluster (x11101ll)	/*absorb(year)*/		first savefirst savefprefix(`IVname')	 
-						est	store	`IVname'_yfe_2nd
-						scalar	Fstat_CD_`IVname'	=	 e(cdf)
-						scalar	Fstat_KP_`IVname'	=	e(widstat)
-					
-						est	restore	`IVname'`endovar'
-						estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
-						estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
-
-						est	store	`IVname'_yfe_1st
-						est	drop	`IVname'`endovar'
-						
-						*	MLE in the first stage
-						*	We first construct fitted value of the endogenous variable from the first stage, to be used as an IV
-						loc	depvar		PFS_glm
-						loc	endovar		FSdummy	//	FSamt_capita
-						loc	IV			SNAP_index_w	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
-						loc	IVname		index_w_Dhat
-						
-						cap	drop	FSdummy_hat
-						logit	FSdummy	`IV'	${FSD_on_FS_X}	i.year [pw=wgt_long_fam_adj] if	reg_sample==1, vce(cluster x11101ll) 
-						predict	FSdummy_hat
-		
-						*	IVregress with the predicted value (Dhat)
-						loc	IV		FSdummy_hat	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
-						ivreghdfe	PFS_glm	${FSD_on_FS_X}	${timevars}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	reg_sample==1, cluster (x11101ll)	first savefirst savefprefix(`IVname')	 
-						
-						est	store	`IVname'_yfe_2nd
-						scalar	Fstat_CD_`IVname'	=	 e(cdf)
-						scalar	Fstat_KP_`IVname'	=	e(widstat)
-					
-						est	restore	`IVname'`endovar'
-						estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
-						estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
-
-						est	store	`IVname'_yfe_1st
-						est	drop	`IVname'`endovar'
-						
-						*	IVregress with BOTH Z and Dhat
-						loc	depvar		PFS_glm
-						loc	endovar		FSdummy	//	FSamt_capita
-						loc	IV			SNAP_index_w	FSdummy_hat	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
-						loc	IVname		index_w_ZDhat
-						
-						ivreghdfe	PFS_glm	${FSD_on_FS_X}	${timevars}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	reg_sample==1, cluster (x11101ll)	first savefirst savefprefix(`IVname')	 
-						
-						est	store	`IVname'_yfe_2nd
-						scalar	Fstat_CD_`IVname'	=	 e(cdf)
-						scalar	Fstat_KP_`IVname'	=	e(widstat)
-					
-						est	restore	`IVname'`endovar'
-						estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
-						estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
-
-						est	store	`IVname'_yfe_1st
-						est	drop	`IVname'`endovar'
-					
-					
-					*	Tabulate results comparing OLS and IV
-				
-												
-						*	1st stage
-						esttab	index_w_Z_yfe_1st 	index_w_Dhat_yfe_1st	index_w_ZDhat_yfe_1st	using "${SNAP_outRaw}/PFS_index_w_yfe_1st.csv", ///
-						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/ year_enum* )	///
-						title(PFS on FS dummy)		replace	
-													
-					
-					*	2nd stage (OLS with and w/o FE, IV with and w/o FE)
-						
-													
-						*	SNAP index
-						esttab	nofe_ols	index_w_Z_yfe_2nd 	index_w_Dhat_yfe_2nd	index_w_ZDhat_yfe_2nd	using "${SNAP_outRaw}/PFS_index_w_yfe_2nd.csv", ///
-						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/ year_enum* )	///
-						title(PFS on FS dummy)		replace	
-						
-						/*
-						esttab	nofe_ols	index_w_Z_nofe_2nd 	index_w_Dhat_nofe_2nd	index_w_ZDhat_nofe_2nd	using "${SNAP_outRaw}/PFS_index_IV_nofe_2nd.tex", ///
-						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(rp_state_enum*)	///
-						title(PFS on FS dummy)		replace	
-						*/		
+					}
 			
-				/*
-				*	Macroeconomic variable AND individual-FE (no year FE)
-				*	IV
-					loc	depvar		PFS_glm
-					loc	endovar		FSdummy	//	FSamt_capita
-					
-	
-						
-						*	OLS in the first stage (classic 2SLS)
-						loc	IV			SNAP_index_w	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
-						loc	IVname		index_w_Z
-						
-						ivreghdfe	PFS_glm	${FSD_on_FS_X}	${macrovars}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	reg_sample==1, ///
-							absorb(x11101ll)		cluster (x11101ll)		first savefirst savefprefix(`IVname')	 
-						est	store	`IVname'_macro_2nd
-						scalar	Fstat_CD_`IVname'	=	 e(cdf)
-						scalar	Fstat_KP_`IVname'	=	e(widstat)
-					
-						est	restore	`IVname'`endovar'
-						estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
-						estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
-
-						est	store	`IVname'_macro_1st
-						est	drop	`IVname'`endovar'
-						
-						*	MLE in the first stage
-						*	We first construct fitted value of the endogenous variable from the first stage, to be used as an IV
-						loc	depvar		PFS_glm
-						loc	endovar		FSdummy	//	FSamt_capita
-						loc	IV			SNAP_index_w	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
-						loc	IVname		index_w_Dhat
-						
-						cap	drop	FSdummy_hat
-						clogit	FSdummy	`IV'	${FSD_on_FS_X}	${macrovars}  if	reg_sample==1, group(x11101ll)
-						predict	FSdummy_hat, p
+					esttab	mund_red_${IVname}_all	mund_red_${IVname}_9713	using "${SNAP_outRaw}/PFS_${IVname}_reduced.csv", ///
+					cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2 yearFE, fmt(0 2)	label("N" "R2" "Year FE")) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(year_enum*)	///
+					title(PFS on ${IVname})		replace	
 		
-						*	IVregress with the predicted value (Dhat)
-						loc	IV		FSdummy_hat	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
-						ivreghdfe	PFS_glm	${FSD_on_FS_X}	${macrovars}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	reg_sample==1, ///
-							absorb(x11101ll)	cluster (x11101ll)	first savefirst savefprefix(`IVname')	 
-						
-						est	store	`IVname'_macro_2nd
-						scalar	Fstat_CD_`IVname'	=	 e(cdf)
-						scalar	Fstat_KP_`IVname'	=	e(widstat)
-					
-						est	restore	`IVname'`endovar'
-						estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
-						estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
-
-						est	store	`IVname'_macro_1st
-						est	drop	`IVname'`endovar'
-						
-						*	IVregress with BOTH Z and Dhat
-						loc	depvar		PFS_glm
-						loc	endovar		FSdummy	//	FSamt_capita
-						loc	IV			SNAP_index_w	FSdummy_hat	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
-						loc	IVname		index_w_ZDhat
-						
-						ivreghdfe	PFS_glm	${FSD_on_FS_X}	${macrovars}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	reg_sample==1, ///
-							absorb(x11101ll)	cluster (x11101ll)	first savefirst savefprefix(`IVname')	 
-						
-						est	store	`IVname'_macro_2nd
-						scalar	Fstat_CD_`IVname'	=	 e(cdf)
-						scalar	Fstat_KP_`IVname'	=	e(widstat)
-					
-						est	restore	`IVname'`endovar'
-						estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
-						estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
-
-						est	store	`IVname'_macro_1st
-						est	drop	`IVname'`endovar'
-					
-					
-					*	Tabulate results comparing OLS and IV
+			
 				
-												
-						*	1st stage
-						esttab	index_w_Z_macro_1st 	index_w_Dhat_macro_1st	index_w_ZDhat_macro_1st	using "${SNAP_outRaw}/PFS_index_w_macro_1st.csv", ///
-						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(rp_state_enum*)	///
-						title(PFS on FS dummy)		replace	
-													
+				*	2SLS
+				
+				foreach	samp	in	9713	all		{
 					
-					*	2nd stage (OLS with and w/o FE, IV with and w/o FE)
+					*	(1) OLS in the first stage (classic 2SLS)
+						global	Z		${IV}	
+						global	Zname	${IVname}_Z
 						
-													
-						*	SNAP index
-						esttab	macro_ols	index_w_Z_macro_2nd 	index_w_Dhat_macro_2nd	index_w_ZDhat_macro_2nd	using "${SNAP_outRaw}/PFS_index_w_macro_2nd.csv", ///
-						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(rp_state_enum*)	///
-						title(PFS on FS dummy)		replace	
-				*/
-				
-				
-				*	With Mundlak controls
-					loc	depvar		PFS_glm
-					loc	endovar		FSdummy	//	FSamt_capita
-					loc	IV			SNAP_index_w	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
-					loc	IVname		index_w_Z
+						ivreghdfe	PFS_glm	${FSD_on_FS_X}	${timevars}	${Mundlak_vars_`samp'}	(FSdummy = ${Z})	[aw=wgt_long_fam_adj] if	reg_sample_`samp'==1, ///
+							/*absorb(x11101ll)	*/	cluster (x11101ll)		first savefirst savefprefix(${Zname})	 partial(*_bar`samp')
+						estadd	local	Mundlak	"Y"
+						estadd	local	YearFE	"Y"
+						est	store	${Zname}_mund_2nd_`samp'
+						scalar	Fstat_CD_${Zname}	=	 e(cdf)
+						scalar	Fstat_KP_${Zname}	=	e(widstat)
 					
-					
-						*	OLS in the first stage (classic 2SLS)
-						ivreghdfe	PFS_glm	${FSD_on_FS_X}	${timevars}	${Mundlak_vars}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	reg_sample==1, ///
-							/*absorb(x11101ll)	*/	cluster (x11101ll)		first savefirst savefprefix(`IVname')	 partial(*_bar)
-						est	store	`IVname'_mund_2nd
-						scalar	Fstat_CD_`IVname'	=	 e(cdf)
-						scalar	Fstat_KP_`IVname'	=	e(widstat)
-					
-						est	restore	`IVname'`endovar'
-						estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
-						estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
+						est	restore	${Zname}${endovar}
+						estadd	local	Mundlak	"Y"
+						estadd	local	YearFE	"Y"
+						estadd	scalar	Fstat_CD	=	Fstat_CD_${Zname}, replace
+						estadd	scalar	Fstat_KP	=	Fstat_KP_${Zname}, replace
 
-						est	store	`IVname'_mund_1st
-						est	drop	`IVname'`endovar'
+						est	store	${Zname}_mund_1st_`samp'
+						est	drop	${Zname}${endovar}
 						
-						*	MLE in the first stage
-						*	We first construct fitted value of the endogenous variable from the first stage, to be used as an IV
-						loc	depvar		PFS_glm
-						loc	endovar		FSdummy	//	FSamt_capita
-						loc	IV			SNAP_index_w	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
-						loc	IVname		index_w_Dhat
+					
+					*	(2) Predicted SNAP status
+						
+						*	We first construct fitted value of the endogenous variable from the first stage using MLE, to be used as an IV
+						global	Z		FSdummy_hat	
+						global	Zname	${IVname}_Dhat
 						
 						cap	drop	FSdummy_hat
-						logit	FSdummy	`IV'	${FSD_on_FS_X}	${timevars}	${Mundlak_vars} [pw=wgt_long_fam_adj] if	reg_sample==1, vce(cluster x11101ll) 
+						logit	FSdummy	${IV}	${FSD_on_FS_X}	${timevars}	${Mundlak_vars_`samp'} [pw=wgt_long_fam_adj] if	reg_sample_`samp'==1, vce(cluster x11101ll) 
+						stopit
 						predict	FSdummy_hat
+						lab	var	FSdummy_hat	"Predicted SNAP status"
 		
-						*	IVregress with the predicted value (Dhat)
-						loc	IV		FSdummy_hat	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
-						ivreghdfe	PFS_glm	${FSD_on_FS_X}	${timevars}	${Mundlak_vars} 	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	reg_sample==1, ///
-							/*absorb(x11101ll)*/	cluster (x11101ll)	first savefirst savefprefix(`IVname')	 partial(*_bar)
-						
-						est	store	`IVname'_mund_2nd
-						scalar	Fstat_CD_`IVname'	=	 e(cdf)
-						scalar	Fstat_KP_`IVname'	=	e(widstat)
+						*	2SLS with the predicted value (Dhat) as instrument			
+						ivreghdfe	PFS_glm	${FSD_on_FS_X}	${timevars}	${Mundlak_vars_`samp'} 	(FSdummy = ${Z})	[aw=wgt_long_fam_adj] if	reg_sample_`samp'==1, ///
+							/*absorb(x11101ll)*/	cluster (x11101ll)	first savefirst savefprefix(${Zname})	 partial(*_bar`samp')
+						estadd	local	Mundlak	"Y"
+						estadd	local	YearFE	"Y"
+						est	store	${Zname}_mund_2nd_`samp'
+						scalar	Fstat_CD_${Zname}	=	 e(cdf)
+						scalar	Fstat_KP_${Zname}	=	e(widstat)
 					
-						est	restore	`IVname'`endovar'
-						estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
-						estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
+						est	restore	${Zname}${endovar}
+						estadd	local	Mundlak	"Y"
+						estadd	local	YearFE	"Y"
+						estadd	scalar	Fstat_CD	=	Fstat_CD_${Zname}, replace
+						estadd	scalar	Fstat_KP	=	Fstat_KP_${Zname}, replace
 
-						est	store	`IVname'_mund_1st
-						est	drop	`IVname'`endovar'
+						est	store	${Zname}_mund_1st_`samp'
+						est	drop	${Zname}${endovar}
 						
-						*	IVregress with BOTH Z and Dhat
-						loc	depvar		PFS_glm
-						loc	endovar		FSdummy	//	FSamt_capita
-						loc	IV			SNAP_index_w	FSdummy_hat	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
-						loc	IVname		index_w_ZDhat
+					*	(3)	Both Z and predicted SNAP status
+						global	Z			${IV}	FSdummy_hat	
+						global	Zname		${IVname}_ZDhat
 						
-						ivreghdfe	PFS_glm	${FSD_on_FS_X}	${timevars}	${Mundlak_vars} (FSdummy = `IV')	[aw=wgt_long_fam_adj] if	reg_sample==1, ///
-							/*absorb(x11101ll)*/	cluster (x11101ll)	first savefirst savefprefix(`IVname')	  partial(*_bar)
+						ivreghdfe	PFS_glm	${FSD_on_FS_X}	${timevars}	${Mundlak_vars_`samp'} (FSdummy = ${Z})	[aw=wgt_long_fam_adj] if	reg_sample_`samp'==1, ///
+							/*absorb(x11101ll)*/	cluster (x11101ll)	first savefirst savefprefix(${Zname})	  partial(*_bar`samp')
 						di	"p-value of J-statistics is `e(jp)'"
-						
-						est	store	`IVname'_mund_2nd
-						scalar	Fstat_CD_`IVname'	=	 e(cdf)
-						scalar	Fstat_KP_`IVname'	=	e(widstat)
+						estadd	local	Mundlak	"Y"
+						estadd	local	YearFE	"Y"
+						est	store	${Zname}_mund_2nd_`samp'
+						scalar	pval_Jstat_${Zname}	=	e(jp)
+						scalar	Fstat_CD_${Zname}		=	e(cdf)
+						scalar	Fstat_KP_${Zname}		=	e(widstat)
 					
-						est	restore	`IVname'`endovar'
-						estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
-						estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
+						est	restore	${Zname}${endovar}
+						estadd	local	Mundlak	"Y"
+						estadd	local	YearFE	"Y"
+						estadd	scalar	pval_Jstat	=	pval_Jstat_${Zname}, replace
+						estadd	scalar	Fstat_CD	=	Fstat_CD_${Zname}, replace
+						estadd	scalar	Fstat_KP	=	Fstat_KP_${Zname}, replace
 
-						est	store	`IVname'_mund_1st
-						est	drop	`IVname'`endovar'
+						est	store	${Zname}_mund_1st_`samp'
+						est	drop	${Zname}${endovar}
 					
-					
+				}
+				
+				
 					*	Tabulate results comparing OLS and IV
 												
-						*	1st stage
-						esttab	index_w_Z_mund_1st 	index_w_Dhat_mund_1st	index_w_ZDhat_mund_1st	using "${SNAP_outRaw}/PFS_index_w_mund_1st.csv", ///
-						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2c Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/ year_enum*)	///
-						title(PFS on FS dummy)		replace	
-													
-					
-					*	2nd stage (OLS with and w/o FE, IV with and w/o FE)
 						
-													
-						*	SNAP index
-						esttab	mund_ols	index_w_Z_mund_2nd 	index_w_Dhat_mund_2nd	index_w_ZDhat_mund_2nd	using "${SNAP_outRaw}/PFS_index_w_mund_2nd.csv", ///
-						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2c Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/ year_enum* )	///
-						title(PFS on FS dummy)		replace	
+					foreach	Zname	in	index_w	CIM	GIM		{
 						
+						foreach	samp	in	all	9713	{
 						
+							*	1st stage
+							esttab	`Zname'_Z_mund_1st_`samp' 	`Zname'_Dhat_mund_1st_`samp' 	`Zname'_ZDhat_mund_1st_`samp' 	using "${SNAP_outRaw}/PFS_`Zname'_mund_1st_`samp'.csv", ///
+							cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N YearFE Mundlak	Fstat_CD	Fstat_KP, fmt(0 2) label("N" "Year FE" "Mundlak" "F-stat(CD)" "F-stat(KP)" )) ///
+							incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/ year_enum*)	///
+							title(PFS on FS dummy)		replace	
+							
+							
+							esttab	`Zname'_Z_mund_1st_`samp' 	`Zname'_Dhat_mund_1st_`samp' 	`Zname'_ZDhat_mund_1st_`samp' 	using "${SNAP_outRaw}/PFS_`Zname'_mund_1st_`samp'.tex", ///
+							cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N YearFE Mundlak	Fstat_CD	Fstat_KP, fmt(0 2) label("N" "Year FE" "Mundlak" "F-stat(CD)" "F-stat(KP)" )) ///
+							incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/ year_enum*)	///
+							title(PFS on FS dummy)		replace								
 						
+						*	2nd stage 
+															
+							*	SNAP index
+							esttab	mund_ols_`samp' 	`Zname'_Z_mund_2nd_`samp'  	`Zname'_Dhat_mund_2nd_`samp' 	`Zname'_ZDhat_mund_2nd_`samp' 	using "${SNAP_outRaw}/PFS_`Zname'_mund_2nd_`samp'.csv", ///
+							cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2c YearFE Mundlak Fstat_CD	Fstat_KP pval_Jstat, fmt(0 2) label("N" "R2" "Year FE" "Mundlak" "F-stat(CD)" "F-stat(KP)" "p-val(J-stat)"))	///
+							incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/ year_enum* )	///
+							title(PFS on FS dummy)		replace	
+							
+							esttab	mund_ols_`samp' 	`Zname'_Z_mund_2nd_`samp'  	`Zname'_Dhat_mund_2nd_`samp' 	`Zname'_ZDhat_mund_2nd_`samp' 	using "${SNAP_outRaw}/PFS_`Zname'_mund_2nd_`samp'.tex", ///
+							cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2c YearFE Mundlak Fstat_CD	Fstat_KP pval_Jstat, fmt(0 2) label("N" "R2" "Year FE" "Mundlak" "F-stat(CD)" "F-stat(KP)" "p-val(J-stat)")) ///
+							incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/ year_enum* )	///
+							title(PFS on FS dummy)		replace	
+						}
 			
-				*	with year- and individual- FE
-				*	(2023-08-01) Since it did not work with the latest regression sample (ever below 200% PL, balanced 1997-2017) using unweighted index, I disable this part as well.
+					}
+			
 				
-					*	IV
-					loc	depvar		PFS_glm
-					loc	endovar		FSdummy	//	FSamt_capita
-					loc	IV			SNAP_index_w	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
-					loc	IVname		index_w_Z
-	
-						
-						*	OLS in the first stage (classic 2SLS)
-						ivreghdfe	PFS_glm	${FSD_on_FS_X}	${timevars}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	reg_sample==1, ///
-							absorb(x11101ll)		cluster (x11101ll)		first savefirst savefprefix(`IVname')	 
-						est	store	`IVname'_yife_2nd
-						scalar	Fstat_CD_`IVname'	=	 e(cdf)
-						scalar	Fstat_KP_`IVname'	=	e(widstat)
+					*	Tabulate in the order I want
 					
-						est	restore	`IVname'`endovar'
-						estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
-						estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
-
-						est	store	`IVname'_yife_1st
-						est	drop	`IVname'`endovar'
-						
-						*	MLE in the first stage
-						*	We first construct fitted value of the endogenous variable from the first stage, to be used as an IV
-						loc	depvar		PFS_glm
-						loc	endovar		FSdummy	//	FSamt_capita
-						loc	IV			SNAP_index_w	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
-						loc	IVname		index_w_Dhat
-						
-						cap	drop	FSdummy_hat
-						clogit	FSdummy	`IV'	${FSD_on_FS_X}	${timevars}  if	reg_sample==1, group(x11101ll)
-						predict	FSdummy_hat, p
-		
-						*	IVregress with the predicted value (Dhat)
-						loc	IV		FSdummy_hat	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
-						ivreghdfe	PFS_glm	${FSD_on_FS_X}	${timevars}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	reg_sample==1, ///
-							absorb(x11101ll)	cluster (x11101ll)	first savefirst savefprefix(`IVname')	 
-						
-						est	store	`IVname'_yife_2nd
-						scalar	Fstat_CD_`IVname'	=	 e(cdf)
-						scalar	Fstat_KP_`IVname'	=	e(widstat)
-					
-						est	restore	`IVname'`endovar'
-						estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
-						estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
-
-						est	store	`IVname'_yife_1st
-						est	drop	`IVname'`endovar'
-						
-						*	IVregress with BOTH Z and Dhat
-						loc	depvar		PFS_glm
-						loc	endovar		FSdummy	//	FSamt_capita
-						loc	IV			SNAP_index_w	FSdummy_hat	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
-						loc	IVname		index_w_ZDhat
-						
-						ivreghdfe	PFS_glm	${FSD_on_FS_X}	${timevars}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	reg_sample==1, ///
-							absorb(x11101ll)	cluster (x11101ll)	first savefirst savefprefix(`IVname')	 
-						
-						est	store	`IVname'_yife_2nd
-						scalar	Fstat_CD_`IVname'	=	 e(cdf)
-						scalar	Fstat_KP_`IVname'	=	e(widstat)
-					
-						est	restore	`IVname'`endovar'
-						estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
-						estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
-
-						est	store	`IVname'_yife_1st
-						est	drop	`IVname'`endovar'
-					
-					
-					*	Tabulate results comparing OLS and IV
-				
-												
-						*	1st stage
-						esttab	index_w_Z_yife_1st 	index_w_Dhat_yife_1st	index_w_ZDhat_yife_1st	using "${SNAP_outRaw}/PFS_index_w_yife_1st.csv", ///
-						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/ year_enum* )	///
-						title(PFS on FS dummy)		replace	
-													
-					
-					*	2nd stage (OLS with and w/o FE, IV with and w/o FE)
-						
-													
-						*	SNAP index
-						esttab	yife_ols	index_w_Z_yife_2nd 	index_w_Dhat_yife_2nd	index_w_ZDhat_yife_2nd	using "${SNAP_outRaw}/PFS_index_w_yife_2nd.csv", ///
-						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/ year_enum* )	///
-						title(PFS on FS dummy)		replace	
-						
-						/*
-						esttab	nofe_ols	index_w_Z_nofe_2nd 	index_w_Dhat_nofe_2nd	index_w_ZDhat_nofe_2nd	using "${SNAP_outRaw}/PFS_index_w_nofe_2nd.tex", ///
-						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(rp_state_enum*)	///
-						title(PFS on FS dummy)		replace	
-						*/		
-				
-				
-				*	Tabulate in the order I want
-					
-					*	1st stage (Z, Dhat, Z and Dhat)
-					esttab	index_w_Z_nofe_1st	index_w_Dhat_nofe_1st	index_w_ZDhat_nofe_1st	index_w_Z_yfe_1st	index_w_Dhat_yfe_1st	index_w_ZDhat_yfe_1st	///
-							index_w_Z_mund_1st	index_w_Dhat_mund_1st	index_w_ZDhat_mund_1st	index_w_Z_yife_1st	index_w_Dhat_yife_1st	index_w_ZDhat_yife_1st			///
-						using "${SNAP_outRaw}/PFS_index_w_1st.csv", ///
-						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/year_enum*)	///
-						title(PFS on FS dummy)		replace	
-				
-					*	2nd stage (Z, Dhat, Z and Dhat)
-					esttab	index_w_Z_nofe_2nd	index_w_Dhat_nofe_2nd	index_w_ZDhat_nofe_2nd	index_w_Z_yfe_2nd	index_w_Dhat_yfe_2nd	index_w_ZDhat_yfe_2nd	///
-							index_w_Z_mund_2nd	index_w_Dhat_mund_2nd	index_w_ZDhat_mund_2nd	index_w_Z_yife_2nd	index_w_Dhat_yife_2nd	index_w_ZDhat_yife_2nd			///
-						using "${SNAP_outRaw}/PFS_index_w_2nd.csv", ///
-						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2 Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/ year_enum*)	///
-						title(PFS on FS dummy)		replace	
-				
-				
-				*	(2023-07-03) I disable the outdated codes below. I will re-activate them as needed
-				/*		
-						
-							*	Original IV only
-						
-							ivreghdfe	PFS_glm	${FSD_on_FS_X}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	reg_sample==1, cluster (x11101ll)	first savefirst savefprefix(`IVname')	 
-							est	store	`IVname'_IV_nofe_2nd
-							scalar	Fstat_CD_`IVname'	=	 e(cdf)
-							scalar	Fstat_KP_`IVname'	=	e(widstat)
-						
-							est	restore	`IVname'`endovar'
-							estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
-							estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
-
-							est	store	`IVname'_nofe_IV_1st
-							est	drop	`IVname'`endovar'
+						*	1st-stage of both SPI and GIM, on 1997-2013 period only
+							esttab	index_w_Z_mund_1st_9713  	index_w_Dhat_mund_1st_9713  index_w_ZDhat_mund_1st_9713  GIM_Z_mund_1st_9713  	GIM_Dhat_mund_1st_9713  GIM_ZDhat_mund_1st_9713	///
+							using "${SNAP_outRaw}/PFS_index_GIM_mund_1st_9713.csv", ///
+							cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2c YearFE Mundlak Fstat_CD	Fstat_KP pval_Jstat, fmt(0 2) label("N" "R2" "Year FE" "Mundlak" "F-stat(CD)" "F-stat(KP)" "p-val(J-stat)"))	///
+							incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/ year_enum* )	///
+							title(PFS on FS dummy)		replace	
 							
-						
-							*	Predicted value only		
-							ivreghdfe	PFS_glm	${FSD_on_FS_X}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(`IV') & reg_sample==1, robust	first savefirst savefprefix(`IVname')	 
-							est	store	`IVname'_IV_nofe_2nd
-							scalar	Fstat_CD_`IVname'	=	 e(cdf)
-							scalar	Fstat_KP_`IVname'	=	e(widstat)
-						
-							est	restore	`IVname'`endovar'
-							estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
-							estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
-
-							est	store	`IVname'_nofe_IV_1st
-							est	drop	`IVname'`endovar'
-												
-							*global	PFS_est_1st	${PFS_est_1st}	`IVname'_1st
-							*global	PFS_est_2nd	${PFS_est_2nd}	`IVname'_2nd
-						
-						
-							/*
-							*	Add dynamic effects.
-							*	First, predict FS amount received
-							est restore `IVname'_nofe_IV_1st
-							cap	drop	FS_wth_PFS_hat
-							predict 	FS_wth_PFS_hat, xb
-							lab	var		FS_wth_PFS_hat	"Predicted FS dummy received last month"
-					
-							*	Now, regress 2nd stage, including FS across multiple periods
-							reghdfe	PFS_glm FS_wth_PFS_hat	l2.FS_wth_PFS_hat	${FSD_on_FS_X}	[aw=wgt_long_fam_adj]	if	income_below_200==1	&	!mi(`IV') & reg_sample==1,	vce(robust) noabsorb
-							est	store	`IVname'_dyn_X_nofe_2nd
-						
-							*global	PFS_est_2nd	${PFS_est_2nd}	PFS_dyn_X_2nd
-							*/
-					
-					
-						*	with state FE							
-							ivreghdfe	PFS_glm	${FSD_on_FS_X}	(FSdummy = `IV')	[aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(`IV') & reg_sample==1,	absorb(ib31.rp_state) robust	first savefirst savefprefix(`IVname')
-							est	store	`IVname'_IV_stfe_2nd
-							scalar	Fstat_CD_`IVname'	=	 e(cdf)
-							scalar	Fstat_KP_`IVname'	=	e(widstat)
-						
-							est	restore	`IVname'`endovar'
-							estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
-							estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
-
-							est	store	`IVname'_stfe_IV_1st
-							est	drop	`IVname'`endovar'
-												
-							*global	PFS_est_1st	${PFS_est_1st}	`IVname'_1st
-							*global	PFS_est_2nd	${PFS_est_2nd}	`IVname'_2nd
-						
-							/*
-							*	Add dynamic effects.
-							*	First, predict FS amount received
-							est restore `IVname'_stfe_IV_1st
-							cap	drop	FS_wth_PFS_hat
-							predict 	FS_wth_PFS_hat, xb
-							lab	var		FS_wth_PFS_hat	"Predicted FS dummy received last month"
-					
-							*	Now, regress 2nd stage, including FS across multiple periods
-							reghdfe	PFS_glm FS_wth_PFS_hat	l2.FS_wth_PFS_hat	${FSD_on_FS_X}	[aw=wgt_long_fam_adj]	if	income_below_200==1	&	!mi(`IV') & reg_sample==1,	vce(robust) absorb(ib31.rp_state)
-							est	store	`IVname'_dyn_X_stfe_2nd
-							*/
+							esttab	index_w_Z_mund_1st_9713  	index_w_Dhat_mund_1st_9713  index_w_ZDhat_mund_1st_9713  GIM_Z_mund_1st_9713  	GIM_Dhat_mund_1st_9713  GIM_ZDhat_mund_1st_9713	///
+							using "${SNAP_outRaw}/PFS_index_GIM_mund_1st_9713.tex", ///
+							cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2c YearFE Mundlak Fstat_CD	Fstat_KP pval_Jstat, fmt(0 2) label("N" "R2" "Year FE" "Mundlak" "F-stat(CD)" "F-stat(KP)" "p-val(J-stat)"))	///
+							incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/ year_enum* )	///
+							title(PFS on FS dummy)		replace	
 							
-						*	state and individual FE														
-							ivreghdfe	PFS_glm	${FSD_on_FS_X}	(`endovar' = `IV')	[aw=wgt_long_fam_adj] if	income_below_200==1 & !mi(`IV') & reg_sample==1,	absorb(ib31.rp_state x11101ll) robust	first savefirst savefprefix(`IVname')	 
-							est	store	`IVname'_IV_fe_2nd
-							scalar	Fstat_CD_`IVname'	=	 e(cdf)
-							scalar	Fstat_KP_`IVname'	=	e(widstat)
-						
-							est	restore	`IVname'`endovar'
-							estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
-							estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
-
-							est	store	`IVname'_fe_IV_1st
-							est	drop	`IVname'`endovar'
-												
-							*global	PFS_est_1st	${PFS_est_1st}	`IVname'_1st
-							*global	PFS_est_2nd	${PFS_est_2nd}	`IVname'_2nd
-						
-							/*
-							*	Add dynamic effects.
-							*	First, predict FS amount received
-							est restore `IVname'_fe_IV_1st
-							cap	drop	FS_wth_PFS_hat
-							predict 	FS_wth_PFS_hat, xb
-							lab	var		FS_wth_PFS_hat	"Predicted FS dummy received last month"
-					
-							*	Now, regress 2nd stage, including FS across multiple periods
-							reghdfe	PFS_glm FS_wth_PFS_hat	l2.FS_wth_PFS_hat	${FSD_on_FS_X}	[aw=wgt_long_fam_adj]	if	income_below_200==1	&	!mi(`IV') & reg_sample==1,	vce(robust) absorb(ib31.rp_state x11101ll)
-							est	store	`IVname'_dyn_X_fe_2nd
-							*/
-												
-					
-						*	Tabulate results comparing OLS and IV
-						
-														
-								*	Subsample (1996-2015) - for all IV (SSI, state citizen ideology and SNAP weighted index)
-								esttab	index_nofe_IV_1st	index_stfe_IV_1st	index_fe_IV_1st	using "${SNAP_outRaw}/PFS_index_sub_IV_1st.csv", ///
-								cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
-								title(PFS on FS dummy)		replace	
-															
+						*	1st-stage of CIM only, 1997-2013 and all period
+							esttab	CIM_Z_mund_1st_9713  	CIM_Dhat_mund_1st_9713 	CIM_Z_mund_1st_all  	CIM_Dhat_mund_1st_all 	///
+							using "${SNAP_outRaw}/PFS_CIM_mund_1st_all_9713.csv", ///
+							cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2c YearFE Mundlak Fstat_CD	Fstat_KP pval_Jstat, fmt(0 2) label("N" "R2" "Year FE" "Mundlak" "F-stat(CD)" "F-stat(KP)" "p-val(J-stat)"))	///
+							incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/ year_enum* )	///
+							title(PFS on FS dummy)		replace	
 							
-							*	2nd stage (OLS with and w/o FE, IV with and w/o FE)
-								
-															
-								*	SNAP index
-								esttab	nofesub_ols	index_IV_nofe_2nd	stfesub_ols	index_IV_stfe_2nd	fesub_ols	index_IV_fe_2nd	index_dyn_X_fe_2nd	using "${SNAP_outRaw}/PFS_index_ols_IV.csv", ///
-								cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
-								title(PFS on FS dummy)		replace	
-								
-								esttab	nofesub_ols	index_IV_nofe_2nd	stfesub_ols	index_IV_stfe_2nd	fesub_ols	index_IV_fe_2nd	index_dyn_X_fe_2nd	using "${SNAP_outRaw}/PFS_index_ols_IV.tex", ///
-								cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N Fstat_CD	Fstat_KP, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
-								title(PFS on FS dummy)		replace	
-												
-				*/			
-								
+							esttab	CIM_Z_mund_1st_9713  	CIM_Dhat_mund_1st_9713 	CIM_Z_mund_1st_all  	CIM_Dhat_mund_1st_all 	///
+							using "${SNAP_outRaw}/PFS_CIM_mund_1st_all_9713.tex", ///
+							cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2c YearFE Mundlak Fstat_CD	Fstat_KP pval_Jstat, fmt(0 2) label("N" "R2" "Year FE" "Mundlak" "F-stat(CD)" "F-stat(KP)" "p-val(J-stat)"))	///
+							incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/ year_enum* )	///
+							title(PFS on FS dummy)		replace	
+							
+						*	1st-stage of GIM only, 1997-2013 and all period
+							esttab	GIM_Z_mund_1st_9713  	GIM_Dhat_mund_1st_9713 	GIM_Z_mund_1st_all  	GIM_Dhat_mund_1st_all 	///
+							using "${SNAP_outRaw}/PFS_GIM_mund_1st_all_9713.csv", ///
+							cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2c YearFE Mundlak Fstat_CD	Fstat_KP pval_Jstat, fmt(0 2) label("N" "R2" "Year FE" "Mundlak" "F-stat(CD)" "F-stat(KP)" "p-val(J-stat)"))	///
+							incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/ year_enum* )	///
+							title(PFS on FS dummy)		replace	
+							
+							esttab	GIM_Z_mund_1st_9713  	GIM_Dhat_mund_1st_9713 	GIM_Z_mund_1st_all  	GIM_Dhat_mund_1st_all 	///
+							using "${SNAP_outRaw}/PFS_GIM_mund_1st_all_9713.tex", ///
+							cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2c YearFE Mundlak Fstat_CD	Fstat_KP pval_Jstat, fmt(0 2) label("N" "R2" "Year FE" "Mundlak" "F-stat(CD)" "F-stat(KP)" "p-val(J-stat)"))	///
+							incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/ year_enum* )	///
+							title(PFS on FS dummy)		replace	
+							
 
 			*	Regressing FSD on predicted FS, using the model we find above
+				*	SNAP weighted policy index, Dhat only, Mundlak controls.
+				global	depvar		PFS_glm
+				global	endovar		FSdummy	//	FSamt_capita
+				global	IV			SNAP_index_w	//	citi6016	//	inst6017_nom	//	citi6016	//		//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
+				global	IVname		index_w	//	CIM	//	
+	
 				
-				*	Benchmark regression; just change the outcome
-				*	IV specification used: SNAP weighted policy index, Dhat only, Mundlak controls.
+				
+				*	Benchmark
+					*	Endovar: SNAP in t-4
+					*	Outcome: FSD variables
 
 					*	MLE in the first stage
 					*	We first construct fitted value of the endogenous variable from the first stage, to be used as an IV
+					global	Z	${IV}
+					
 					loc	IV		SNAP_index_w
 					cap	drop	FSdummy_hat
-					logit	FSdummy	`IV'	${FSD_on_FS_X}	${timevars}	${Mundlak_vars} [pw=wgt_long_fam_adj] if	reg_sample==1, vce(cluster x11101ll) 
+					logit	FSdummy	${IV}	${FSD_on_FS_X}	${timevars}	${Mundlak_vars_9713} [pw=wgt_long_fam_adj] if	reg_sample_9713==1, vce(cluster x11101ll) 
 					predict	FSdummy_hat
 					lab	var	FSdummy_hat	"Predicted SNAP participation"
 				
@@ -1563,21 +629,21 @@
 					loc	IVname		l4
 				
 					
-					ivreghdfe	`depvar'	${FSD_on_FS_X_l4}	${timevars}	${Mundlak_vars} (`endovar' = `IV')	[aw=wgt_long_fam_adj] if	reg_sample==1, ///
-						/*absorb(x11101ll)*/	cluster (x11101ll)	first savefirst savefprefix(`IVname')	  partial(*_bar)
+					ivreghdfe	${depvar}	${FSD_on_FS_X_l4}	${timevars}	${Mundlak_vars} (${endovar} = ${IV})	[aw=wgt_long_fam_adj] if	reg_sample==1, ///
+						/*absorb(x11101ll)*/	cluster (x11101ll)	first savefirst savefprefix(${IVname})	  partial(*_bar)
 					
-					est	store	`depvar'_`IVname'_2nd
-					scalar	Fstat_CD_`IVname'	=	e(cdf)
-					scalar	Fstat_KP_`IVname'	=	e(widstat)
-					estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
-					estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
-					est	store	`depvar'_`IVname'_2nd
+					est	store	${depvar}_${IVname}_2nd
+					scalar	Fstat_CD_${IVname}	=	e(cdf)
+					scalar	Fstat_KP_${IVname}	=	e(widstat)
+					estadd	scalar	Fstat_CD	=	Fstat_CD_${IVname}, replace
+					estadd	scalar	Fstat_KP	=	Fstat_KP_${IVname}, replace
+					est	store	${depvar}_${IVname}_2nd
 			
-					est	restore	`IVname'`endovar'
-					estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname', replace
-					estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname', replace
-					est	store	`depvar'_`IVname'_1st
-					est	drop	`IVname'`endovar'
+					est	restore	${IVname}${endovar}
+					estadd	scalar	Fstat_CD	=	Fstat_CD_${IVname}, replace
+					estadd	scalar	Fstat_KP	=	Fstat_KP_${IVname}, replace
+					est	store	${depvar}_${IVname}_1st
+					est	drop	${IVname}${endovar}
 					
 		
 					*	(ii) RHS: treatment and controls at all periods. (t-4, t-2, t)
@@ -1586,17 +652,17 @@
 					loc	IV			l4_SNAP_index_w	l4_FSdummy_hat	l2_SNAP_index_w	l2_FSdummy_hat	SNAP_index_w	FSdummy_hat	//	Z and Dhat in t-4
 					loc	IVname		alllag
 					
-					ivreghdfe	`depvar'	${FSD_on_FS_X_l4l2}	${FSD_on_FS_X}	${timevars}	${Mundlak_vars} (`endovar' = `IV')	[aw=wgt_long_fam_adj] if	reg_sample==1, ///
-						/*absorb(x11101ll)*/	cluster (x11101ll)	first savefirst savefprefix(`IVname')	  partial(*_bar)
+					ivreghdfe	${depvar}	${FSD_on_FS_X_l4l2}	${FSD_on_FS_X}	${timevars}	${Mundlak_vars} (${endovar} = ${IV})	[aw=wgt_long_fam_adj] if	reg_sample==1, ///
+						/*absorb(x11101ll)*/	cluster (x11101ll)	first savefirst savefprefix(${IVname})	  partial(*_bar)
 					
 									
-					est	store	`depvar'_`IVname'_2nd
-					scalar	Fstat_CD_`IVname'	=	e(cdf)
-					scalar	Fstat_KP_`IVname'	=	e(widstat)
+					est	store	${depvar}_${IVname}_2nd
+					scalar	Fstat_CD_${IVname}	=	e(cdf)
+					scalar	Fstat_KP_${IVname}	=	e(widstat)
 					
-					estadd	scalar	Fstat_CD	=	Fstat_CD_`IVname'
-					estadd	scalar	Fstat_KP	=	Fstat_KP_`IVname'
-					est	store	`depvar'_`IVname'_2nd
+					estadd	scalar	Fstat_CD	=	Fstat_CD_${IVname}
+					estadd	scalar	Fstat_KP	=	Fstat_KP_${IVname}
+					est	store	${depvar}_${IVname}_2nd
 					
 					*	Retrieve first-stage F-stat for each endovar
 					*	Since there are multiple endogenous variable, we need to loop for each first-stage regression
@@ -1611,10 +677,10 @@
 					*	NOTE: DO NOT combine the loop above (retireving F-stat) and the loop below (adding F-stat to stored estimate). It is because once estimate is restored, e(first) table will be gone.
 					foreach	var	of	loc	endovar	{
 						di	"endovar is `var'"
-						est	restore	`IVname'`var'
+						est	restore	${IVname}`var'
 						estadd	scalar	Fstat_SWF	=	Fstat_SWF_`var'
-						est	store	`depvar'_`IVname'`var'_1st
-						est	drop	`IVname'`var'
+						est	store	${depvar}_${IVname}`var'_1st
+						est	drop	${IVname}`var'
 					}
 				
 				
@@ -1826,6 +892,11 @@
 		use	"${SNAP_dtInt}/SNAP_const", clear
 		
 		
+		*	Keep revelant sample only
+		keep	if	!mi(PFS_glm)
+	
+	
+	
 	
 		
 		
@@ -1834,9 +905,9 @@
 		*keep	if	inrange(year,1977,2015)
 			*	Re-scale HFSM, so it can be compared with the PFS
 			
-			cap	drop	HFSM_rescale
+			cap	drop	FSSS_rescale
 			gen	HFSM_rescale = (9.3-HFSM_scale)/9.3
-			label	var	HFSM_rescale "HFSM (re-scaled)"
+			label	var	HFSM_rescale "FSSS (re-scaled)"
 			
 			*	Density Estimate of Food Security Indicator (Figure A1)
 				
@@ -1881,15 +952,15 @@
 		
 		*	Sample information
 			
-			count if 	income_below_200==1		&	!mi(PFS_glm)		//	# of observations with non-missing PFS
-			count if in_sample	&	income_below_200==1		&	!mi(PFS_glm)	&	baseline_indiv==1	//	Baseline individual in sapmle
-			count if in_sample	&	income_below_200==1		&	!mi(PFS_glm)	&	splitoff_indiv==1	//	Splitoff individual in sapmle
+			count if 	income_ever_below_200==1		&	!mi(PFS_glm)		//	# of observations with non-missing PFS
+			count if in_sample	&	income_ever_below_200==1		&	!mi(PFS_glm)	&	baseline_indiv==1	//	Baseline individual in sapmle
+			count if in_sample	&	income_ever_below_200==1		&	!mi(PFS_glm)	&	splitoff_indiv==1	//	Splitoff individual in sapmle
 				
 			*	Number of individuals
-				distinct	x11101ll	if	!mi(PFS_glm)	&	income_below_200==1		//	# of baseline individuals in sapmle
-				distinct	x11101ll	if	income_below_200==1		//	# of baseline individuals in sapmle (including missing PFS)
-				distinct	x11101ll	if	!mi(PFS_glm)	&	income_below_200==1		&	baseline_indiv==1	//	# of baseline individuals in sapmle
-				distinct	x11101ll	if	!mi(PFS_glm)	&	income_below_200==1		&	splitoff_indiv==1	//	Baseline individual in sapmle
+				distinct	x11101ll	if	!mi(PFS_glm)	&	income_ever_below_200==1		//	# of baseline individuals in sapmle
+				distinct	x11101ll	if	income_ever_below_200==1		//	# of baseline individuals in sapmle (including missing PFS)
+				distinct	x11101ll	if	!mi(PFS_glm)	&	income_ever_below_200==1		&	baseline_indiv==1	//	# of baseline individuals in sapmle
+				distinct	x11101ll	if	!mi(PFS_glm)	&	income_ever_below_200==1		&	splitoff_indiv==1	//	Baseline individual in sapmle
 				
 			*	Counting only individuals in regression sample
 				distinct	x11101ll	if	reg_sample==1 // reg_sample==1
@@ -1917,12 +988,18 @@
 
 			*	Individual-level (unique per individual)	
 				
-				*	Gender
-				local	var	ind_female
-				cap	drop	`var'_uniq
-				bys x11101ll	live_in_FU:	gen `var'_uniq=`var' if _n==1	&	live_in_FU==1	
-				summ `var'_uniq	
-				label	var	`var'_uniq "Gender (ind)"
+				*	Gender and education
+				foreach	var	in	ind_female	ind_NoHS	ind_HS ind_somecol ind_col	{
+					
+					cap	drop	`var'_uniq
+					bys x11101ll	live_in_FU:	gen `var'_uniq=`var' if _n==1	&	live_in_FU==1	
+					summ `var'_uniq	
+					
+					local vlab: variable	label	`var'
+					lab	var	`var'_uniq	"`vlab'"
+				}
+				
+				
 								
 				*	Number of waves living in FU
 				loc	var	num_waves_in_FU
@@ -2005,41 +1082,50 @@
 				gen	double	fam_income_month_pc_real	=	(fam_income_pc_real/12)
 				label	var	fam_income_month_pc_real	"Monthly family income per capita"
 				
-				label	var	foodexp_tot_inclFS_pc_real	"Monthly food exp per capia"
-				label	var	FS_rec_amt_real				"\$ Monthly FS redeemed"
-				label 	var	childnum					"\# of child"
+				*lab		var	major_control_mix	"Mixed state control"
 				
-				lab		var	major_control_mix	"Mixed state control"
+				
+				
+					*	Additional cleaning
+				lab	var	SL_5	"SL5"
+				lab	var	citi6016	"State citizen ideology"
+				lab	var	FS_rec_wth	"SNAP received"
+				lab	var	FS_rec_amt_real	"SNAP amount"
+				label	var	foodexp_tot_inclFS_pc_real	"Monthly food exp per capia"
+				label 	var	childnum					"\# of child"
+				lab	var	SNAP_index_w	"SNAP Policy Index (weighted)"
+				lab	var	FS_ever_used_uniq	"Ever received SNAP"
 				
 				*	For now, generate summ table separately for indvars and fam-level vars, as indvars do not represent full sample if conditiond by !mi(glm) (need to figure out why)
-				local	indvars	ind_female_uniq num_waves_in_FU_uniq FS_ever_used_uniq total_FS_used_uniq	share_FS_used_uniq
+				local	indvars	ind_female_uniq ind_col_uniq num_waves_in_FU_uniq FS_ever_used_uniq //total_FS_used_uniq	share_FS_used_uniq
 				local	rpvars	rp_female	rp_age	rp_White	rp_married	rp_NoHS rp_HS rp_somecol rp_col		rp_employed rp_disabled
-				local	famvars	famnum	ratio_child		split_off	fam_income_month_pc_real	foodexp_tot_inclFS_pc_real		
+				local	famvars	famnum	ratio_child		fam_income_month_pc_real	foodexp_tot_inclFS_pc_real		
 				local	FSvars	FS_rec_wth	FS_rec_amt_real
-				local	IVs		citi6016_0to1
+				local	IVs		SNAP_index_w	citi6016	inst6017_nom
 				local	FSDvars	PFS_glm	SL_5	TFI_HCR	CFI_HCR	TFI_FIG	CFI_FIG	TFI_SFIG	CFI_SFIG	
 				
-				estpost summ	`indvars'		if	!mi(PFS_glm)	/*  num_waves_in_FU_uniq>=2	 &*/	  // Temporary condition. Need to think proper condition.
-				estpost summ	`indvars'		if	in_sample==1	&	income_below_200==1	/*  num_waves_in_FU_uniq>=2	 &*/	  // Temporary condition. Need to think proper condition.
+				estpost summ	`indvars'	[aw=wgt_long_fam_adj]	if	!mi(PFS_glm)	//	all sample
+				estpost summ	`indvars'	[aw=wgt_long_fam_adj]	if	!mi(PFS_glm)	&	balanced_9713==1	&	income_ever_below_200_9713==1	/*  num_waves_in_FU_uniq>=2	 &*/	  // Temporary condition. Need to think proper condition.
 				
 				local	summvars	/*`indvars'*/	`rpvars'	`famvars'	`FSvars'	`IVs'	`FSDvars'
 	
-				estpost tabstat	`summvars'	 if in_sample==1	&	!mi(PFS_glm)	[aw=wgt_long_fam_adj],	statistics(count	mean	sd	min	median	p95	max) columns(statistics)		// save
+				estpost tabstat	`summvars'	 if	!mi(PFS_glm)	[aw=wgt_long_fam_adj],	statistics(count	mean	sd	min	max) columns(statistics)		// save
 				est	store	sumstat_all
-				estpost tabstat	`summvars' 	if in_sample==1	&	!mi(PFS_glm)	&	income_below_200==1	[aw=wgt_long_fam_adj],	statistics(mean	sd	min	max) columns(statistics)	// save
-				est	store	sumstat_lowinc
+				estpost tabstat	`summvars' 	if	!mi(PFS_glm)	&	balanced_9713==1	&	income_ever_below_200_9713==1	[aw=wgt_long_fam_adj],	statistics(count	mean	sd	min	max) columns(statistics)	// save
+				est	store	sumstat_9713
 				
 					*	FS amount per capita in real dollars (only those used)
 					estpost tabstat	 FS_rec_amt_capita	if in_sample==1	&	!mi(PFS_glm)	&	income_below_200==1	& FS_rec_wth==1 [aw=wgt_long_fam_adj],	statistics(mean	sd	min	max) columns(statistics)	// save
 				
-
-				esttab	sumstat_all	sumstat_lowinc	using	"${SNAP_outRaw}/Tab_1_Sumstats.csv",  ///
-					cells("count(fmt(%12.0f)) mean(fmt(%12.2f)) sd(fmt(%12.2f)) min(fmt(%12.2f)) p50(fmt(%12.2f)) p95(fmt(%12.2f)) max(fmt(%12.2f))") label	title("Summary Statistics") noobs 	  replace
+			
+				
+				esttab	sumstat_all	sumstat_9713	using	"${SNAP_outRaw}/Tab_1_Sumstats.csv",  ///
+					cells("count(fmt(%12.0f)) mean(fmt(%12.2f)) sd(fmt(%12.2f)) min(fmt(%12.2f)) max(fmt(%12.2f))") label	title("Summary Statistics") noobs 	  replace
 									
-				esttab	sumstat_all	sumstat_lowinc	using	"${SNAP_outRaw}/Tab_1_Sumstats.tex",  ///
-					cells("mean(fmt(%12.2f)) sd(fmt(%12.2f)) min(fmt(%12.2f)) max(fmt(%12.2f))") label	title("Summary Statistics") noobs 	  replace
+				esttab	sumstat_all	sumstat_9713	using	"${SNAP_outRaw}/Tab_1_Sumstats.tex",  ///
+					cells("count(fmt(%12.0f)) mean(fmt(%12.2f)) sd(fmt(%12.2f))") label	title("Summary Statistics") noobs 	  replace
 					
-				esttab	sumstat_lowinc	using	"${SNAP_outRaw}/Tab_1_Sumstats_lowinc.tex",  ///
+				esttab	sumstat_9713	using	"${SNAP_outRaw}/Tab_1_Sumstats_lowinc.tex",  ///
 					cells("mean(fmt(%12.2f)) sd(fmt(%12.2f)) min(fmt(%12.2f)) max(fmt(%12.2f))") label	title("Summary Statistics") noobs 	  replace	
 					
 				
@@ -2047,7 +1133,7 @@
 				summ	PFS_glm SL_5 TFI_HCR CFI_HCR TFI_FIG CFI_FIG if in_sample==1	&	income_below_200==1	& PFS_FI_glm==1 & FS_rec_wth!=1 [aw=wgt_long_fam_adj],d // didn't receive SNAP
 
 			
-				 x11101ll 	if in_sample==1	&	income_below_200==1	[aw=wgt_long_fam_adj]
+			
 				/*
 				*estpost summ	`indvars'	if	/*   num_waves_in_FU_uniq>=2	&*/	!mi(PFS_glm)  // Temporary condition. Need to think proper condition.
 				*summ	FS_rec_amt_real	if	!mi(PFS_glm)	&	FS_rec_wth==1 & inrange(rp_age,0,130) // Temporarily add age condition to take care of outlier. Will be taken care of later.
