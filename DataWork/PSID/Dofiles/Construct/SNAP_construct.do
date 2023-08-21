@@ -84,6 +84,10 @@
 		*	Drop states outside 48 continental states (HA/AK/inapp/etc.), as we do not have their TFP cost information.
 		drop	if	inlist(rp_state,0,50,51,99)
 		
+		*	(2023-08-20) Keep only those whos income ever below 200 (more than 99% belong to this case)
+		tab	income_ever_below_200
+		keep	if	income_ever_below_200==1
+		
 		*	Rescale large variable
 		cap	drop	l2_foodexp_tot_inclFS_pc_2_real_K
 		gen			l2_foodexp_inclFS_pc_2_real_K	=	l2_foodexp_tot_inclFS_pc_2_real / 1000
@@ -306,37 +310,55 @@
 		
 		*	Regress PFS on characteristics
 		*	(2023-1-18) This one needs to be re-visited, considering what regression method we will use (svy prefix, weight, fixed effects, etc.)
-		use    "${SNAP_dtInt}/SNAP_long_PFS",	clear	
-		
-			*	PFS, without region FE
+		*	(2023-8-20) Re-visited. Make sure to do this regression on the final sapmle (non-missing PFS, income ever below 200, balaned b/w 9713, etc). I set the default counter as zero to run manually, until it is moved to other dofile.
+		*use    "${SNAP_dtInt}/SNAP_long_PFS",	clear	
+		local	run_PFS_reg=0
+		if	run_PFS_reg==1	{
+			
+			*	No SNAP status, state and year FE, all sapmle
 			local	depvar	PFS_glm
 			svy, subpop(if !mi(`depvar')):	///
-				reg	`depvar'	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}
+				reg	`depvar'	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	${regionvars}	${timevars}
+			est	store	PFS_noSNAP_all	
+			estadd	local	state_year_FE	"Y"
+			svy, subpop(if !mi(`depvar')):	mean	PFS_glm		//	Need to think about how to add this usign "estadd"....
 			
-			reg	`depvar'	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars} [aweight=wgt_long_fam_adj]
+			*	reg	`depvar'	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars} [aweight=wgt_long_fam_adj]	//	Coefficients are sampe, but different Sterror.
 			
+			*	SNAP status, state and year FE, all sapmle
 			svy, subpop(if !mi(PFS_glm)):	///
-				reg	`depvar'	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}	${macrovars}*/
-			est	store	PFS_base	
+				reg	`depvar'	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	${regionvars}	${timevars}	FS_rec_wth	
+			est	store	PFS_SNAP_all	
+			estadd	local	state_year_FE	"Y"
+			svy, subpop(if !mi(`depvar')):	mean	PFS_glm	//	Need to think about how to add this usign "estadd"....
 			
-			svy, subpop(if !mi(PFS_glm)):	///
-				reg	`depvar'	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	${foodvars}		/*${macrovars}	*/
-			est	store	PFS_FS	
+			*	No SNAP status, state and year FE, 97-13 balanced sample
+			svy, subpop(if !mi(PFS_glm)	&	balanced_9713==1):	///
+				reg	`depvar'	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	${regionvars}	${timevars}	
+			est	store	PFS_noSNAP_9713	
+			estadd	local	state_year_FE	"Y"
+			svy, subpop(if !mi(`depvar') &	balanced_9713==1):	mean	PFS_glm
 			
-			svy, subpop(if !mi(PFS_glm)):	///
-				reg	`depvar'	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	${foodvars}	${macrovars}					
-			est	store	PFS_FS_macro
+			*	SNAP status, state and year FE, 97-13 balanced sample
+			svy, subpop(if !mi(PFS_glm)	&	balanced_9713==1):	///
+				reg	`depvar'	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	${regionvars}	${timevars}	FS_rec_wth	
+			est	store	PFS_SNAP_9713
+			estadd	local	state_year_FE	"Y"
+			svy, subpop(if !mi(`depvar') &	balanced_9713==1):	mean	PFS_glm
 			
 		*	Food Security Indicators and Their Correlates
-			esttab	PFS_base	PFS_FS	PFS_FS_macro	using "${SNAP_outRaw}/Tab_3_PFS_association.csv", ///
-					cells(b(star fmt(3)) se(fmt(2) par)) stats(N_sub r2) label legend nobaselevels star(* 0.10 ** 0.05 *** 0.01)	/*drop(_cons)*/	///
-					title(Effect of Correlates on Food Security Status) replace
+			esttab	PFS_noSNAP_all	PFS_SNAP_all	PFS_noSNAP_9713	PFS_SNAP_9713	using "${SNAP_outRaw}/Tab_3_PFS_association.csv", ///
+					cells(b(star fmt(3)) se(fmt(2) par)) stats(N_sub r2 state_year_FE meanPFS, label("N" "R2" "State and Year FE" "Mean PFS")) label legend nobaselevels star(* 0.10 ** 0.05 *** 0.01)	drop(rp_state*	year_enum*)	///
+					title(PFS and household covariates) replace
 					
 					
-			esttab	PFS_base	PFS_FS	PFS_FS_macro	using "${SNAP_outRaw}/Tab_3_PFS_association.tex", ///
-					cells(b(star fmt(3)) & se(fmt(2) par)) stats(N_sub r2) incelldelimiter() label legend nobaselevels star(* 0.10 ** 0.05 *** 0.01)	/*drop(_cons)*/		///
+			esttab	PFS_noSNAP_all	PFS_SNAP_all	PFS_noSNAP_9713	PFS_SNAP_9713	using "${SNAP_outRaw}/Tab_3_PFS_association.tex", ///
+					cells(b(star fmt(3)) & se(fmt(2) par)) stats(N_sub r2 state_year_FE	, label("N" "R2" "State and Year FE")) ///
+					incelldelimiter() label legend nobaselevels star(* 0.10 ** 0.05 *** 0.01)	drop(rp_state*	year_enum*)			///
 					/*cells(b(nostar fmt(%8.3f)) & se(fmt(2) par)) stats(N_sub r2, fmt(%8.0fc %8.3fc)) incelldelimiter() label legend nobaselevels /*nostar star(* 0.10 ** 0.05 *** 0.01)*/	/*drop(_cons)*/	*/	///
-					title(Effect of Correlates on Food Security Status) replace
+					title(PFS and household covariates) replace
+		
+		}	//	run_PFS_reg
 		
 	}
 	
