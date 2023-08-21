@@ -4002,7 +4002,7 @@
 				replace	`var'=1	if	(inrange(year,1994,1997)	|	inrange(year,2009,2019))	&	!mi(stamp_usewth_month)	&	stamp_usewth_month==1
 				
 				label	value	`var' yes1no0
-				label var	`var'		"FS used last month"
+				label var	`var'		"SNAP received"
 				
 			
 
