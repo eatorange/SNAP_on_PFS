@@ -38,17 +38,17 @@
 		
 		*	(2023-08-20)	Keep non-missing PFS obs only.
 		keep	if	!mi(PFS_glm)
-		assert	income_ever_below_200==1
-	
+
 		*	Construct an indicator with balanced sample from 1997-2013
-			*	For dynamic treatment effect, each endogenous treatment should be instrumented, meaning I can use observations when IV is available (1997-2013)
-			*	If we aggregate PFS over 3 waves (PFS_t, PFS_t-2, PFS_t-4), we can have FSD variables over three waves (FSD_2001, ..., FSD_2013)
+		*	For dynamic treatment effect, each endogenous treatment should be instrumented, meaning I can use observations when IV is available (1997-2013)
+		*	If we aggregate PFS over 3 waves (PFS_t, PFS_t-2, PFS_t-4), we can have FSD variables over three waves (FSD_2001, ..., FSD_2013)
 		cap	drop	num_nomiss_9713	
 		cap	drop	balanced_9713
 		bys	x11101ll: egen num_nomiss_9713 = count(PFS_glm) if inrange(year,1997,2013)
 		gen	balanced_9713	=	1	if	inrange(year,1997,2013)	&	num_nomiss_9713	==	9	// should be 11 non-missing PFS over 1997-2017
 		lab	var	balanced_9713	"PFS balanced b/w 1997-2013"
-		drop	num_nomiss_9713
+		drop	num_nomiss_9713	
+		
 		
 		*	Keep only observations where citizen ideology IV is available (1977-2015)
 		*	(2023-1-15) Maybe I shouldn't do it, because even if IV is available till 2015, we still use PFS in 2017 and 2019 (Iv regression automatically exclude 2017/2019, since there's no IV there.)
