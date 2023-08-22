@@ -85,7 +85,6 @@
 		drop	if	inlist(rp_state,0,50,51,99)
 		
 		*	(2023-08-20) Keep only those whos income ever below 200 (more than 99% belong to this case)
-		tab	income_ever_below_200
 		keep	if	income_ever_below_200==1
 		
 		*	Rescale large variable
@@ -106,7 +105,7 @@
 		global	timevars		year_enum4-year_enum11 year_enum14-year_enum30 //	Exclude year_enum3 (1979) as base category. year_enum12 (1990)  and year_enum13 (1991) are excluded due to lack of lagged data.
 					
 					
-		label	var	FS_rec_wth	"FS last month"
+		label	var	FS_rec_wth	"SNAP received"
 		label	var	foodexp_tot_inclFS_pc			"Food exp (with FS benefit)"
 		label	var	l2_foodexp_tot_inclFS_pc_1_real		"Food Exp in t-2"
 		label	var	l2_foodexp_inclFS_pc_2_real_K		"(Food Exp in t-2)$^2$ (K)"
@@ -148,21 +147,56 @@
 			*	I use Poisson quasi-MLE estimation, instead of GLM with Gamma in the original PFS paper
 			*	I include individual-FE
 			*	Please refer to "SNAP_PFS_const_test.do" file for more detail.
-		ppmlhdfe	${depvar}	${statevars} ${demovars}	${eduvars} 	${empvars}	${healthvars}	${familyvars}	${econvars}		[pweight=wgt_long_fam_adj], ///
-			absorb(x11101ll ib31.rp_state ib1979.year) vce(cluster x11101ll) d	
-		/*
-		glm 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}*/	${indvars}	/*${regionvars}	${timevars}*/	[aw=wgt_long_fam_adj], family(gamma)	link(log)
-		svy, subpop(if ${PFS_sample}): glm 	`depvar'	${statevars}	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	/*${foodvars}*/	${macrovars}	/*${regionvars}	${timevars}*/, family(gamma)	link(log)
-		*/		
-		ereturn list
-		est	sto	glm_step1
 			
-		*	Predict fitted value and residual
-		gen	glm_step1_sample=1	if	e(sample)==1 // e(sample) includes both subpopulation and non-subpopulation, so we need to include subpop condition here to properly restrict regression sample.
-		predict double mean1_foodexp_glm	if	glm_step1_sample==1
-		predict double e1_foodexp_glm		if	glm_step1_sample==1,r
-		gen e1_foodexp_sq_glm = (e1_foodexp_glm)^2	if	glm_step1_sample==1
+			*	All sample
+			ppmlhdfe	${depvar}	${statevars} ${demovars}	${eduvars} 	${empvars}	${healthvars}	${familyvars}	${econvars}		[pweight=wgt_long_fam_adj]	///
+				if	income_ever_below_200==1, ///
+				absorb(x11101ll ib31.rp_state ib1979.year) vce(cluster x11101ll) d	
+			
+			ereturn list
+			est	sto	glm_step1
+				
+			*	Predict fitted value and residual
+			gen	glm_step1_sample=1	if	e(sample)==1 // e(sample) includes both subpopulation and non-subpopulation, so we need to include subpop condition here to properly restrict regression sample.
+			predict double mean1_foodexp_glm	if	glm_step1_sample==1
+			predict double e1_foodexp_glm		if	glm_step1_sample==1,r
+			gen e1_foodexp_sq_glm = (e1_foodexp_glm)^2	if	glm_step1_sample==1
+			
+			
+			*	Repeat it using "balanced" 1997-2013 subsample
+				*	Our goal is only to use balanced subsample, which should have non-missing PFS over the period
+				*	To do so, we do the 1st-step using all 1997-2013 sample with non-missing TFP cost, and use the step1 sample who has balanced predicted mean (b/c they will be balanced TFP)
+				cap	drop	glm_step1_sample_9713
+				global	depvar		foodexp_tot_inclFS_pc_real	/*IHS_foodexp*/
+				
+				qui	ppmlhdfe	${depvar}	${statevars} ${demovars}	${eduvars} 	${empvars}	${healthvars}	${familyvars}	${econvars}		[pweight=wgt_long_fam_adj]	///
+					if	income_ever_below_200_9713==1	&	!mi(foodexp_W_TFP_pc_COLI_real),	///
+					absorb(x11101ll ib31.rp_state ib1979.year) vce(cluster x11101ll) d	
+				gen		glm_step1_sample_9713=1	if	e(sample)==1 // e(sample) includes both subpopulation and non-subpopulation, so we need to include subpop condition here to properly restrict regression sample.
+				
+				*	Now, tag the balanced sample based on this value
+				cap	drop	num_nomiss_9713	
+				cap	drop	balanced_9713
+				bys	x11101ll: egen num_nomiss_9713 = total(glm_step1_sample_9713) if inrange(year,1997,2013)
+				gen	balanced_9713	=	1	if	inrange(year,1997,2013)	&	num_nomiss_9713	==	9	// should be 11 non-missing PFS over 1997-2017
+				lab	var	balanced_9713	"PFS balanced b/w 1997-2013"
+				drop	num_nomiss_9713	
+				drop	glm_step1_sample_9713
+				
+				*	Now re-do step 1 using the balanced sample
+				
+				qui	ppmlhdfe	${depvar}	${statevars} ${demovars}	${eduvars} 	${empvars}	${healthvars}	${familyvars}	${econvars}		[pweight=wgt_long_fam_adj]	///
+					if	balanced_9713==1,	///
+					absorb(x11101ll ib31.rp_state ib1979.year) vce(cluster x11101ll) d	
+				est store glm_step1_9713
+								*	Predict fitted value and residual
+				predict double mean1_foodexp_glm_9713	if	balanced_9713==1
+				predict double e1_foodexp_glm_9713		if	balanced_9713==1,r
+				gen 	e1_foodexp_sq_glm_9713 = (e1_foodexp_glm_9713)^2	if	balanced_9713==1
+				
+				
 		
+			
 		/*
 		
 			*	Issue: mean in residuals are small, but standard deviation is large, meaning greater dispersion in residual.
@@ -196,7 +230,7 @@
 		*	(2023-1-18) Possion with FE now converges, and it does better job compared to Gaussian regression. So we use it.
 		local	depvar	e1_foodexp_sq_glm
 		
-			*	GLM with Poisson
+			*	Poisson quasi-MLE
 			ppmlhdfe	`depvar'	${statevars} ${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	[pweight=wgt_long_fam_adj], ///
 				absorb(x11101ll ib31.rp_state ib1979.year) vce(cluster x11101ll) d	
 			est store glm_step2
@@ -205,6 +239,20 @@
 			gen	sd_foodexp_glm	=	sqrt(abs(var1_foodexp_glm))	//	Take square root of absolute value, since predicted value can be negative which does not have square root.
 			gen	error_var1_glm	=	abs(var1_foodexp_glm - e1_foodexp_sq_glm)	//	prediction error. 
 			*br	e1_foodexp_sq_glm	var1_foodexp_glm	error_var1_glm
+			
+			*	1997-2013 balanced subsample
+				local	depvar	e1_foodexp_sq_glm_9713
+		
+				*	Poisson quasi-MLE
+				ppmlhdfe	`depvar'	${statevars} ${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	[pweight=wgt_long_fam_adj]	if	balanced_9713==1, ///
+					absorb(x11101ll ib31.rp_state ib1979.year) vce(cluster x11101ll) d	
+				est store glm_step2_9713
+				predict	double	var1_foodexp_glm_9713	if	balanced_9713==1	// (2023-06-21) Poisson quasi-MLE does not seem to generate negative predicted value, which is good (no need to square them)
+				gen	sd_foodexp_glm_9713	=	sqrt(abs(var1_foodexp_glm_9713))	//	Take square root of absolute value, since predicted value can be negative which does not have square root.
+				gen	error_var1_glm_9713	=	abs(var1_foodexp_glm_9713 - e1_foodexp_sq_glm_9713)	//	prediction error. 
+				*br	e1_foodexp_sq_glm	var1_foodexp_glm	error_var1_glm
+			
+				
 			
 			
 			/*
@@ -250,7 +298,17 @@
 			esttab	glm_step1	glm_step2	using "${SNAP_outRaw}/GLM_pooled.tex", ///
 					cells(b(nostar fmt(%8.3f)) & se(fmt(2) par)) stats(N_sub, fmt(%8.0fc)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(_cons)*/	///
 					title(Conditional Mean and Variance of Food Expenditure per capita)		replace		
+			
+			
+			esttab	glm_step1_9713	glm_step2_9713	using "${SNAP_outRaw}/GLM_pooled_9713.csv", ///
+					cells(b(star fmt(%8.2f)) se(fmt(2) par)) stats(N_sub /*r2*/) label legend nobaselevels star(* 0.10 ** 0.05 *** 0.01)	///
+					title(Conditional Mean and Variance of Food Expenditure per capita) 	replace
+					
+			esttab	glm_step1_9713	glm_step2_9713	using "${SNAP_outRaw}/GLM_pooled_9713.tex", ///
+					cells(b(nostar fmt(%8.3f)) & se(fmt(2) par)) stats(N_sub, fmt(%8.0fc)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(_cons)*/	///
+					title(Conditional Mean and Variance of Food Expenditure per capita)		replace		
 		
+			
 		
 		*	Step 3
 			
@@ -279,6 +337,31 @@
 				label	var	PFS_glm "PFS"
 			
 			
+			
+			*	1997-2013 balanced subsample
+			gen alpha1_foodexp_pc_glm_9713	= (mean1_foodexp_glm_9713)^2 / var1_foodexp_glm_9713	//	shape parameter of Gamma (alpha)
+			gen beta1_foodexp_pc_glm_9713	= var1_foodexp_glm_9713 / mean1_foodexp_glm_9713		//	scale parameter of Gamma (beta)
+			
+						
+			*	The  code below is a temporary code to see what is going wrong in the original code. I replaced expected value of residual squared with residual squared
+			*gen alpha1_foodexp_pc_glm	= (mean1_foodexp_glm)^2 / e1_foodexp_sq_glm	//	shape parameter of Gamma (alpha)
+			*gen beta1_foodexp_pc_glm	= e1_foodexp_sq_glm / mean1_foodexp_glm		//	scale parameter of Gamma (beta)
+			
+			*	Generate PFS by constructing CDF
+			*	I create two versions - without COLI and with COLI.
+			
+				*	Without COLI adjustment (used for PFS descriptive paper)
+				global	TFP_threshold	foodexp_W_TFP_pc_real	/*IHS_TFP*/
+				gen PFS_glm_noCOLI_9713 = gammaptail(alpha1_foodexp_pc_glm_9713, ${TFP_threshold}/beta1_foodexp_pc_glm_9713)	//	gammaptail(a,(x-g)/b)=(1-gammap(a,(x-g)/b)) where g is location parameter (g=0 in this case)
+				label	var	PFS_glm_noCOLI_9713	"PFS (w/o COLI)"
+			
+				*	With COLI adjustment (main caufal inference)
+				global	TFP_threshold	foodexp_W_TFP_pc_COLI_real	/*IHS_TFP*/
+				gen PFS_glm_9713	 = gammaptail(alpha1_foodexp_pc_glm_9713, ${TFP_threshold}/beta1_foodexp_pc_glm_9713)	//	gammaptail(a,(x-g)/b)=(1-gammap(a,(x-g)/b)) where g is location parameter (g=0 in this case)
+				label	var	PFS_glm_9713 "PFS"
+	
+		
+			
 					
 			*	Normal (to show the robustness of the distributional assumption)
 			/*
@@ -305,6 +388,24 @@
 		replace	`var'=0	if	!mi(PFS_glm_noCOLI)	&	!inrange(PFS_glm_noCOLI,0,0.5)
 		replace	`var'=1	if	!mi(PFS_glm_noCOLI)	&	inrange(PFS_glm_noCOLI,0,0.5)
 		lab	var	`var'	"HH is food insecure (PFS)"
+		
+		
+			*	1997-2013 balanced subsample
+			
+			loc	var	PFS_FI_glm_9713
+			cap	drop	`var'
+			gen		`var'=.
+			replace	`var'=0	if	!mi(PFS_glm_9713)	&	!inrange(PFS_glm_9713,0,0.5)
+			replace	`var'=1	if	!mi(PFS_glm_9713)	&	inrange(PFS_glm_9713,0,0.5)
+			lab	var	`var'	"HH is food insecure (PFS w/o COLI) (1997-2013)"
+			
+			loc	var	PFS_FI_glm_noCOLI_9713
+			cap	drop	`var'
+			gen		`var'=.
+			replace	`var'=0	if	!mi(PFS_glm_noCOLI_9713)	&	!inrange(PFS_glm_noCOLI_9713,0,0.5)
+			replace	`var'=1	if	!mi(PFS_glm_noCOLI_9713)	&	inrange(PFS_glm_noCOLI_9713,0,0.5)
+			lab	var	`var'	"HH is food insecure (PFS) (1997-2013)"
+			
 
 		save    "${SNAP_dtInt}/SNAP_long_PFS",	replace
 		
@@ -313,7 +414,7 @@
 		*	(2023-8-20) Re-visited. Make sure to do this regression on the final sapmle (non-missing PFS, income ever below 200, balaned b/w 9713, etc). I set the default counter as zero to run manually, until it is moved to other dofile.
 		*use    "${SNAP_dtInt}/SNAP_long_PFS",	clear	
 		local	run_PFS_reg=0
-		if	run_PFS_reg==1	{
+		if	`run_PFS_reg'==1	{
 			
 			*	No SNAP status, state and year FE, all sapmle
 			local	depvar	PFS_glm
