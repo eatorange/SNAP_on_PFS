@@ -105,7 +105,7 @@
 		global	timevars		year_enum4-year_enum11 year_enum14-year_enum30 //	Exclude year_enum3 (1979) as base category. year_enum12 (1990)  and year_enum13 (1991) are excluded due to lack of lagged data.
 					
 					
-		label	var	FS_rec_wth	"SNAP received"
+		*label	var	FS_rec_wth	"SNAP received"
 		label	var	foodexp_tot_inclFS_pc			"Food exp (with FS benefit)"
 		label	var	l2_foodexp_tot_inclFS_pc_1_real		"Food Exp in t-2"
 		label	var	l2_foodexp_inclFS_pc_2_real_K		"(Food Exp in t-2)$^2$ (K)"
