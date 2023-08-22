@@ -69,15 +69,15 @@
 		local	fam_agg			0	//	Aggregate family-level variables across waves
 		
 		*	SECTION 2: Prepare external data
-		local	ext_data		1	//	Prepare external data (CPI, TFP, etc.)
+		local	ext_data		0	//	Prepare external data (CPI, TFP, etc.)
 		
 		*	SECTION 3: Construct PSID panel data and import external data
 		local	cr_panel		0	//	Create panel structure from ID variable
 			local	panel_view	0	//	Create an excel file showing the change of certain clan over time (for internal data-check only)
-		local	merge_data		1	//	Merge ind- and family- variables and import it into ID variable
+		local	merge_data		0	//	Merge ind- and family- variables and import it into ID variable
 			local	raw_reshape	0		//	Merge raw variables and reshape into long data (takes time)
 			local	add_clean	0		//	Do additional cleaning and import external data (CPI, TFP)
-			local	import_dta	1		//	Import aggregated variables and external data into ID data. 
+			local	import_dta	0		//	Import aggregated variables and external data into ID data. 
 		
 		*	SECTION 4: Clean data and save it
 		local	clean_vars		1	//	Clean variables and save it
@@ -4076,7 +4076,10 @@
 			
 			label	value	`var'	yes1no0
 			label	var	`var'	"FS used this year"
-				
+		
+		
+		
+		
 		*	Food stamp amount received
 		
 			*	FS Recall period (1999-2007) - will be later used to adjust values
@@ -4865,6 +4868,70 @@
 				gen	double	l2_`var'	=	l2.`var'
 				
 			}
+			
+			*	Create lagged dummes for SNAP status
+			sort	x11101ll	year
+			foreach	lag	in	2	4	{
+				
+				cap	drop	l`lag'_FS_rec_wth
+				gen		l`lag'_FS_rec_wth	=	l`lag'.FS_rec_wth
+				lab	var	l`lag'_FS_rec_wth	"SNAP received `lag' years ago"
+				
+				*cap	drop	f`lag'_FS_rec_wth
+				*gen		f`lag'_FS_rec_wth	=	f`lag'.FS_rec_wth
+				*lab	var	f`lag'_FS_rec_wth	"SNAP received `lag' years later"
+				
+				
+			}
+			
+			*	Create dummies of culumative SNAP redemptions for dynamics treatment
+				
+				loc	var	SNAP_cum_status
+				cap	drop	`var'	//	SNAP_for_cum
+				egen	`var'	=	group(FS_rec_wth	l2_FS_rec_wth	l4_FS_rec_wth)
+				lab	var	`var'	"Cumulative SNAP status last 5-year"
+				*egen	SNAP_for_cum	=	group(FS_rec_wth	f2_FS_rec_wth	f4_FS_rec_wth)
+				*lab	var	SNAP_for_cum	"Cumulative SNAP status next 5-year"
+				
+				
+				assert	`var'==1	if	l4_FS_rec_wth==0	&	l2_FS_rec_wth==0	&	FS_rec_wth==0
+				assert	`var'==2	if	l4_FS_rec_wth==1	&	l2_FS_rec_wth==0	&	FS_rec_wth==0
+				assert	`var'==3	if	l4_FS_rec_wth==0	&	l2_FS_rec_wth==1	&	FS_rec_wth==0
+				assert	`var'==4	if	l4_FS_rec_wth==1	&	l2_FS_rec_wth==1	&	FS_rec_wth==0
+				assert	`var'==5	if	l4_FS_rec_wth==0	&	l2_FS_rec_wth==0	&	FS_rec_wth==1
+				assert	`var'==6	if	l4_FS_rec_wth==1	&	l2_FS_rec_wth==0	&	FS_rec_wth==1
+				assert	`var'==7	if	l4_FS_rec_wth==0	&	l2_FS_rec_wth==1	&	FS_rec_wth==1
+				assert	`var'==8	if	l4_FS_rec_wth==1	&	l2_FS_rec_wth==1	&	FS_rec_wth==1
+								
+				lab	define	`var'	1	"Never"		2	"t-4 only"			3	"t-2 only"			4	"t-4 and t-2 only"	///
+											5	"t only"	6	"t-4 and t only"	7	"t-2 and t only"	8	"t-4 t-2 and t", replace
+				lab	val	`var'	`var'
+				lab	var	`var'	"SNAP status last 5 years"
+					
+				tab	`var',	gen(`var')
+				rename	`var'?	(SNAP_000	SNAP_100	SNAP_010	SNAP_110	SNAP_001	SNAP_101	SNAP_011	SNAP_111)
+				
+				lab	var	SNAP_000	"SNAP status 5 years: Never"
+				lab	var	SNAP_100	"SNAP status 5 years: t-4 only"
+				lab	var	SNAP_010	"SNAP status 5 years: t-2 only"
+				lab	var	SNAP_110	"SNAP status 5 years: t-4 and t-2 only"
+				lab	var	SNAP_001	"SNAP status 5 years: t only"
+				lab	var	SNAP_101	"SNAP status 5 years: t-4 and t only"
+				lab	var	SNAP_011	"SNAP status 5 years: t-2 and t only"
+				lab	var	SNAP_111	"SNAP status 5 years: t-4 t-2 and t"
+				
+			*	Aggregate cumulative dummies by the number of SNAP redemptions over 5-year
+			loc	var		SNAP_cum_fre
+			cap	drop	`var'
+			gen		`var'=.
+			replace	`var'=0		if	inlist(1,SNAP_000)
+			replace	`var'=1		if	inlist(1,SNAP_100,SNAP_010,SNAP_001)
+			replace	`var'=2		if	inlist(1,SNAP_110,SNAP_011,SNAP_101)
+			replace	`var'=3		if	inlist(1,SNAP_111)
+			
+			lab	var	`var'		"\# SNAP participation last 5 years"
+
+	
 		
 		*	Drop 1975 and 1990
 		*	I only need those years for 1967 and 1991, which I just imported above (so no longer needed)
