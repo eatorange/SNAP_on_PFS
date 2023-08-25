@@ -60,7 +60,7 @@
 	di "Git branch `r(branch)'; commit `r(sha)'."
 	
 	*	Determine which part of the code to be run
-	local	PFS_const	1	//	Construct PFS from cleaned data
+	local	PFS_const	0	//	Construct PFS from cleaned data
 	local	FSD_const	1	//	Construct FSD from PFS
 	
 	/****************************************************************
@@ -328,12 +328,14 @@
 			
 				*	Without COLI adjustment (used for PFS descriptive paper)
 				global	TFP_threshold	foodexp_W_TFP_pc_real	/*IHS_TFP*/
-				gen PFS_glm_noCOLI = gammaptail(alpha1_foodexp_pc_glm, ${TFP_threshold}/beta1_foodexp_pc_glm)	//	gammaptail(a,(x-g)/b)=(1-gammap(a,(x-g)/b)) where g is location parameter (g=0 in this case)
+				cap	drop	PFS_glm_noCOLI
+				gen			PFS_glm_noCOLI = gammaptail(alpha1_foodexp_pc_glm, ${TFP_threshold}/beta1_foodexp_pc_glm)	//	gammaptail(a,(x-g)/b)=(1-gammap(a,(x-g)/b)) where g is location parameter (g=0 in this case)
 				label	var	PFS_glm_noCOLI "PFS (w/o COLI)"
 			
 				*	With COLI adjustment (main caufal inference)
 				global	TFP_threshold	foodexp_W_TFP_pc_COLI_real	/*IHS_TFP*/
-				gen PFS_glm	 = gammaptail(alpha1_foodexp_pc_glm, ${TFP_threshold}/beta1_foodexp_pc_glm)	//	gammaptail(a,(x-g)/b)=(1-gammap(a,(x-g)/b)) where g is location parameter (g=0 in this case)
+				cap	drop	PFS_glm
+				gen 		PFS_glm	 = gammaptail(alpha1_foodexp_pc_glm, ${TFP_threshold}/beta1_foodexp_pc_glm)	//	gammaptail(a,(x-g)/b)=(1-gammap(a,(x-g)/b)) where g is location parameter (g=0 in this case)
 				label	var	PFS_glm "PFS"
 			
 			
@@ -352,15 +354,35 @@
 			
 				*	Without COLI adjustment (used for PFS descriptive paper)
 				global	TFP_threshold	foodexp_W_TFP_pc_real	/*IHS_TFP*/
-				gen PFS_glm_noCOLI_9713 = gammaptail(alpha1_foodexp_pc_glm_9713, ${TFP_threshold}/beta1_foodexp_pc_glm_9713)	//	gammaptail(a,(x-g)/b)=(1-gammap(a,(x-g)/b)) where g is location parameter (g=0 in this case)
+				cap	drop	PFS_glm_noCOLI_9713
+				gen			PFS_glm_noCOLI_9713 = gammaptail(alpha1_foodexp_pc_glm_9713, ${TFP_threshold}/beta1_foodexp_pc_glm_9713)	//	gammaptail(a,(x-g)/b)=(1-gammap(a,(x-g)/b)) where g is location parameter (g=0 in this case)
 				label	var	PFS_glm_noCOLI_9713	"PFS (w/o COLI)"
 			
 				*	With COLI adjustment (main caufal inference)
 				global	TFP_threshold	foodexp_W_TFP_pc_COLI_real	/*IHS_TFP*/
-				gen PFS_glm_9713	 = gammaptail(alpha1_foodexp_pc_glm_9713, ${TFP_threshold}/beta1_foodexp_pc_glm_9713)	//	gammaptail(a,(x-g)/b)=(1-gammap(a,(x-g)/b)) where g is location parameter (g=0 in this case)
+				cap	drop	PFS_glm_9713
+				gen 		PFS_glm_9713	 = gammaptail(alpha1_foodexp_pc_glm_9713, ${TFP_threshold}/beta1_foodexp_pc_glm_9713)	//	gammaptail(a,(x-g)/b)=(1-gammap(a,(x-g)/b)) where g is location parameter (g=0 in this case)
 				label	var	PFS_glm_9713 "PFS"
 	
+			*	Generate lagged PFS
+			foreach	var	in	PFS_glm	PFS_glm_noCOLI	PFS_glm_9713	PFS_glm_noCOLI_9713	{
+				
+				loc	varlabel:	var	label	`var'
+				
+				cap	drop	l2_`var'
+				gen	l2_`var'	=	l2.`var'
+				lab	var	l2_`var'	"(L2) `varlabel'"
+				
+				cap	drop	l4_`var'
+				gen	l4_`var'	=	l4.`var'
+				lab	var	l4_`var'	"(L4) `varlabel'"
+				
+			}
+
 		
+		
+			
+			
 			
 					
 			*	Normal (to show the robustness of the distributional assumption)
