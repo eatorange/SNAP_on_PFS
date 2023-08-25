@@ -4,11 +4,120 @@
 
 	*	IV regression
 	if	`IV_reg'==1	{
-			
-		*	Weak IV test 
-		*	(2022-05-01) For now, we use IV to predict T(FS participation) and use it to predict W (food expenditure per capita) (previously I used it to predict PFS in the second stage)
+		
+		
 		use	"${SNAP_dtInt}/SNAP_const", clear
-		lab	var	FS_rec_wth	"SNAP received"
+		
+		*	Additional cleaning
+			
+			*	Re-scale (to vary from 0 to 1) and standardize SNAP index
+			*	Not sure I am gonna use it..
+				foreach	type	in	uw	w	{
+
+					*	Re-scaled version
+					cap	drop	SNAP_index_`type'_0to1
+					summ	SNAP_index_`type'  [aw=wgt_long_fam_adj]
+					gen		SNAP_index_`type'_0to1	=	(SNAP_index_`type'-r(min)) / (r(max) - r(min))
+					lab	var	SNAP_index_`type'_0to1		"SNAP Policy Index (`type' \& rescaled)"
+							
+					*	Standardized version				
+					cap drop SNAP_index_`type'_std
+					summ	SNAP_index_`type'  [aw=wgt_long_fam_adj]
+					gen	SNAP_index_`type'_std = (SNAP_index_`type' - r(mean)) / r(sd)
+					lab	var	SNAP_index_`type'_std	"SNAP policy index (`type' \& standardized)"
+					
+				}
+				
+				*	Generate dummy for each cumulative SNAP status over 5-year
+				*	Will be later imported to "clean.do" file
+				cap	drop	SNAP_cum_fre_?
+				tab	SNAP_cum_fre, gen(SNAP_cum_fre_)
+				rename	(SNAP_cum_fre_1	SNAP_cum_fre_2	SNAP_cum_fre_3	SNAP_cum_fre_4)	(SNAP_cum_fre_0	SNAP_cum_fre_1	SNAP_cum_fre_2	SNAP_cum_fre_3)
+				lab	var	SNAP_cum_fre_0	"No SNAP over 5 years"
+				lab	var	SNAP_cum_fre_1	"SNAP once over 5 years"
+				lab	var	SNAP_cum_fre_2	"SNAP twice over 5 years"
+				lab	var	SNAP_cum_fre_3	"SNAP thrice over 5 years"
+			
+		
+			*	Temporary create copies of endogenous variable (name too long)
+				cap	drop	FSdummy	FSamt	FSamtK
+				clonevar	FSdummy			=	FS_rec_wth
+				clonevar	FSamt			=	FS_rec_amt_real
+				clonevar	FSamtcp			=	FS_rec_amt_capita_real
+				
+				gen			FSamtK	=	FSamt/1000
+				lab	var		FSamtK	"SNAP benefit (USD) (K)"
+				lab	var		FSamtcp	"SNAP benefit amount per capita"
+				
+				cap	drop	FS_amt_real
+				cap	drop	FS_amt_realK
+				cap	drop	FS_amt_cap_real
+				cap	drop	FS_amt_cap_realK
+				clonevar	FS_amt_real			=	FS_rec_amt_real
+				gen			FS_amt_realK		=	FS_rec_amt_real	/	1000
+				clonevar	FS_amt_cap_real		=	FS_rec_amt_capita_real
+				gen			FS_amt_cap_realK	=	FS_rec_amt_capita_real / 1000
+				lab	var		FS_amt_real			"SNAP benefit"
+				lab	var		FS_amt_realK		"SNAP benefit (K)"
+				lab	var		FS_amt_cap_realK	"SNAP benefit per capita (K)"
+		
+			*	Temporarily rescale SSI and share variables (0-1 to 1-100)
+			qui	ds	share_edu_exp_sl-SSI_GDP_s
+			
+			foreach	var	in	`r(varlist)'		{
+				
+				replace	`var'=	`var'*100		if	!mi(`var')	&	!inrange(`var',1,100) // This condition make sure that we do not double-scale it (ex. later fixed it in the "clean" part but forgot to fix it here.)
+				assert	inrange(`var',0,100)	if	!mi(`var')
+			}
+			
+			*	Temporary rescale lagged food exp^2
+			replace	l2_foodexp_tot_inclFS_pc_2_real	=	l2_foodexp_tot_inclFS_pc_2_real/1000
+			lab	var	l2_foodexp_tot_inclFS_pc_2_real		"Food exp in t-2 (K)"
+			
+			*	Temporary generate state control categorical variable
+			cap	drop	major_control_cat
+			gen			major_control_cat=.
+			replace		major_control_cat=0	if	major_control_mix==1
+			replace		major_control_cat=1	if	major_control_dem==1
+			replace		major_control_cat=2	if	major_control_rep==1
+			lab	define	major_control_cat	0	"Mixed"	1	"Demo control"	2	"Repub control"
+			lab	val		major_control_cat	major_control_cat
+			lab	var		major_control_cat	"State control"
+			
+			*	Temporary generate interaction variable
+			gen	int_SSI_exp_sl_01_03	=	SSI_exp_sl	*	year_01_03
+			gen	int_SSI_GDP_sl_01_03	=	SSI_GDP_sl	*	year_01_03
+			gen	int_share_GDP_sl_01_03	=	share_welfare_GDP_sl	*	year_01_03
+			*gen	int_SSI_GDP_sl_post96	=	SSI_GDP_sl	*	post_1996
+			*gen	int_SSI_GDP_s_post96	=	SSI_GDP_s	*	post_1996
+			
+			lab	var	year_01_03				"{2001,2003}"
+			lab	var	int_SSI_exp_sl_01_03	"SSI X {2001_2003}"
+			lab	var	int_SSI_GDP_sl_01_03	"SSI X {2001_2003}"
+			lab	var	int_share_GDP_sl_01_03	"Social expenditure share X {2001_2003}"
+		
+			
+			*	Variable label	
+			label	var	foodexp_tot_inclFS_pc_real	"Food exp (with FS benefit)"
+			label	var	l2_foodexp_tot_inclFS_pc_1_real	"Food Exp in t-2"
+			label	var	l2_foodexp_tot_inclFS_pc_2_real	"(Food Exp in t-2)$^2$"
+			label	var	rp_age		"Age (RP)"
+			label	var	rp_age_sq	"Age$^2$ (RP)"
+			label	var	change_RP	"RP changed"
+			label	var	ln_fam_income_pc_real	"ln(per capita income)"
+			label	var	unemp_rate	"State Unemp Rate"
+			label	var	major_control_dem	"Dem state control"
+			label	var	major_control_rep	"Rep state control"
+			label	var	SSI_GDP_sl	"SSI"
+			label	var	year_01_03	"2001 or 2003"
+			label	var	citi6016	"State citizen ideology (1960-2015)"
+			
+	
+	
+			
+		*	(2023-08-20)	Keep non-missing PFS obs only.
+		keep	if	!mi(PFS_glm)
+		
 		
 		*	Summary stats of PFS (with and w/o COLI)
 		summ 	PFS_glm  	[aw=wgt_long_fam_adj]	if !mi(PFS_glm) & !mi(PFS_glm_noCOLI) & inrange(year,1990,2015)
@@ -29,43 +138,40 @@
 						title(Distribution of PFS - with and w/o COLI)	note(COLI is available since 1990)
 		graph	export	"${SNAP_outRaw}/Dist_PFS_COLI.png", as(png) replace
 		graph	close
+	
+	
+		
 		
 		*	Use "PFS_noCOLI" as base PFS variable
 		drop	PFS_glm
 		rename	PFS_glm_noCOLI	PFS_glm
 		lab	var	PFS_glm	"PFS"
 		
-		
-		*	(2023-08-20)	Keep non-missing PFS obs only.
-		keep	if	!mi(PFS_glm)
-
-		*	Construct an indicator with balanced sample from 1997-2013
-		*	For dynamic treatment effect, each endogenous treatment should be instrumented, meaning I can use observations when IV is available (1997-2013)
-		*	If we aggregate PFS over 3 waves (PFS_t, PFS_t-2, PFS_t-4), we can have FSD variables over three waves (FSD_2001, ..., FSD_2013)
-		cap	drop	num_nomiss_9713	
-		cap	drop	balanced_9713
-		bys	x11101ll: egen num_nomiss_9713 = count(PFS_glm) if inrange(year,1997,2013)
-		gen	balanced_9713	=	1	if	inrange(year,1997,2013)	&	num_nomiss_9713	==	9	// should be 11 non-missing PFS over 1997-2017
-		lab	var	balanced_9713	"PFS balanced b/w 1997-2013"
-		drop	num_nomiss_9713	
-		
-		
 		*	Keep only observations where citizen ideology IV is available (1977-2015)
 		*	(2023-1-15) Maybe I shouldn't do it, because even if IV is available till 2015, we still use PFS in 2017 and 2019 (Iv regression automatically exclude 2017/2019, since there's no IV there.)
 		*keep	if	inrange(year,1977,2015) & !mi(citi6016)
+
+
+		*	Set globals
+		global	statevars		l2_foodexp_tot_inclFS_pc_1_real	l2_foodexp_tot_inclFS_pc_2_real 
+		global	demovars		rp_age rp_age_sq	rp_nonWhte	rp_married	rp_female	
+		global	econvars		ln_fam_income_pc_real	
+		global	healthvars		rp_disabled
+		global	familyvars		famnum	ratio_child	change_RP
+		global	empvars			rp_employed
+		global	eduvars			rp_NoHS rp_somecol rp_col
+		//global	foodvars		FS_rec_wth
+		global	macrovars		unemp_rate	CPI
+		global	regionvars		rp_state_enum2-rp_state_enum31 rp_state_enum33-rp_state_enum50 	//	Excluding NY (rp_state_enum32) and outside 48 states (1, 52, 53). The latter should be excluded when running regression
+		*global	timevars		year_enum4-year_enum11 year_enum14-year_enum30 //	Exclude year_enum3 (1978) as base category. year_enum12 (1990)  and year_enum13 (1991) are excluded due to lack of lagged data.
+		global	timevars		year_enum4-year_enum11 year_enum14-year_enum30	//	Using year_enum18 (1996) as a base year, when regressing with SNAP index IV (1996-2013)
+		global	indvars			/*ind_female*/ age_ind	age_ind_sq ind_NoHS ind_somecol ind_col /* ind_employed_dummy*/
 		
-		*	Change variable label (will be imported into clean.do later)
-		lab	var	FS_rec_wth	"SNAP received"
-		*lab	var	FSdummy	"Received FS"
-		lab	var	inst6017_nom	"State government ideology"
+
+	
 		
-		*	Individual age squared
-		loc	var		age_ind_sq
-		cap	drop	`var'
-		gen	`var'	=	(age_ind)^2
-		lab	var	`var'	"Age squared (Ind)"
 		
-			
+
 		*	Outcome variables
 		summ	PFS_glm	PFS_FI_glm
 		summ	PFS_glm PFS_FI_glm	[aw=wgt_long_fam_adj]
@@ -93,123 +199,45 @@
 		
 		
 		
+		*	Event study plot
 		
-		*	Set globals
-		global	statevars		l2_foodexp_tot_inclFS_pc_1_real	l2_foodexp_tot_inclFS_pc_2_real 
-		global	demovars		rp_age rp_age_sq	rp_nonWhte	rp_married	rp_female	
-		global	econvars		ln_fam_income_pc_real	
-		global	healthvars		rp_disabled
-		global	familyvars		famnum	ratio_child	change_RP
-		global	empvars			rp_employed
-		global	eduvars			rp_NoHS rp_somecol rp_col
-		//global	foodvars		FS_rec_wth
-		global	macrovars		unemp_rate	CPI
-		global	regionvars		rp_state_enum2-rp_state_enum31 rp_state_enum33-rp_state_enum50 	//	Excluding NY (rp_state_enum32) and outside 48 states (1, 52, 53). The latter should be excluded when running regression
-		*global	timevars		year_enum4-year_enum11 year_enum14-year_enum30 //	Exclude year_enum3 (1978) as base category. year_enum12 (1990)  and year_enum13 (1991) are excluded due to lack of lagged data.
-		global	timevars		year_enum4-year_enum11 year_enum14-year_enum30	//	Using year_enum18 (1996) as a base year, when regressing with SNAP index IV (1996-2013)
-		global	indvars			/*ind_female*/ age_ind	age_ind_sq ind_NoHS ind_somecol ind_col /* ind_employed_dummy*/
-		
-
-		label	var	FS_rec_wth	"FS last month"
-		label	var	foodexp_tot_inclFS_pc_real	"Food exp (with FS benefit)"
-		label	var	l2_foodexp_tot_inclFS_pc_1_real	"Food Exp in t-2"
-		label	var	l2_foodexp_tot_inclFS_pc_2_real	"(Food Exp in t-2)$^2$"
-		label	var	rp_age		"Age (RP)"
-		label	var	rp_age_sq	"Age$^2$ (RP)"
-		label	var	change_RP	"RP changed"
-		label	var	ln_fam_income_pc_real	"ln(per capita income)"
-		label	var	unemp_rate	"State Unemp Rate"
-		label	var	major_control_dem	"Dem state control"
-		label	var	major_control_rep	"Rep state control"
-		label	var	SSI_GDP_sl	"SSI"
-		label	var	year_01_03	"2001 or 2003"
-		label	var	citi6016	"State citizen ideology (1960-2015)"
-		
-		
-		*	Re-scale (to vary from 0 to 1) and standardize SNAP index
-		*	Not sure I am gonna use it..
-			foreach	type	in	uw	w	{
-
-				*	Re-scaled version
-				cap	drop	SNAP_index_`type'_0to1
-				summ	SNAP_index_`type'  [aw=wgt_long_fam_adj]
-				gen		SNAP_index_`type'_0to1	=	(SNAP_index_`type'-r(min)) / (r(max) - r(min))
-				lab	var	SNAP_index_`type'_0to1		"SNAP Policy Index (`type' \& rescaled)"
-						
-				*	Standardized version				
-				cap drop SNAP_index_`type'_std
-				summ	SNAP_index_`type'  [aw=wgt_long_fam_adj]
-				gen	SNAP_index_`type'_std = (SNAP_index_`type' - r(mean)) / r(sd)
-				lab	var	SNAP_index_`type'_std	"SNAP policy index (`type' \& standardized)"
+			* Regress PFS on relative time dummies (2-years ago as a baseline)
+			*	yit = a0 + a1*1(T=-8) + a2*1(T=-4) + a3*1(T=-2) + a4*1(T=0)
+				*	Base category: T=-6
 				
-			}
+				*	Start with OLS, no FE, no controls
+				
+				*reg	PFS_glm	year_SNAP_std_l8 year_SNAP_std_l4 year_SNAP_std_l2 year_SNAP_std_l0	[aw=wgt_long_fam_adj]	if	event_study_sample==1	//	all event study sample
+								
+							
+				reg	PFS_glm	year_SNAP_std_l8 year_SNAP_std_l4 year_SNAP_std_l2 year_SNAP_std_l0	[aw=wgt_long_fam_adj]	if	event_study_sample==1	&	SNAP_cum_fre_1st==1	//	SNAP only once over 5-year period (t-4, t-2 and t)
+				est	store	SNAP_once
+				
+				reg	PFS_glm	year_SNAP_std_l8 year_SNAP_std_l4 year_SNAP_std_l2 year_SNAP_std_l0	[aw=wgt_long_fam_adj]	if	event_study_sample==1	&	SNAP_cum_fre_1st==2	//	SNAP only twice over 5-year period (t-4, t-2 and t)
+				est	store	SNAP_twice
+				
+				reg	PFS_glm	year_SNAP_std_l8 year_SNAP_std_l4 year_SNAP_std_l2 year_SNAP_std_l0	[aw=wgt_long_fam_adj]	if	event_study_sample==1	&	SNAP_cum_fre_1st==3	//	SNAP only twice over 5-year period (t-4, t-2 and t)
+				est	store	SNAP_thrice
+				
+				coefplot SNAP_once SNAP_twice	SNAP_thrice, drop(_cons) xline(0) vertical title(PFS after the first SNAP participation)
+				graph	export	"${SNAP_outRaw}/Cumul_SNAP_redemp_1st_noctrl.png", replace
+				
+				*	Control
+				reg	PFS_glm	${FSD_on_FS_X}	${timevars}	year_SNAP_std_l8 year_SNAP_std_l4 year_SNAP_std_l2 year_SNAP_std_l0	[aw=wgt_long_fam_adj]	if	event_study_sample==1	&	SNAP_cum_fre_1st==1	//	all event study sample 
+				est	store	SNAP_once_control
+				
+				reg	PFS_glm	${FSD_on_FS_X}	${timevars}	year_SNAP_std_l8 year_SNAP_std_l4 year_SNAP_std_l2 year_SNAP_std_l0	[aw=wgt_long_fam_adj]	if	event_study_sample==1	&	SNAP_cum_fre_1st==2	//	all event study sample 
+				est	store	SNAP_twice_control
+				
+				reg	PFS_glm	${FSD_on_FS_X}	${timevars}	year_SNAP_std_l8 year_SNAP_std_l4 year_SNAP_std_l2 year_SNAP_std_l0	[aw=wgt_long_fam_adj]	if	event_study_sample==1	&	SNAP_cum_fre_1st==3	//	all event study sample 
+				est	store	SNAP_thrice_control
+			
+				coefplot SNAP_once_control SNAP_twice_control	SNAP_thrice_control, keep(year_SNAP_std_l8	year_SNAP_std_l4	year_SNAP_std_l2	year_SNAP_std_l0) xline(0) vertical title(PFS after the first SNAP participation)
+				graph	export	"${SNAP_outRaw}/Cumul_SNAP_redemp_1st_ctrl.png", replace
+				
 
-		
-			
-		*	Re-scale citizen ideology variable (from 0-100 to 0-1 : for better interpretation)
-		cap	drop	citi6016_0to1
-		gen	citi6016_0to1	=	citi6016/100
-		lab	var	citi6016_0to1	"State citizen ideology (0-1)"
+	
 
-		
-		*	Temporary create copies of endogenous variable (name too long)
-			cap	drop	FSdummy	FSamt	FSamtK
-			clonevar	FSdummy			=	FS_rec_wth
-			clonevar	FSamt			=	FS_rec_amt_real
-			clonevar	FSamtcp			=	FS_rec_amt_capita_real
-			
-			gen			FSamtK	=	FSamt/1000
-			lab	var		FSamtK	"SNAP benefit (USD) (K)"
-			lab	var		FSamtcp	"SNAP benefit amount per capita"
-			
-			cap	drop	FS_amt_real
-			cap	drop	FS_amt_realK
-			cap	drop	FS_amt_cap_real
-			cap	drop	FS_amt_cap_realK
-			clonevar	FS_amt_real			=	FS_rec_amt_real
-			gen			FS_amt_realK		=	FS_rec_amt_real	/	1000
-			clonevar	FS_amt_cap_real		=	FS_rec_amt_capita_real
-			gen			FS_amt_cap_realK	=	FS_rec_amt_capita_real / 1000
-			lab	var		FS_amt_real			"SNAP benefit"
-			lab	var		FS_amt_realK		"SNAP benefit (K)"
-			lab	var		FS_amt_cap_realK	"SNAP benefit per capita (K)"
-	
-		*	Temporarily rescale SSI and share variables (0-1 to 1-100)
-		qui	ds	share_edu_exp_sl-SSI_GDP_s
-		
-		foreach	var	in	`r(varlist)'		{
-		    
-			replace	`var'=	`var'*100		if	!mi(`var')	&	!inrange(`var',1,100) // This condition make sure that we do not double-scale it (ex. later fixed it in the "clean" part but forgot to fix it here.)
-			assert	inrange(`var',0,100)	if	!mi(`var')
-		}
-		
-		*	Temporary rescale lagged food exp^2
-		replace	l2_foodexp_tot_inclFS_pc_2_real	=	l2_foodexp_tot_inclFS_pc_2_real/1000
-		lab	var	l2_foodexp_tot_inclFS_pc_2_real		"Food exp in t-2 (K)"
-		
-		*	Temporary generate state control categorical variable
-		cap	drop	major_control_cat
-		gen			major_control_cat=.
-		replace		major_control_cat=0	if	major_control_mix==1
-		replace		major_control_cat=1	if	major_control_dem==1
-		replace		major_control_cat=2	if	major_control_rep==1
-		lab	define	major_control_cat	0	"Mixed"	1	"Demo control"	2	"Repub control"
-		lab	val		major_control_cat	major_control_cat
-		lab	var		major_control_cat	"State control"
-		
-		*	Temporary generate interaction variable
-		gen	int_SSI_exp_sl_01_03	=	SSI_exp_sl	*	year_01_03
-		gen	int_SSI_GDP_sl_01_03	=	SSI_GDP_sl	*	year_01_03
-		gen	int_share_GDP_sl_01_03	=	share_welfare_GDP_sl	*	year_01_03
-		*gen	int_SSI_GDP_sl_post96	=	SSI_GDP_sl	*	post_1996
-		*gen	int_SSI_GDP_s_post96	=	SSI_GDP_s	*	post_1996
-		
-		lab	var	year_01_03				"{2001,2003}"
-		lab	var	int_SSI_exp_sl_01_03	"SSI X {2001_2003}"
-		lab	var	int_SSI_GDP_sl_01_03	"SSI X {2001_2003}"
-		lab	var	int_share_GDP_sl_01_03	"Social expenditure share X {2001_2003}"
-		
-	
 	
 		*	(2023-7-2)
 		*	As many things have changed, I am writing this comments to organize my thoughts
@@ -323,16 +351,15 @@
 			di	"${FSD_on_FS_X_l4l2}"
 			di	"${FSD_on_FS_X_l2}"
 			di	"${FSD_on_FS_X_l4}"			
-				
-			
+	
 						
 			*	IV - Switch between Weighted Policy index, CIM and GIM
 				
 				*	Setup
 				global	depvar		PFS_glm
 				global	endovar		FSdummy	//	FSamt_capita
-				global	IV			citi6016	//	inst6017_nom	//	citi6016	//	SNAP_index_w	//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
-				global	IVname		CIM	//	index_w
+				global	IV			SNAP_index_w	//	citi6016	//	inst6017_nom	//	citi6016	//		//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
+				global	IVname		index_w	//	CIM	//	
 	
 				
 				lab	var	age_ind		"Age (ind)"
@@ -446,7 +473,6 @@
 						
 						cap	drop	FSdummy_hat
 						logit	FSdummy	${IV}	${FSD_on_FS_X}	${timevars}	${Mundlak_vars_`samp'} [pw=wgt_long_fam_adj] if	reg_sample_`samp'==1, vce(cluster x11101ll) 
-						stopit
 						predict	FSdummy_hat
 						lab	var	FSdummy_hat	"Predicted SNAP status"
 		
@@ -498,7 +524,7 @@
 					*	Tabulate results comparing OLS and IV
 												
 						
-					foreach	Zname	in	index_w	CIM	GIM		{
+					foreach	Zname	in	index_w	/*CIM	GIM	*/	{
 						
 						foreach	samp	in	all	9713	{
 						
@@ -532,7 +558,7 @@
 			
 				
 					*	Tabulate in the order I want
-					
+					/*
 						*	1st-stage of both SPI and GIM, on 1997-2013 period only
 							esttab	index_w_Z_mund_1st_9713  	index_w_Dhat_mund_1st_9713  index_w_ZDhat_mund_1st_9713  GIM_Z_mund_1st_9713  	GIM_Dhat_mund_1st_9713  GIM_ZDhat_mund_1st_9713	///
 							using "${SNAP_outRaw}/PFS_index_GIM_mund_1st_9713.csv", ///
@@ -571,7 +597,7 @@
 							cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2c YearFE Mundlak Fstat_CD	Fstat_KP pval_Jstat, fmt(0 2) label("N" "R2" "Year FE" "Mundlak" "F-stat(CD)" "F-stat(KP)" "p-val(J-stat)"))	///
 							incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/ year_enum* )	///
 							title(PFS on FS dummy)		replace	
-							
+					*/	
 
 			*	Regressing FSD on predicted FS, using the model we find above
 				*	SNAP weighted policy index, Dhat only, Mundlak controls.
@@ -579,38 +605,73 @@
 				global	endovar		FSdummy	//	FSamt_capita
 				global	IV			SNAP_index_w	//	citi6016	//	inst6017_nom	//	citi6016	//		//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
 				global	IVname		index_w	//	CIM	//	
-	
+				
+				
+				
+					*	Generate lagged vars
+					foreach	var	in	/*FSdummy_hat*/	SNAP_index_w	{
+						
+						loc	varlabel:	var	label	`var'
+						
+						cap	drop	l2_`var'
+						gen	l2_`var'	=	l2.`var'
+						lab	var	l2_`var'	"(L2) `varlabel'"
+						
+						cap	drop	l4_`var'
+						gen	l4_`var'	=	l4.`var'
+						lab	var	l4_`var'	"(L4) `varlabel'"
+						
+					}	
+				
+				*	Run logistic regression
+				
+					*	LHS: SNAP_it
+					*	RHS: X_it
+					cap	drop	SNAPhat
+					logit	FSdummy	${IV}	${FSD_on_FS_X}	${timevars}	${Mundlak_vars_9713} [pw=wgt_long_fam_adj] if	reg_sample_9713==1, vce(cluster x11101ll) 
+					predict	SNAPhat
+					lab	var	SNAPhat	"Predicted SNAP in t"
+					
+					*	LHS: SNAP_cum_fre_1 - Received SNAP once over (t-4, t-2, t) (binary)
+					*	RHS: SPI_t-4, SPI_t-2, X_t-4, X-t-2
+					cap	drop	SNAP1hat
+					logit	SNAP_cum_fre_1	l4.${IV}	l2.${IV}	${IV}	${FSD_on_FS_X_l4l2}	${FSD_on_FS_X}	${timevars}	${Mundlak_vars_9713}	if	reg_sample_9713==1, vce(cluster x11101ll)
+					predict	SNAP1hat
+					lab	var	SNAP1hat	"(Predicted) SNAP once over 5-year"
+					
+					*	LHS: SNAP_cum_fre_2 - Received SNAP twice over (t-4, t-2, t) (binary)
+					*	RHS: SPI_t-4, SPI_t-2, X_t-4, X-t-2
+					cap	drop	SNAP2hat
+					logit	SNAP_cum_fre_2	l4.${IV}	l2.${IV}	${IV}	${FSD_on_FS_X_l4l2}	${FSD_on_FS_X}	${timevars}	${Mundlak_vars_9713}	if	reg_sample_9713==1, vce(cluster x11101ll)
+					predict	SNAP2hat
+					lab	var	SNAP2hat	"(Predicted) SNAP twice over 5-year"
+					
+					*	LHS: SNAP_cum_fre_3 - Received SNAP twice over (t-4, t-2, t) (binary)
+					*	RHS: SPI_t-4, SPI_t-2, X_t-4, X-t-2
+					cap	drop	SNAP3hat
+					logit	SNAP_cum_fre_3	l4.${IV}	l2.${IV}	${IV}	${FSD_on_FS_X_l4l2}	${FSD_on_FS_X}	${timevars}	${Mundlak_vars_9713}	if	reg_sample_9713==1, vce(cluster x11101ll)
+					predict	SNAP3hat
+					lab	var	SNAP3hat	"(Predicted) SNAP thrice over 5-year"
 				
 				
 				*	Benchmark
-					*	Endovar: SNAP in t-4
-					*	Outcome: FSD variables
+					*	Outcome: FSD over 3 period (t-4, t-2, t)
+					*	Endovar: SNAP in t-4 only (benchmark does not include SNAP in t-2 or t)
+					*	Z: SPI in t-4
 
-					*	MLE in the first stage
-					*	We first construct fitted value of the endogenous variable from the first stage, to be used as an IV
-					global	Z	${IV}
+					global	Z		l4_${IV}
+					global	endoX	l4_${endovar}
 					
-					loc	IV		SNAP_index_w
-					cap	drop	FSdummy_hat
-					logit	FSdummy	${IV}	${FSD_on_FS_X}	${timevars}	${Mundlak_vars_9713} [pw=wgt_long_fam_adj] if	reg_sample_9713==1, vce(cluster x11101ll) 
-					predict	FSdummy_hat
-					lab	var	FSdummy_hat	"Predicted SNAP participation"
-				
-					*	Generate lagged FSdummy_hat
-					cap	drop	l2_FSdummy_hat
-					cap	drop	l4_FSdummy_hat
-					gen	l2_FSdummy_hat=l2.FSdummy_hat
-					gen	l4_FSdummy_hat=l4.FSdummy_hat
-					lab	var	l2_FSdummy_hat	"Predicted SNAP participation (t-2)"
-					lab	var	l4_FSdummy_hat	"Predicted SNAP participation (t-4)"
+					ivreghdfe	${depvar}	${FSD_on_FS_X_l4l2}	${FSD_on_FS_X}	${timevars}	${Mundlak_vars} (${endoX} = ${Z})	[aw=wgt_long_fam_adj] if	reg_sample_9713==1, ///
+						/*absorb(x11101ll)*/	cluster (x11101ll)	first savefirst savefprefix(${IVname})	  partial(*_bar)
 					
-					*	Generate lagged instrument
-					cap	drop	l2_SNAP_index_w
-					cap	drop	l4_SNAP_index_w
-					gen		l2_SNAP_index_w=l2.SNAP_index_w
-					gen		l4_SNAP_index_w=l4.SNAP_index_w
-					lab	var	l2_SNAP_index_w	"Weighted SNAP policy index (t-2)"
-					lab	var	l4_SNAP_index_w	"Weighted SNAP policy index (t-4)"
+					
+					
+					
+					
+					
+					
+					
 					
 					
 					

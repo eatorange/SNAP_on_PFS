@@ -74,10 +74,10 @@
 		*	SECTION 3: Construct PSID panel data and import external data
 		local	cr_panel		0	//	Create panel structure from ID variable
 			local	panel_view	0	//	Create an excel file showing the change of certain clan over time (for internal data-check only)
-		local	merge_data		0	//	Merge ind- and family- variables and import it into ID variable
+		local	merge_data		1	//	Merge ind- and family- variables and import it into ID variable
 			local	raw_reshape	0		//	Merge raw variables and reshape into long data (takes time)
 			local	add_clean	0		//	Do additional cleaning and import external data (CPI, TFP)
-			local	import_dta	0		//	Import aggregated variables and external data into ID data. 
+			local	import_dta	1		//	Import aggregated variables and external data into ID data. 
 		
 		*	SECTION 4: Clean data and save it
 		local	clean_vars		1	//	Clean variables and save it
@@ -954,11 +954,18 @@
 			drop	if	_merge==2
 			drop	_merge
 			rename	statecode	rp_state
-			
+					
+			*	Re-scale citizen ideology variable (from 0-100 to 0-1 : for better interpretation)
+			cap	drop	citi6016_0to1
+			gen	citi6016_0to1	=	citi6016/100
+			lab	var	citi6016_0to1	"State citizen ideology (0-1)"
 			
 			*	Save
 			sort	rp_state	year
 			compress
+			lab	var	citi6016		"State citizen ideology"
+			lab	var	inst6017_nom	"State government ideology"	
+
 			save	"${SNAP_dtInt}/citizen_government_ideology",	replace
 			
 			*	Descriptive stats/figures
@@ -3564,7 +3571,14 @@
 				replace	`var'=1	if	!mi(rp_age)	&	inrange(rp_age,66,120)
 				lab	var	`var'	"RP age over 65"
 				
-
+				
+		*	Individual age squared
+		loc	var		age_ind_sq
+		cap	drop	`var'
+		gen	`var'	=	(age_ind)^2
+		lab	var	`var'	"Age squared (Ind)"
+		
+			
 		
 		*	Gender
 		*	Uses same code over the waves. Very few observations have wild code neither male nor female. Treat them as missing
@@ -4884,7 +4898,11 @@
 				
 			}
 			
-			*	Create dummies of culumative SNAP redemptions for dynamics treatment
+			*	Create "observational-level" dummies of culumative SNAP redemptions over 5-year (t-4, t-2, t)
+			*	NOTE: This is an observational-level variable, NOT individual-level variable
+				*	Suppose an individual's SNAP status over 9 years (t-4, t-2, t, t+2, t+4) is (0,0,1,0,1)
+				*	Then this variable's value will be (1,1,2) in (t-4, t-2 and t)
+			*	I construct "individual-level" SNAP status over the 5-year after the "first" SNAP participation later.
 				
 				loc	var	SNAP_cum_status
 				cap	drop	`var'	//	SNAP_for_cum
@@ -4921,6 +4939,7 @@
 				lab	var	SNAP_111	"SNAP status 5 years: t-4 t-2 and t"
 				
 			*	Aggregate cumulative dummies by the number of SNAP redemptions over 5-year
+			*	NOTE: This is an observational-level.
 			loc	var		SNAP_cum_fre
 			cap	drop	`var'
 			gen		`var'=.
@@ -4930,8 +4949,8 @@
 			replace	`var'=3		if	inlist(1,SNAP_111)
 			
 			lab	var	`var'		"\# SNAP participation last 5 years"
-
-	
+		
+			
 		
 		*	Drop 1975 and 1990
 		*	I only need those years for 1967 and 1991, which I just imported above (so no longer needed)
@@ -4940,6 +4959,141 @@
 					
 		*	Drop variables no longer needed
 		*	(This part will be added later)
+		
+		
+		*	(2023-08-24) Construct Cumulative SNAP usage variables, (used for event study plot, intensive/extensive marginal effect, etc.)
+				
+			*	For event study, we need to create a standardized time
+			*	Since there are multiple treatments occuring multiple periods, it is difficult to standardize treatment period.
+				*	For example, if a household is treated in 1997 and 1999, then relative treatment period cannot be standarized (which on should be t=0?)
+			*	There are two ways to deal with
+				*	(1) Limit the sample to whose who "never treated" and "treated only once" where treatment time can be standarzied.
+				*	(2) Standardize based on the "first treatment"
+			*	I will do the second method, using "tsspell" command
+			
+			*	Total # of SNAP participation over time (it will be used for analyses by group)
+			loc	var	SNAP_cumul_all
+			cap	drop	`var'
+			bys	x11101ll:	egen	`var'	=	total(FS_rec_wth)
+			lab	var	`var'	"\# of SNAP participation over the entire period"
+			
+						
+			* Construct the spells of SNAP redemption using "tsspell" command
+			*	NOTE: "replace" option does not work when the variable doesn't exist, so we manually drop them
+			cap	drop	SNAP_seq
+			cap	drop	SNAP_spell
+			cap	drop	SNAP_end	
+			tsspell, cond(year>=1979 & FS_rec_wth==1) seq(SNAP_seq) spell(SNAP_spell) end(SNAP_end) 
+			
+			*	Construct standardized year T when T=-4 as "first SNAP participation" (i.e. T=0 means "first SNAP in 4 years ago")
+			*	The reason for not standardizing T when T=0 as "the year first received SNAP" is because, we constructed FSD variables based on PFS status in t-4, t-2 and t
+				*	Since I want to plot event study design and effects on SNAP participation based on SNAP redemption status over the same period (t-4, t-2 and t), we need to standardize based on SNAP redemption at t-4
+				*	If we standardize based on first SNAP participation at t=0, there's no SNAP status in t=-2 and t=-4 (since first got SNAP in t=0).
+			*	Note: the code below excludes those who are "never treated", since they do not have any year of SNAP participation
+			
+			loc	var		year_SNAP_std
+			cap	drop	`var'
+			gen	`var'=.
+			/*
+			forval	t=0(2)4	{
+			    
+				replace	`var'=`t'			if	l`t'.SNAP_seq==1	&	l`t'.SNAP_spell==1
+				replace	`var'=`t' * (-1)	if	f`t'.SNAP_seq==1	&	f`t'.SNAP_spell==1
+				
+			}
+			*/
+			
+			replace	`var'=-4	if	l0.SNAP_seq==1	&	l0.SNAP_spell==1	//	T=-4: year first received SNAP
+			replace	`var'=-2	if	l2.SNAP_seq==1	&	l2.SNAP_spell==1	//	T=-2: 2 years after first received SNAP
+			replace	`var'=0		if	l4.SNAP_seq==1	&	l4.SNAP_spell==1	//	T=0:  4 years after first received SNAP
+			
+			replace	`var'=-6	if	f2.SNAP_seq==1	&	f2.SNAP_spell==1	//	T=-6: 2 years prior to first received SNAP
+			replace	`var'=-8	if	f4.SNAP_seq==1	&	f4.SNAP_spell==1	//	T=-8: 4 years prior to first received SNAP, standardize at T=-8
+			
+			
+			lab	var	`var'	"Standardized year (=-4 when first received SNAP)"
+			
+			
+			*	Create dummies of standardized years
+			cap	drop	year_SNAP_std?
+			cap	drop	year_SNAP_std_??
+			tab	year_SNAP_std, gen(year_SNAP_std)	
+			rename	year_SNAP_std?	(year_SNAP_std_l8	year_SNAP_std_l6	year_SNAP_std_l4	year_SNAP_std_l2	year_SNAP_std_l0)
+			
+			lab	var	year_SNAP_std_l8	"t-4"	//	4 years before the first SNAP (T=-8)
+			lab	var	year_SNAP_std_l6	"t-2"	//	2 years before the first SNAP (T=-6)
+			lab	var	year_SNAP_std_l4	"t"		//	Year of the first SNAP (T=-4)
+			lab	var	year_SNAP_std_l2	"t+2"	//	2 years after the first SNAP (T=-2)
+			lab	var	year_SNAP_std_l0	"t+4"	//	4 years after the first SNAP (T=0)
+			
+			
+			*	Generate interaction variable (SNAP x relative time duumies)
+			*	Not sure I am gonna use it...
+			/*
+			forval	t=1/7	{
+			    
+				cap	drop	year_SNAP_int`t'
+				gen		year_SNAP_int`t'	=	year_SNAP_std`t' & FS_rec_wth
+				replace	year_SNAP_int`t'=.	if	mi(year_SNAP_standard`t')
+				lab	var	year_SNAP_int`t'	"SNAP x relative time dummy"
+			}
+			*/
+			
+			*	Set sample of balanced households (no-missing value from 4-year ago, 2-year ago, 0-year, 2-year later and 4-year later)
+				*	Time period conditioned upon should be equal to the time period used to construct the standardized year.
+			*	Remember that FSD variables are constructed based on 4-year ago, 2-year ago and 0-year.
+				cap	drop	num_nonmiss_event
+				cap	drop	event_study_sample
+				gen	num_nonmiss_event	=	1	if	!mi(l4.year_SNAP_std)	&	!mi(l2.year_SNAP_std)	&	!mi(l0.year_SNAP_std)	&	!mi(f2.year_SNAP_std)	&	!mi(f4.year_SNAP_std)	//	Tag balanced individual
+				bys	x11101ll:	egen	event_study_sample	=	max(num_nonmiss_event)	if	!mi(year_SNAP_std)
+				lab	var	event_study_sample	"Balanced event study sample (-6 -4 -2 0 2)"
+				drop	num_nonmiss_event
+		
+			*	Cateogrization of individuals based on the # of cumulative SNAP redemption over 5 years "after" the first redemption (including the first one)
+				*	This variable is needed to categorize "a group of" observations into subgroup.
+					*	(1) Those who redeemped SNAP only once over the 5-year period
+					*	(2) Those who only redeemd SNAP twice over the 5-year period
+					*	(3) Those who got SNAP all 3 periods over the 5-year period (t-4, t-2, t)
+				*	It is to see how PFS change differently over time by different intensity of the fist SNAP exposure.
+				*	NOTE: I could construct it at individual-level since I limit to 5 years since the "first" SNAP exposure. I cannot create individual-level if I use "any" SNAP exposure
+				loc	var	SNAP_cum_fre_1st
+				cap	drop	`var'	
+				gen	`var'=.
+				
+					*	(0) Those who never participated in SNAP: should be zero (no SNAP participation over 3 period)
+					replace	`var'=0	if	year_SNAP_std==.	&	FS_rec_wth==0		&	f2.FS_rec_wth==0	&	f4.FS_rec_wth==0					
+					
+					*	(1) Those who participated only once over 5-year period, since the first participation.
+					replace	`var'=1	if	year_SNAP_std==-8	&	f6.FS_rec_wth==0	&	f8.FS_rec_wth==0	//	(t-8)
+					replace	`var'=1	if	year_SNAP_std==-6	&	f4.FS_rec_wth==0	&	f6.FS_rec_wth==0	//	(t-6)
+					replace	`var'=1	if	year_SNAP_std==-4	&	f2.FS_rec_wth==0	&	f4.FS_rec_wth==0	//	(t-4)
+					replace	`var'=1	if	year_SNAP_std==-2	&	FS_rec_wth==0		&	f2.FS_rec_wth==0	//	(t-2) 
+					replace	`var'=1	if	year_SNAP_std==0	&	l2.FS_rec_wth==0	&	FS_rec_wth==0		//	t
+										
+					*	(2)	1 more SNAP redemption after the first redemption.
+					replace	`var'=2	if	year_SNAP_std==-8	&	((f6.FS_rec_wth==1	&	f8.FS_rec_wth==0)	|	(f6.FS_rec_wth==0	&	f8.FS_rec_wth==1))	//	(t-8)
+					replace	`var'=2	if	year_SNAP_std==-6	&	((f4.FS_rec_wth==1	&	f6.FS_rec_wth==0)	|	(f4.FS_rec_wth==0	&	f6.FS_rec_wth==1))	//	(t-6)
+					replace	`var'=2	if	year_SNAP_std==-4	&	((f2.FS_rec_wth==1	&	f4.FS_rec_wth==0)	|	(f2.FS_rec_wth==0	&	f4.FS_rec_wth==1))	//	(t-4)
+					replace	`var'=2	if	year_SNAP_std==-2	&	((FS_rec_wth==1		&	f2.FS_rec_wth==0)	|	(FS_rec_wth==0		&	f2.FS_rec_wth==1))	//	(t-2)
+					replace	`var'=2	if	year_SNAP_std==0	&	((l2.FS_rec_wth==1	&	FS_rec_wth==0)		|	(l2.FS_rec_wth==0	&	FS_rec_wth==1))	//	(t)
+					
+					*	(3) All 3 redemption over the five-year period
+					replace	`var'=3	if	year_SNAP_std==-8	&	f6.FS_rec_wth==1	&	f8.FS_rec_wth==1	//	(t-8)
+					replace	`var'=3	if	year_SNAP_std==-6	&	f4.FS_rec_wth==1	&	f6.FS_rec_wth==1	//	(t-6)
+					replace	`var'=3	if	year_SNAP_std==-4	&	f2.FS_rec_wth==1	&	f4.FS_rec_wth==1	//	(t-4)
+					replace	`var'=3	if	year_SNAP_std==-2	&	FS_rec_wth==1		&	f2.FS_rec_wth==1	//	(t-2)
+					replace	`var'=3	if	year_SNAP_std==0	&	l2.FS_rec_wth==1	&	FS_rec_wth==1	//	(t)
+					
+					lab	var	`var'	"\# of cumulative SNAP redemption since the first redemption over 5-year"
+					
+					lab	define	`var'	0	"N/A - No SNAP at all"	1	"Once"	2	"Twice"		3	"Three times", replace
+					lab	val	`var'	`var'
+			
+			
+			*	Tabluate cumulative SNAP frequency over event study sample
+				tab	SNAP_cum_fre_1st	if	event_study_sample==1, m
+				
+				br	x11101ll	year	FS_rec_wth	year_SNAP_std	year_SNAP_std_??	if	event_study_sample
 		
 
 		*	Check discontinuity of final variables by checking weighted average
