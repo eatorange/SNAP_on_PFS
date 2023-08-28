@@ -201,6 +201,9 @@
 		
 		*	Event study plot
 		
+			*	Construct interaction terms
+			
+			
 			* Regress PFS on relative time dummies (2-years ago as a baseline)
 			*	yit = a0 + a1*1(T=-8) + a2*1(T=-4) + a3*1(T=-2) + a4*1(T=0)
 				*	Base category: T=-6
@@ -330,11 +333,14 @@
 			
 			*	Controls
 			*	Reset macros		
+			global	FSD_on_FS_X_l4l2l0	//	Controls in l0, l2 and l4
 			global	FSD_on_FS_X_l4l2	//	Controls in l2 and l4
 			global	FSD_on_FS_X_l2		//	Controls in l2
 			global	FSD_on_FS_X_l4		//	Controls in l4
 			
 			foreach	var	of	global	FSD_on_FS_X	{
+				
+				loc	varlabel:	var	label	`var'
 				
 				cap	drop	l2_`var'
 				cap	drop	l4_`var'
@@ -342,11 +348,17 @@
 				gen		l2_`var'	=	l2.`var'
 				gen		l4_`var'	=	l4.`var'
 				
-				global	FSD_on_FS_X_l4l2	${FSD_on_FS_X_l4l2}	l2_`var'	l4_`var'
-				global	FSD_on_FS_X_l2		${FSD_on_FS_X_l2}	l2_`var'
-				global	FSD_on_FS_X_l4		${FSD_on_FS_X_l4}	l4_`var'
+				lab	var	l2_`var'	"(L2) `varlabel'"
+				lab	var	l4_`var'	"(L4) `varlabel'"
+				
+				global	FSD_on_FS_X_l4l2l0	${FSD_on_FS_X_l4l2l0}	l4_`var'	l2_`var'	`var'		
+				global	FSD_on_FS_X_l4l2	${FSD_on_FS_X_l4l2}		l4_`var'	l2_`var'	
+				global	FSD_on_FS_X_l2		${FSD_on_FS_X_l2}		l2_`var'
+				global	FSD_on_FS_X_l4		${FSD_on_FS_X_l4}		l4_`var'
+								
 			}
 			
+			di	"${FSD_on_FS_X_l4l2l0}"
 			di	"${FSD_on_FS_X}"
 			di	"${FSD_on_FS_X_l4l2}"
 			di	"${FSD_on_FS_X_l2}"
@@ -622,6 +634,14 @@
 						lab	var	l4_`var'	"(L4) `varlabel'"
 						
 					}	
+					
+					cap	drop	TFI0
+					cap	drop	CFI0
+					clonevar	TFI0	=	TFI_HCR
+					clonevar	CFI0	=	CFI_HCR
+					local	FSD	CFI0
+					
+					*	Generate 
 				
 				*	Run logistic regression
 				
@@ -629,41 +649,147 @@
 					*	RHS: X_it
 					cap	drop	SNAPhat
 					logit	FSdummy	${IV}	${FSD_on_FS_X}	${timevars}	${Mundlak_vars_9713} [pw=wgt_long_fam_adj] if	reg_sample_9713==1, vce(cluster x11101ll) 
+					est	store	SNAPhat_logit
+					estadd	local	Mundlak	"Y"
+					estadd	local	YearFE	"Y"
 					predict	SNAPhat
 					lab	var	SNAPhat	"Predicted SNAP in t"
+					margins, dydx(${IV}	${FSD_on_FS_X}) post
+					est	store	SNAPhat_logit_dydx
+					
 					
 					*	LHS: SNAP_cum_fre_1 - Received SNAP once over (t-4, t-2, t) (binary)
 					*	RHS: SPI_t-4, SPI_t-2, X_t-4, X-t-2
 					cap	drop	SNAP1hat
-					logit	SNAP_cum_fre_1	l4.${IV}	l2.${IV}	${IV}	${FSD_on_FS_X_l4l2}	${FSD_on_FS_X}	${timevars}	${Mundlak_vars_9713}	if	reg_sample_9713==1, vce(cluster x11101ll)
+					logit	SNAP_cum_fre_1	l4_${IV}	l2_${IV}	${IV}	${FSD_on_FS_X_l4l2l0}	${timevars}	${Mundlak_vars_9713}	if	reg_sample_9713==1, vce(cluster x11101ll)
+					est	store	SNAP1hat_logit
+					estadd	local	Mundlak	"Y"
+					estadd	local	YearFE	"Y"
 					predict	SNAP1hat
 					lab	var	SNAP1hat	"(Predicted) SNAP once over 5-year"
 					
 					*	LHS: SNAP_cum_fre_2 - Received SNAP twice over (t-4, t-2, t) (binary)
 					*	RHS: SPI_t-4, SPI_t-2, X_t-4, X-t-2
 					cap	drop	SNAP2hat
-					logit	SNAP_cum_fre_2	l4.${IV}	l2.${IV}	${IV}	${FSD_on_FS_X_l4l2}	${FSD_on_FS_X}	${timevars}	${Mundlak_vars_9713}	if	reg_sample_9713==1, vce(cluster x11101ll)
+					logit	SNAP_cum_fre_2	l4_${IV}	l2_${IV}	${IV}	${FSD_on_FS_X_l4l2l0}	${timevars}	${Mundlak_vars_9713}	if	reg_sample_9713==1, vce(cluster x11101ll)
+					est	store	SNAP2hat_logit
+					estadd	local	Mundlak	"Y"
+					estadd	local	YearFE	"Y"
 					predict	SNAP2hat
 					lab	var	SNAP2hat	"(Predicted) SNAP twice over 5-year"
 					
 					*	LHS: SNAP_cum_fre_3 - Received SNAP twice over (t-4, t-2, t) (binary)
 					*	RHS: SPI_t-4, SPI_t-2, X_t-4, X-t-2
 					cap	drop	SNAP3hat
-					logit	SNAP_cum_fre_3	l4.${IV}	l2.${IV}	${IV}	${FSD_on_FS_X_l4l2}	${FSD_on_FS_X}	${timevars}	${Mundlak_vars_9713}	if	reg_sample_9713==1, vce(cluster x11101ll)
+					logit	SNAP_cum_fre_3	l4_${IV}	l2_${IV}	${IV}	${FSD_on_FS_X_l4l2l0}	${timevars}	${Mundlak_vars_9713}	if	reg_sample_9713==1, vce(cluster x11101ll)
+					est	store	SNAP3hat_logit
+					estadd	local	Mundlak	"Y"
+					estadd	local	YearFE	"Y"
 					predict	SNAP3hat
 					lab	var	SNAP3hat	"(Predicted) SNAP thrice over 5-year"
+					
+					*	Comtemporary SNAP redemption
+					esttab	SNAPhat_logit  	 	SNAPhat_logit_dydx	///
+							using "${SNAP_outRaw}/SNAP_index_MLE_logit.csv", ///
+							cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2_p YearFE Mundlak Fstat_CD	Fstat_KP pval_Jstat, fmt(0 2) label("N" "R2" "Year FE" "Mundlak" "F-stat(CD)" "F-stat(KP)" "p-val(J-stat)"))	///
+							incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop( year_enum* *bar9713 ) /*order(l4_${IV}	l2_${IV}	${IV})*/	///
+							title(SNAP on SPI)		replace
+					
+					*	Cumulative SNAP redemption
+					esttab	/*SNAPhat_logit*/  	SNAP1hat_logit  SNAP2hat_logit  SNAP3hat_logit  		///
+							using "${SNAP_outRaw}/SNAPcum_index_MLE_logit.csv", ///
+							cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2_p YearFE Mundlak Fstat_CD	Fstat_KP pval_Jstat, fmt(0 2) label("N" "R2" "Year FE" "Mundlak" "F-stat(CD)" "F-stat(KP)" "p-val(J-stat)"))	///
+							incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop( year_enum* *bar9713 ) /*order(l4_${IV}	l2_${IV}	${IV})*/	///
+							title(Cumulative SNAP on SPI)		replace	
 				
 				
-				*	Benchmark
+				*	Benchmark: Everything on the RHS is only at t-4
 					*	Outcome: FSD over 3 period (t-4, t-2, t)
-					*	Endovar: SNAP in t-4 only (benchmark does not include SNAP in t-2 or t)
+					*	Endovar: SNAPhat in t-4 only (benchmark does not include SNAP in t-2 or t)
 					*	Z: SPI in t-4
-
-					global	Z		l4_${IV}
+					*	Controls: X in t-4
+					
+					
+						*	Generate lagged vars
+					foreach	var	in	SNAPhat	{
+						
+						loc	varlabel:	var	label	`var'
+						
+						cap	drop	l2_`var'
+						gen	l2_`var'	=	l2.`var'
+						lab	var	l2_`var'	"(L2) `varlabel'"
+						
+						cap	drop	l4_`var'
+						gen	l4_`var'	=	l4.`var'
+						lab	var	l4_`var'	"(L4) `varlabel'"
+						
+					}	
+					
+					/*
+					*	(2023-08-25) About 11% of 97-13 balanced sample have RP changed (rp_change), so the only time-invarying variable is individual age/college. Not sure it is worth it....
+					*	Set global for X such that
+						*	(i) If time-varying, include across the periods
+						*	(ii) If time-invarying, include only in t-4
+						
+						di	"${FSD_on_FS_X}"
+					foreach	var	of	global	FSD_on_FS_X	{
+					    
+					}
+					*/
+					
+					global	depvar	TFI_SFIG	//	SL_5
+					global	Z		l4_SNAPhat
+					global	Zname	l4_SNAPhat
 					global	endoX	l4_${endovar}
 					
-					ivreghdfe	${depvar}	${FSD_on_FS_X_l4l2}	${FSD_on_FS_X}	${timevars}	${Mundlak_vars} (${endoX} = ${Z})	[aw=wgt_long_fam_adj] if	reg_sample_9713==1, ///
-						/*absorb(x11101ll)*/	cluster (x11101ll)	first savefirst savefprefix(${IVname})	  partial(*_bar)
+					
+					ivreghdfe	${depvar}	${FSD_on_FS_X_l4}	/*${FSD_on_FS_X}*/	${timevars}	${Mundlak_vars_9713} (${endoX} = ${Z})	[aw=wgt_long_fam_adj] if	reg_sample_9713==1, ///
+						/*absorb(x11101ll)*/	cluster (x11101ll)	first savefirst savefprefix(${Zname})  partial(*_bar9713)
+					est	store	${depvar}_${Zname}_2nd
+					estadd	local	Mundlak	"Y"
+					estadd	local	YearFE	"Y"
+					scalar	Fstat_CD_${Zname}		=	e(cdf)
+					scalar	Fstat_KP_${Zname}		=	e(widstat)
+				
+					est	restore	${Zname}${endoX}
+					estadd	local	Mundlak	"Y"
+					estadd	local	YearFE	"Y"
+					estadd	scalar	Fstat_CD	=	Fstat_CD_${Zname}, replace
+					estadd	scalar	Fstat_KP	=	Fstat_KP_${Zname}, replace
+					
+					est	store	${depvar}_${Zname}_1st
+					est	drop	${Zname}${endoX}
+					
+					
+					*	Everything on the RHS should include t-4, t-2 and t
+					global	Z		l4_SNAPhat	l2_SNAPhat	SNAPhat
+					global	Zname	l4l2l0_SNAPhat
+					global	endoX	SNAP_cum_fre_1 SNAP_cum_fre_2 SNAP_cum_fre_3
+					
+					
+					ivreghdfe	${depvar}	${FSD_on_FS_X_l4l2l0}	/*${FSD_on_FS_X}*/	${timevars}	${Mundlak_vars_9713} (${endoX} = ${Z})	[aw=wgt_long_fam_adj] if	reg_sample_9713==1, ///
+						/*absorb(x11101ll)*/	cluster (x11101ll)	first savefirst savefprefix(${Zname})  partial(*_bar9713)
+					est	store	${depvar}_${Zname}_2nd
+					estadd	local	Mundlak	"Y"
+					estadd	local	YearFE	"Y"
+					scalar	Fstat_CD_${Zname}		=	e(cdf)
+					scalar	Fstat_KP_${Zname}		=	e(widstat)
+					
+					
+					esttab	${depvar}_l4_SNAPhat_2nd	 	${depvar}_l4l2l0_SNAPhat_2nd	using "${SNAP_outRaw}/${depvar}_index_2nd.csv", ///
+							cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2_p YearFE Mundlak Fstat_CD	Fstat_KP pval_Jstat, fmt(0 2) label("N" "R2" "Year FE" "Mundlak" "F-stat(CD)" "F-stat(KP)" "p-val(J-stat)"))	///
+							incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop( year_enum* /**bar9713*/ ) order(l4_FSdummy	l2_FSdummy	FSdummy)	///
+							title(SL5 on SNAP)		replace
+					
+					
+					
+					
+					
+					
+					
+					
+					
+					
 					
 					
 					
@@ -676,12 +802,7 @@
 					
 					
 					*	IVregress
-					cap	drop	TFI0
-					cap	drop	CFI0
-					clonevar	TFI0	=	TFI_HCR
-					clonevar	CFI0	=	CFI_HCR
-					local	FSD	CFI0
-					
+				
 					*	(i) RHS: treatment and controls at l4 only (FSD_t = a0 + a1*FS_t-4 + a2*X_t-4 + ...)
 						*	Since Mundlak in individual-level average over time, we don't need lag.
 					loc	depvar		`FSD'

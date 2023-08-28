@@ -72,15 +72,15 @@
 		local	ext_data		0	//	Prepare external data (CPI, TFP, etc.)
 		
 		*	SECTION 3: Construct PSID panel data and import external data
-		local	cr_panel		0	//	Create panel structure from ID variable
+		local	cr_panel		1	//	Create panel structure from ID variable
 			local	panel_view	0	//	Create an excel file showing the change of certain clan over time (for internal data-check only)
 		local	merge_data		1	//	Merge ind- and family- variables and import it into ID variable
-			local	raw_reshape	0		//	Merge raw variables and reshape into long data (takes time)
-			local	add_clean	0		//	Do additional cleaning and import external data (CPI, TFP)
+			local	raw_reshape	1		//	Merge raw variables and reshape into long data (takes time)
+			local	add_clean	1		//	Do additional cleaning and import external data (CPI, TFP)
 			local	import_dta	1		//	Import aggregated variables and external data into ID data. 
 		
 		*	SECTION 4: Clean data and save it
-		local	clean_vars		1	//	Clean variables and save it
+		local	clean_vars		0	//	Clean variables and save it
 		
 		*	(These parts were moved into "SNAP_const.do")
 		local	PFS_const		0	//	Construct PFS
