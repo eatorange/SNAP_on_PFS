@@ -1039,7 +1039,13 @@
 			label	value	`var'	yes1no0
 			label	var	`var'	"SNAP used this year"
 		
-		
+		*	Spouse have changed
+			loc	var	SP_changed
+			cap	drop	`var'
+			gen		`var'=0
+			replace	`var'=1	if	change_famcomp==2
+			lab	var	`var'	"Spouse changed"
+			
 		
 		
 		*	SNAP amount received

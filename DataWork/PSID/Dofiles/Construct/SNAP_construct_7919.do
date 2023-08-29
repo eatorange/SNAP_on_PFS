@@ -155,8 +155,8 @@
 			
 			ereturn list
 			est	sto	glm_step1
-			margins, dydx(*) post
-			est	sto	ppml_step1_dydx
+			*margins, dydx(*) post
+			*est	sto	ppml_step1_dydx
 				
 			*	Predict fitted value and residual
 			gen	glm_step1_sample=1	if	e(sample)==1 // e(sample) includes both subpopulation and non-subpopulation, so we need to include subpop condition here to properly restrict regression sample.
@@ -174,8 +174,8 @@
 			ppmlhdfe	`depvar'	${statevars} ${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	${foodvars}	[pweight=wgt_long_fam_adj], ///
 				absorb(x11101ll ib31.rp_state ib1979.year) vce(cluster x11101ll) d	
 			est store glm_step2
-			margins, dydx(*) post
-			est	sto	ppml_step2_dydx
+			*margins, dydx(*) post
+			*est	sto	ppml_step2_dydx
 			
 			gen	glm_step2_sample=1	if	e(sample)==1 
 			predict	double	var1_foodexp_glm	if	glm_step2_sample==1	// (2023-06-21) Poisson quasi-MLE does not seem to generate negative predicted value, which is good (no need to square them)
@@ -188,7 +188,7 @@
 		*	Output
 		**	For AER manuscript, we omit asterisk(*) to display significance as AER requires not to use.
 		**	If we want to diplay star, renable "star" option inside "cells" and "star(* 0.10 ** 0.05 *** 0.01)"
-		
+			/*
 			esttab	glm_step1	glm_step2	using "${SNAP_outRaw}/GLM_pooled_7919.csv", ///
 					cells(b(star fmt(%8.2f)) se(fmt(2) par)) stats(N_sub /*r2*/) label legend nobaselevels star(* 0.10 ** 0.05 *** 0.01)	///
 					title(Conditional Mean and Variance of Food Expenditure per capita) 	replace
@@ -213,7 +213,7 @@
 			esttab	glm_step1	glm_step2	ppml_step1_dydx	ppml_step2_dydx	using "${SNAP_outRaw}/GLM_pooled_all_dydx_7919.tex", ///
 					cells(b(nostar fmt(%8.3f)) & se(fmt(2) par)) stats(N, fmt(%8.0fc)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(_cons)*/	///
 					title(Conditional Mean and Variance of Food Expenditure per capita)		replace	
-		
+		*/
 		*	Step 3
 			
 			*	Gamma
@@ -234,6 +234,9 @@
 				cap	drop	PFS_glm_noCOLI
 				gen			PFS_glm_noCOLI = gammaptail(alpha1_foodexp_pc_glm, ${TFP_threshold}/beta1_foodexp_pc_glm)	//	gammaptail(a,(x-g)/b)=(1-gammap(a,(x-g)/b)) where g is location parameter (g=0 in this case)
 				label	var	PFS_glm_noCOLI "PFS (w/o COLI)"
+		
+		summ	PFS_glm_noCOLI,d
+		summ	PFS_glm_noCOLI [aw=wgt_long_fam_adj], d
 		
 			
 			*	Generate lagged PFS

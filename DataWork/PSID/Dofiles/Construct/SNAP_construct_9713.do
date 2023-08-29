@@ -60,8 +60,8 @@
 	di "Git branch `r(branch)'; commit `r(sha)'."
 	
 	*	Determine which part of the code to be run
-	local	PFS_const_9713	0	//	Construct PFS from cleaned data
-	local	PFS_const_9713	1	//	Construct FSD from PFS
+	local	PFS_const_9713	1	//	Construct PFS from cleaned data
+	local	FSD_const_9713	1	//	Construct FSD from PFS
 	
 	/****************************************************************
 		SECTION 1: Construct PFS
@@ -69,7 +69,7 @@
 		
 	*	Construct PFS
 	*	Please check "SNAP_PFS_const_test.do" file for the rational behind PFS model selection
-	if	`PFS_const'==1	{
+	if	`PFS_const_9713'==1	{
 	 
 		use    "${SNAP_dtInt}/SNAP_cleaned_long_9713",	clear
 	
@@ -83,11 +83,10 @@
 		
 		*	(2023-08-27) Keep only those whos income ever below 130 (about 34% belong to this case)
 		keep	if	income_ever_below_130_9513==1
-					
 	
 		*	Set globals
 		global	statevars		l2_foodexp_tot_inclFS_pc_1_real l2_foodexp_inclFS_pc_2_real_K
-		global	demovars		rp_age rp_age_sq	rp_nonWhite	rp_married	/*rp_female*/ //	 Female is perfectly collinear with household-FE?
+		global	demovars		rp_age rp_age_sq	rp_nonWhite	rp_married	rp_female //	Note:  Female is perfectly collinear with household-FE.
 		global	eduvars			rp_NoHS rp_somecol rp_col
 		global	empvars			rp_employed
 		global	healthvars		rp_disabled
@@ -177,11 +176,11 @@
 		
 			*	Poisson quasi-MLE
 			ppmlhdfe	`depvar'	${statevars} ${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	[pweight=wgt_long_fam], ///
-				absorb(x11101ll ib31.rp_state ib1997.year) vce(cluster x11101ll) d	
+				absorb(x11101ll	 ib31.rp_state ib1997.year) vce(cluster x11101ll) d	
 			est store ppml_step2
 			gen	ppml_step2_sample=1	if	e(sample)==1 
 			predict	double	var1_foodexp_ppml	if	ppml_step2_sample==1	// (2023-06-21) Poisson quasi-MLE does not seem to generate negative predicted value, which is good (no need to square them)
-			gen	sd_foodexp_ppml	=	sqrt(abs(var1_foodexp_ppml))	//	Take square root of absolute value, since predicted value can be negative which does not have square root.
+			*gen	sd_foodexp_ppml	=	sqrt(abs(var1_foodexp_ppml))	//	Take square root of absolute value, since predicted value can be negative which does not have square root.
 			gen	error_var1_ppml	=	abs(var1_foodexp_ppml - e1_foodexp_sq_ppml)	//	prediction error. 
 			
 	
@@ -215,7 +214,7 @@
 			
 			*	Generate PFS by constructing CDF
 			*	I create two versions - without COLI and with COLI.
-			*	(2023-Only 79 obs have missing COLI, so I will use COLI as main outcome variable
+			*	(2023-8-27) Only 52 obs have missing COLI, so I will use COLI as main outcome variable
 			
 /*
 				*	Without COLI adjustment (used for PFS descriptive paper)
@@ -230,6 +229,8 @@
 				cap	drop	PFS_ppml
 				gen 		PFS_ppml	 = gammaptail(alpha1_foodexp_pc_ppml, ${TFP_threshold}/beta1_foodexp_pc_ppml)	//	gammaptail(a,(x-g)/b)=(1-gammap(a,(x-g)/b)) where g is location parameter (g=0 in this case)
 				label	var	PFS_ppml "PFS"
+				
+				summ	${statevars} ${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	mean1_foodexp_ppml	var1_foodexp_ppml	alpha1_foodexp_pc_ppml	beta1_foodexp_pc_ppml	foodexp_W_TFP_pc_COLI_real	PFS_ppml
 			
 			*	Generate lagged PFS
 			foreach	var	in	PFS_ppml	/*PFS_ppml_noCOLI*/		{
@@ -246,7 +247,8 @@
 				
 			}
 
-
+			summ	PFS_ppml,d
+			summ	PFS_ppml	[aweight=wgt_long_fam],d
 			
 					
 			*	Normal (to show the robustness of the distributional assumption)
@@ -271,57 +273,51 @@
 	
 		save    "${SNAP_dtInt}/SNAP_long_PFS_9713",	replace
 		
-		*	Regress PFS on characteristics
-		*	(2023-1-18) This one needs to be re-visited, considering what regression method we will use (svy prefix, weight, fixed effects, etc.)
-		*	(2023-8-20) Re-visited. Make sure to do this regression on the final sapmle (non-missing PFS, income ever below 200, balaned b/w 9713, etc). I set the default counter as zero to run manually, until it is moved to other dofile.
-		use    "${SNAP_dtInt}/SNAP_long_PFS_9713",	clear	
+		
 		local	run_PFS_reg=1
 		if	`run_PFS_reg'==1	{
 			
+			*	Regress PFS on characteristics
+			*	(2023-1-18) This one needs to be re-visited, considering what regression method we will use (svy prefix, weight, fixed effects, etc.)
+			*	(2023-8-20) Re-visited. Make sure to do this regression on the final sapmle (non-missing PFS, income ever below 200, balaned b/w 9713, etc). I set the default counter as zero to run manually, until it is moved to other dofile.
+			use    "${SNAP_dtInt}/SNAP_long_PFS_9713",	clear	
 			
-			*	No SNAP status, no individual FE
 			local	depvar	PFS_ppml
 			
-			svy:	reg	`depvar'	rp_female	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	ib31.rp_state	ib1997.year 
-			reghdfe	`depvar'		rp_female	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	[pw=wgt_long_fam], absorb(rp_state year)
-			
-			
-			svy:	reg	`depvar'	rp_female
-			reghdfe	PFS_ppml rp_female	[pw=wgt_long_fam], noabsorb
-			
-			svy:	reg	`depvar'	rp_female	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	ib31.rp_state	ib1997.year 
-			
-			
-			reghdfe	PFS_ppml rp_female	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	[pw=wgt_long_fam], absorb(rp_state year)
-				reghdfe	PFS_ppml rp_female	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	[pw=wgt_long_fam], absorb(rp_state year	x11101ll)
-			
-			
-			
-			svy, subpop(if !mi(`depvar')):	///
-				reg	`depvar'	rp_female	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	ib31.rp_state	ib1997.year 
-			est	store	PFS_noSNAP_all	
+			*	No SNAP status, no HH FE
+			reghdfe	`depvar'		${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	[pw=wgt_long_fam], absorb(rp_state year) vce(cluster x11101ll)
 			estadd	local	state_year_FE	"Y"
-			svy, subpop(if !mi(`depvar')):	mean	PFS_ppml		//	Need to think about how to add this usign "estadd"....
+			estadd	local	HH_FE	"N"
+			est	store	PFS_X_noSNAP_stFE
 			
-			*	reg	`depvar'	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars} [aweight=wgt_long_fam_adj]	//	Coefficients are sampe, but different Sterror.
-			
-			*	SNAP status, state and year FE, all sapmle
-			svy, subpop(if !mi(PFS_ppml)):	///
-				reg	`depvar'	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	ib31.rp_state	ib1997.year	FS_rec_wth	
-			est	store	PFS_SNAP_all	
+			*	SNAP status, no individual FE
+			reghdfe	`depvar'		${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	FS_rec_wth	[pw=wgt_long_fam], absorb(rp_state year) vce(cluster x11101ll)
 			estadd	local	state_year_FE	"Y"
-			svy, subpop(if !mi(`depvar')):	mean	PFS_ppml	//	Need to think about how to add this usign "estadd"....
-		
+			estadd	local	HH_FE	"N"
+			est	store	PFS_X_SNAP_stFE
+			
+			*	No SNAP status, HH FE
+			reghdfe	`depvar'		${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	[pw=wgt_long_fam], absorb(rp_state year x11101ll) vce(cluster x11101ll)
+			estadd	local	state_year_FE	"Y"
+			estadd	local	HH_FE	"Y"
+			est	store	PFS_X_noSNAP_sthFE
+			
+			*	SNAP status, no individual FE
+			reghdfe	`depvar'		${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	FS_rec_wth	[pw=wgt_long_fam], absorb(rp_state year x11101ll) vce(cluster x11101ll)
+			estadd	local	state_year_FE	"Y"
+			estadd	local	HH_FE	"Y"
+			est	store	PFS_X_SNAP_sthFE
+			
 			
 		*	Food Security Indicators and Their Correlates
-			esttab	PFS_noSNAP_all	PFS_SNAP_all		using "${SNAP_outRaw}/Tab_3_PFS_association.csv", ///
-					cells(b(star fmt(3)) se(fmt(2) par)) stats(N_sub r2 state_year_FE meanPFS, label("N" "R2" "State and Year FE" "Mean PFS")) label legend nobaselevels star(* 0.10 ** 0.05 *** 0.01)	drop(*.rp_state	*.year)	///
+			esttab	PFS_X_noSNAP_stFE	PFS_X_SNAP_stFE		PFS_X_noSNAP_sthFE		PFS_X_SNAP_sthFE		using "${SNAP_outRaw}/Tab_3_PFS_association.csv", ///
+					cells(b(star fmt(3)) se(fmt(2) par)) stats(N r2 state_year_FE	HH_FE, label("N" "R2" "State and Year FE" "Household FE")) label legend nobaselevels star(* 0.10 ** 0.05 *** 0.01)	/*drop(*.rp_state	*.year)*/	///
 					title(PFS and household covariates) replace
 					
 					
-			esttab	PFS_noSNAP_all	PFS_SNAP_all		using "${SNAP_outRaw}/Tab_3_PFS_association.tex", ///
-					cells(b(star fmt(3)) & se(fmt(2) par)) stats(N_sub r2 state_year_FE	, label("N" "R2" "State and Year FE")) ///
-					incelldelimiter() label legend nobaselevels star(* 0.10 ** 0.05 *** 0.01)	drop(rp_state*	year_enum*)			///
+			esttab	PFS_X_noSNAP_stFE	PFS_X_SNAP_stFE		PFS_X_noSNAP_sthFE		PFS_X_SNAP_sthFE		using "${SNAP_outRaw}/Tab_3_PFS_association.tex", ///
+					cells(b(star fmt(3)) & se(fmt(2) par)) stats(N r2 state_year_FE	HH_FE, label("N" "R2" "State and Year FE" "Household FE")) ///
+					incelldelimiter() label legend nobaselevels star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state*	year_enum*)	*/		///
 					/*cells(b(nostar fmt(%8.3f)) & se(fmt(2) par)) stats(N_sub r2, fmt(%8.0fc %8.3fc)) incelldelimiter() label legend nobaselevels /*nostar star(* 0.10 ** 0.05 *** 0.01)*/	/*drop(_cons)*/	*/	///
 					title(PFS and household covariates) replace
 		
@@ -334,7 +330,7 @@
 	****************************************************************/	
 	
 	*	Construct dynamics variables
-	if	`FSD_const'==1	{
+	if	`FSD_const_9713'==1	{
 		
 		use	"${SNAP_dtInt}/SNAP_long_PFS_9713", clear
 		
@@ -353,6 +349,7 @@
 		
 		*	Before genering FSDs, generate the number of non-missing PFS values over the 5-year (PFS_t, PFS_t-2, PFS_t-4)
 		*	It will vary from 0 to the full length of reference period (currently 3)
+		*	(2023-08-28) Not sure I am gonno need it, as my sample is already balanced at the beginning
 		loc	var	num_nonmissing_PFS
 		cap	drop	`var'
 		gen	`var'=0
@@ -362,6 +359,8 @@
 
 		}
 		lab	var	`var'	"# of non-missing PFS over 5 years"
+		
+		
 		
 		
 		*	Spell length variable - the consecutive years of FI experience
@@ -545,7 +544,7 @@
 		
 		*	Save
 		compress
-		save    "${SNAP_dtInt}/SNAP_const",	replace
+		save    "${SNAP_dtInt}/SNAP_const_9713",	replace
 		
 	}
 	
