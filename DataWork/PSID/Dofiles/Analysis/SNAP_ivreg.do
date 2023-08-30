@@ -6,8 +6,14 @@
 	if	`IV_reg'==1	{
 		
 		
-		use	"${SNAP_dtInt}/SNAP_const", clear
-		*rename	rp_nonWhte rp_nonWhite
+		use	"${SNAP_dtInt}/SNAP_long_PFS_AEPP", clear
+		
+			*	Keep study sample or 1997-2013 causal inference
+			keep	if	income_ever_below_130_9713==1	//	income ever below 130%
+		
+		
+		*	Keep only study sample
+		
 		
 		*	Additional cleaning
 			
