@@ -538,10 +538,28 @@
 		use	"${SNAP_dtInt}/SNAP_descdta_1979_2019", clear
 		
 		
-			*	PFS by gender and race
-			graph	box	PFS_ppml_noCOLI		[aw=wgt_long_fam_adj], over(rp_female) over(rp_nonWhte)	over(rp_edu_cat) nooutsides name(outcome_subgroup, replace) title(Food Security by Subgroup)
-			graph	export	"${SNAP_outRaw}/PFS_by_subgroup.png", replace	
+			*	PFS by RP's gender and race and education
+			graph	box	PFS_ppml_noCOLI		[aw=wgt_long_fam_adj], over(rp_female) over(rp_nonWhte)	over(rp_edu_cat) nooutsides name(outcome_subgroup_rp, replace) title(Food Security by Subgroup) note("")
+			graph	export	"${SNAP_outRaw}/PFS_by_rp_subgroup.png", replace	
 			graph	close
+			
+			*	PFS by individual's gender and race and education
+				
+				*	Cleaning for label
+				lab	define	ind_nonWhite	0	"White"	1	"Non-White", replace
+				lab	val	ind_nonWhite	ind_nonWhite
+				
+				*	Temporarily replace "inapp(education)" as missing
+				recode	ind_edu_cat	(0=.)	
+				
+			graph	box	PFS_ppml_noCOLI		[aw=wgt_long_fam_adj], over(ind_female) over(ind_nonWhite)	over(ind_edu_cat) nooutsides name(outcome_subgroup_ind, replace) title(Food Security by Subgroup) note("")
+			graph	export	"${SNAP_outRaw}/PFS_by_ind_subgroup.png", replace	
+			graph	close
+			
+			*	PFS by individual's gender, race and education
+			
+			*	Temporarily contruct individual race variable
+			
 			
 			*	PFS and NME
 			{	/*
