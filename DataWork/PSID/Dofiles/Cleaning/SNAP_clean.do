@@ -72,15 +72,15 @@
 		local	ext_data		0	//	Prepare external data (CPI, TFP, etc.)
 		
 		*	SECTION 3: Construct PSID panel data and import external data
-		local	cr_panel		1	//	Create panel structure from ID variable
+		local	cr_panel		0	//	Create panel structure from ID variable
 			local	panel_view	0	//	Create an excel file showing the change of certain clan over time (for internal data-check only)
-		local	merge_data		1	//	Merge ind- and family- variables and import it into ID variable
+		local	merge_data		0	//	Merge ind- and family- variables and import it into ID variable
 			local	raw_reshape	1		//	Merge raw variables and reshape into long data (takes time)
 			local	add_clean	1		//	Do additional cleaning and import external data (CPI, TFP)
 			local	import_dta	1		//	Import aggregated variables and external data into ID data. 
 		
 		*	SECTION 4: Clean data and save it
-		local	clean_vars		0	//	Clean variables and save it
+		local	clean_vars		1	//	Clean variables and save it
 		
 		*	(These parts were moved into "SNAP_const.do")
 		local	PFS_const		0	//	Construct PFS
@@ -279,6 +279,14 @@
 			keep	x11101ll	`var'*
 			save	"${SNAP_dtInt}/Fam_vars/`var'", replace
 			
+			*	Race (spouse) - available since 1985
+			local	var	sp_race
+			psid use || `var' [85]V12293 [86]V13500 [87]V14547 [88]V16021 [89]V17418 [90]V18749 [91]V20049 [92]V21355 [93]V23212 [94]ER3883 [95]ER6753 [96]ER8999 [97]ER11760 [99]ER15836 [01]ER19897 [03]ER23334 [05]ER27297 [07]ER40472 [09]ER46449 [11]ER51810 [13]ER57549 [15]ER64671 [17]ER70744 [19]ER76752 	///
+			using "${SNAP_dtRaw}/Unpacked"  , keepnotes design(any) clear		
+			
+			keep	x11101ll	`var'*
+			save	"${SNAP_dtInt}/Fam_vars/`var'", replace
+					
 			
 		*	Location
 			
@@ -3615,19 +3623,62 @@
 		*	Codes are different over waves, but White always has value=1 so we can use simple categorization (White vs non-White) without further harmonization
 		*	For years with multiple responses, we use the first reponse only (over the entire PSID data less than 5% gave multiple answers.)
 		*	For DK/Refusal, we categorize them as non-White
-		loc	var	rp_White
-		cap	drop	`var'
-		gen		`var'=0	if	inrange(rp_race,2,9)	//	Black, Asian, Native American, etc.
-		replace	`var'=1	if	rp_race==1 // White
-		label	value	`var'	yes1no0
-		label	var		`var'	"White (RP)"
-		
-		local	var	rp_nonWhte
-		cap	drop	`var'
-		gen		`var'=rp_White
-		recode	`var'	(1=0) (0=1) 
-		label	value	`var'	yes1no0
-		label	var		`var'	"non-White (RP)"
+			
+			
+			*	RP
+			loc	var	rp_White
+			cap	drop	`var'
+			gen		`var'=0	if	inrange(rp_race,2,9)	//	Black, Asian, Native American, etc.
+			replace	`var'=1	if	rp_race==1 // White
+			label	value	`var'	yes1no0
+			label	var		`var'	"White (RP)"
+			
+			local	var	rp_nonWhte
+			cap	drop	`var'
+			gen		`var'=rp_White
+			recode	`var'	(1=0) (0=1) 
+			label	value	`var'	yes1no0
+			label	var		`var'	"non-White (RP)"
+			
+			*	Spouse
+			loc	var	sp_White
+			cap	drop	`var'
+			gen		`var'=0	if	inrange(sp_race,2,9)	//	Black, Asian, Native American, etc.
+			replace	`var'=1	if	sp_race==1 // White
+			label	value	`var'	yes1no0
+			label	var		`var'	"White (SP)"
+			
+			local	var	sp_nonWhite
+			cap	drop	`var'
+			gen		`var'=sp_White
+			recode	`var'	(1=0) (0=1) 
+			label	value	`var'	yes1no0
+			label	var		`var'	"non-White (SP)"
+			
+			*	Individual
+			*	NOTE: Individual-level race is NOT avaiable in PSID. So we can only indirectly construct it, using RP or SP
+			loc	var	ind_race
+			cap	drop	`var'
+			gen	`var'=.
+			replace	`var'=rp_race	if	seqnum==1	&	relrp_recode==1
+			replace	`var'=sp_race	if	seqnum==2	&	relrp_recode==2
+			lab	var	`var'	"Race (ind) - only if RP or SP"
+			
+				loc	var	ind_White
+				cap	drop	`var'
+				gen		`var'=0	if	inrange(ind_race,2,9)	//	Black, Asian, Native American, etc.
+				replace	`var'=1	if	ind_race==1 // White
+				label	value	`var'	yes1no0
+				label	var		`var'	"White (ind) - only if RP or SP"
+				
+				local	var	ind_nonWhite
+				cap	drop	`var'
+				gen		`var'=ind_White
+				recode	`var'	(1=0) (0=1) 
+				label	value	`var'	yes1no0
+				label	var		`var'	"non-White (ind) - only if RP or SP"
+					
+				
 		
 		*	State of Residence
 		lab	val	rp_state statecode
