@@ -4001,7 +4001,7 @@
 			loc	var	income_ever_below_130_9713
 			cap	drop	`var'
 			bys	x11101ll:	egen	`var'	=	max(income_below_130)	if	inrange(year,1997,2013)
-			lab	var	`var'	"Income below 130% PL at least once (1997-2017)"
+			lab	var	`var'	"Income below 130% PL at least once (1997-2013)"
 			tab	`var'	if	year==2013	&	in_sample==1	//	counting only one obs per person. 48% of the individuals (5,845) fall into this category
 		
 		*	Individuals whose family income was "consistently" below 130%/200%

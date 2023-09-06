@@ -9,9 +9,52 @@
 		use	  "${SNAP_dtInt}/SNAP_long_PFS", clear
 		
 			*	Keep study sample or 1997-2013 causal inference
-			keep	if	income_ever_below_130_9713==1	//	income ever below 130%
+			keep	if	inrange(year,1997,2013)
+			
+
+			*	Construct individual indicator
+			sort	x11101ll	year
+				
+				*	RP
+				cap	drop	RP
+				gen	RP=1	if	seqnum==1	&	relrp_recode==1
+				lab	var	RP	"Reference person"
+				
+				*	Spouse
+				cap	drop	SP
+				gen	SP=1	if	seqnum==2	&	relrp_recode==2
+				lab	var	SP	"Spouse of RP"
+				
+				*	RP or SP
+				cap	drop	RPSP
+				gen	RPSP=1	if	inlist(1,RP,SP)
+				lab	var	RPSP	"RP or RP's spouse"
+				
+				
+				*	Cumulative status over period
+				foreach	var	in RP SP RPSP	{
+					
+					
+					cap	drop	num`var'
+					bys	x11101ll:	egen	num`var'	=	total(`var') if inrange(year,1997,2013)
+					
+					cap	drop	same`var'_9713
+					cap	drop	no`var'_9713
+					
+					
+					gen	same`var'_9713=1	if	num`var'==9 // same status all the time
+					lab	var	same`var'_9713	"same `var' over 1997-2013"
+					gen no`var'_9713=1		if	num`var'==0 // never been this status all the time.
+					lab	var	no`var'_9713	"no `var' over 1997-2013"
+				}
+			
+	
+			
+			*	(2023-08-20)	Keep non-missing PFS obs only.
+			summ	PFS_ppml	PFS_ppml_noCOLI
+			keep	if	!mi(PFS_ppml)
 		
-		
+	
 		*	Additional cleaning
 			
 			*	Re-scale (to vary from 0 to 1) and standardize SNAP index
@@ -105,8 +148,8 @@
 			label	var	foodexp_tot_inclFS_pc_real	"Food exp (with FS benefit)"
 			label	var	l2_foodexp_tot_inclFS_pc_1_real	"Food Exp in t-2"
 			label	var	l2_foodexp_tot_inclFS_pc_2_real	"(Food Exp in t-2)$^2$"
-			label	var	rp_age		"Age (RP)"
-			label	var	rp_age_sq	"Age$^2$ (RP)"
+			label	var	rp_age		"Age"
+			label	var	rp_age_sq	"Age$^2$"
 			label	var	change_RP	"RP changed"
 			label	var	ln_fam_income_pc_real	"ln(per capita income)"
 			label	var	unemp_rate	"State Unemp Rate"
@@ -117,13 +160,161 @@
 			label	var	citi6016	"State citizen ideology (1960-2015)"
 			
 	
-	
+
+		*	Summary stats of PFS 
+		*	(2023-09-01) Use individual weight since the unit of analyse is individual
+			*	For now, generate summ table separately for indvars and fam-level vars, as indvars do not represent full sample if conditiond by !mi(ppml) (need to figure out why)
+				
+				lab	var	rp_female	"Female (=1)"
+				lab	var	rp_age		"Age"
+				lab	var	rp_White	"White (=1)"
+				lab	var	rp_married	"Married (=1)"
+				lab	var	rp_employed "Employed (=1)"
+				lab	var	rp_disabled "Disabled (=1)"
+				lab	var	rp_NoHS		"Less than high school (=1)"
+				lab	var	rp_HS		"High school (=1)"
+				lab	var	rp_somecol	"College w/o degree (=1)"
+				lab	var	rp_col		"College degree (=1)"
+				lab	var	famnum		"Household size"
+				lab	var	ratio_child	"\% of child in household"
+				lab	var	FS_rec_wth	"Received SNAP (=1)"
+				
+				cap	drop	fam_income_month_pc_real_K
+				gen	fam_income_month_pc_real_K	=	(fam_income_pc_real / 1000) / 12
+				lab	var	fam_income_month_pc_real_K	"Monthly income per capita (K)"
+				
+				lab	var	SNAP_index_uw	"SNAP Policy Index (unweighted)"
+				lab	var	SNAP_index_w	"SNAP Policy Index (weighted)"
+				lab	var	FS_rec_amt_real	"SNAP benefit amount"
+				
+				local	HHvars		rp_female	rp_age	rp_White	rp_married	rp_employed rp_disabled	rp_NoHS rp_HS rp_somecol rp_col	
+				local	famvars		famnum	ratio_child
+				local	moneyvars	fam_income_month_pc_real_K	foodexp_tot_inclFS_pc_real		
+				local	SNAPvars	FS_rec_wth	FS_rec_amt_real
+				local	IVs			SNAP_index_uw	SNAP_index_w
+				local	FSvars		PFS_ppml PFS_FI_ppml	//SL_5	TFI_HCR	CFI_HCR	TFI_FIG	CFI_FIG	TFI_SFIG	CFI_SFIG	 // temporarily drop FSD
+				
+				local	summvars	/*`indvars'*/	`HHvars'	`famvars'	`moneyvars' `SNAPvars' `IVs'	`FSvars'
+				
+				*estpost summ	`indvars'	[aw=wgt_long_fam_adj]	if	!mi(PFS_ppml)	//	all sample
+				*estpost summ	`indvars'	[aw=wgt_long_fam_adj]	if	!mi(PFS_ppml)	&	balanced_9713==1	&	income_ever_below_200_9713==1	/*  num_waves_in_FU_uniq>=2	 &*/	  // Temporary condition. Need to think proper condition.
+				
+				
+				*	All, unweighted
+				estpost tabstat	`summvars'	 if	!mi(PFS_ppml),	statistics(count	mean	sd) columns(statistics)		// save
+				est	store	sumstat_all_nowgt
+				*	All, weighted
+				estpost tabstat	`summvars' 	if	!mi(PFS_ppml)	&	income_ever_below_130_9713==1,	statistics(count	mean	sd) columns(statistics)	// save
+				est	store	sumstat_inc130_nowgt
+				*	Income belowe 130, unweighted
+				estpost tabstat	`summvars'	 if	!mi(PFS_ppml)	[aw=wgt_long_ind],	statistics(count	mean	sd) columns(statistics)		// save
+				est	store	sumstat_all_wgt
+				*	Income below 130, weighted
+				estpost tabstat	`summvars' 	if	!mi(PFS_ppml)	&	income_ever_below_130_9713==1	[aw=wgt_long_ind],	statistics(count	mean	sd) columns(statistics)	// save
+				est	store	sumstat_inc130_wgt
+				
+				
+					*	FS amount per capita in real dollars (only those used)
+					*estpost tabstat	 FS_rec_amt_capita	if in_sample==1	&	!mi(PFS_ppml)	&	income_below_200==1	& FS_rec_wth==1 [aw=wgt_long_fam_adj],	statistics(mean	sd	min	max) columns(statistics)	// save
+				
 			
-		*	(2023-08-20)	Keep non-missing PFS obs only.
-		keep	if	!mi(PFS_ppml)
+				
+				esttab	sumstat_all_nowgt	sumstat_inc130_nowgt	sumstat_all_wgt	sumstat_inc130_nowgt	using	"${SNAP_outRaw}/Tab_1_Sumstats.csv",  ///
+					cells("count(fmt(%12.0f)) mean(fmt(%12.2f)) sd(fmt(%12.2f)) min(fmt(%12.2f)) max(fmt(%12.2f))") label	title("Summary Statistics") noobs 	  replace
+									
+				esttab	sumstat_all_nowgt	sumstat_inc130_nowgt	using	"${SNAP_outRaw}/Tab_1_Sumstats.tex",  ///
+					cells("count(fmt(%12.0fc)) mean(fmt(%12.2f)) sd(fmt(%12.2f))") label	title("Summary Statistics - unweighted") noobs 	  replace
+					
+				esttab	sumstat_all_wgt	sumstat_inc130_wgt	using	"${SNAP_outRaw}/Tab_1_Sumstats_wgt.tex",  ///
+					cells("count(fmt(%12.0fc)) mean(fmt(%12.2fc)) sd(fmt(%12.2f))") label	title("Summary Statistics - weighted") noobs 	  replace	
+				
+				
+			
+			
+		*	Regression of PFS on Hh characteristics.
+			
+			*	Set Xs
+			local	HHvars		rp_female	rp_age	rp_White	rp_married	rp_employed rp_disabled	rp_NoHS rp_somecol rp_col	
+			local	famvars		famnum	ratio_child	fam_income_month_pc_real_K
+			local	SNAPvars	FS_rec_wth	
+			
+			local	regionvars		rp_state_enum2-rp_state_enum31 rp_state_enum33-rp_state_enum50 	//	Excluding NY (rp_state_enum32) and outside 48 states (1, 52, 53). The latter should be excluded when running regression
+			local	timevars		year_enum20-year_enum27	//	Using year_enum19 (1997) as a base year
+			
+			
+			local	depvar	PFS_ppml_noCOLI
+			
+			*	unweighted, all sample
+			reg	`depvar'	`HHvars'	`famvars'	`SNAPvars'	`regionvars'	`timevars'
+			estadd	local	state_year_FE	"Y", replace
+			estadd	local	wgt		"N", replace
+			summ	`depvar'
+			estadd	scalar	meanPFS	=	r(mean), replace
+			est	store reg_PFS_X_all_nowgt
+			
+			*	Unweighted, inc 130%
+			reg	`depvar'	`HHvars'	`famvars'	`SNAPvars'	`regionvars'	`timevars' if income_ever_below_130_9713==1
+			estadd	local	state_year_FE	"Y", replace
+			estadd	local	wgt		"N", replace
+			summ	`depvar'
+			estadd	scalar	meanPFS	=	r(mean), replace
+			est	store reg_PFS_X_inc130_nowgt
+			
+			*	unweighted, full sapmle
+			reg	`depvar'	`HHvars'	`famvars'	`SNAPvars'	`regionvars'	`timevars' [pw=wgt_long_ind]
+			estadd	local	state_year_FE	"Y", replace
+			estadd	local	wgt		"Y", replace
+			summ	`depvar' [aw=wgt_long_ind]
+			estadd	scalar	meanPFS	=	r(mean), replace
+			est	store reg_PFS_X_all_wgt
+			
+			*	Unweighted, inc 130%
+			reg	`depvar'	`HHvars'	`famvars'	`SNAPvars'	`regionvars'	`timevars'  [pw=wgt_long_ind]	if income_ever_below_130_9713==1
+			estadd	local	state_year_FE	"Y", replace
+			estadd	local	wgt		"Y", replace
+			summ	`depvar' [aw=wgt_long_ind]
+			estadd	scalar	meanPFS	=	r(mean), replace
+			est	store reg_PFS_X_inc130_wgt
+			
+			
+			esttab	reg_PFS_X_all_nowgt		reg_PFS_X_inc130_nowgt	reg_PFS_X_all_wgt	reg_PFS_X_inc130_wgt	/*PFS_noSNAP_9713	PFS_SNAP_9713*/	using "${SNAP_outRaw}/Tab_3_PFS_association.csv", ///
+					cells(b(star fmt(3)) se(fmt(2) par)) stats(N r2 meanPFS state_year_FE wgt, label("N" "R2" "Mean PFS" "State and Year FE" "Weighted")) label legend nobaselevels star(* 0.10 ** 0.05 *** 0.01)	drop(rp_state*	year_enum*)	///
+					title(PFS and household covariates) replace
+			
+			esttab	reg_PFS_X_all_nowgt		reg_PFS_X_inc130_nowgt	reg_PFS_X_all_wgt	reg_PFS_X_inc130_wgt	using "${SNAP_outRaw}/Tab_3_PFS_association.tex", ///
+					cells(b(star fmt(3)) se(fmt(2) par)) stats(N r2 meanPFS state_year_FE wgt, fmt(%8.0fc %8.2fc) label("N" "R2" "Mean PFS" "State and Year FE" "Weighted")) ///
+					incelldelimiter() label legend nobaselevels star(* 0.10 ** 0.05 *** 0.01)	drop(rp_state*	year_enum*)	replace		
+				
 		
 		
-		*	Summary stats of PFS (with and w/o COLI)
+		*	Kernel density
+			*	PFS by gender
+				graph twoway 		(kdensity PFS_ppml	if	!mi(PFS_ppml) & inrange(year,1997,2013) & rp_female==0, bwidth(0.05) )	///
+									(kdensity PFS_ppml	if	!mi(PFS_ppml) & inrange(year,1997,2013) & rp_female==1, bwidth(0.05) ),	///
+									/*title (Density Estimates of the USDA scale and the PFS)*/	xtitle(PFS) ytitle(Density)		///
+									name(PFS_ind_gender, replace) graphregion(color(white)) bgcolor(white)	title(by Gender)	///
+									legend(lab (1 "Male") lab(2 "Female") rows(1))	
+									
+									
+				*	PFS by race
+				graph twoway 		(kdensity PFS_ppml	if	!mi(PFS_ppml) & inrange(year,1997,2013) & rp_White==1, bwidth(0.05) )	///
+									(kdensity PFS_ppml	if	!mi(PFS_ppml) & inrange(year,1997,2013) & rp_White==0, bwidth(0.05) ),	///
+									/*title (Density Estimates of the USDA scale and the PFS)*/	xtitle(PFS) ytitle(Density)		///
+									name(PFS_rp_race, replace) graphregion(color(white)) bgcolor(white) title(by Race)		///
+									legend(lab (1 "White") lab(2 "non-White") rows(1))	
+				
+				graph	combine	PFS_ind_gender	PFS_rp_race, graphregion(color(white) fcolor(white)) 
+				graph	export	"${SNAP_outRaw}/PFS_kdensities.png", replace
+				graph	close
+		
+		
+	
+		
+		/*
+		local	demovars	rp_NoHS rp_HS rp_somecol rp_col rp_employed rp_disabled famnum ratio_child
+		local	moneyvars	
+		
+		
 		summ 	PFS_ppml  	[aw=wgt_long_fam_adj]	if !mi(PFS_ppml) & !mi(PFS_ppml_noCOLI) & inrange(year,1990,2015)
 		scalar	mean_PFS	=	r(mean)
 		summ	PFS_ppml_noCOLI	[aw=wgt_long_fam_adj]	if !mi(PFS_ppml) & !mi(PFS_ppml_noCOLI) & inrange(year,1990,2015)
@@ -136,46 +327,29 @@
 		summ	`var'	[aw=wgt_long_fam_adj]	if	inrange(year,1990,2015),d
 		di r(mean)/mean_PFS
 		
-			
 		graph twoway 	(kdensity PFS_ppml  			if !mi(PFS_ppml) & !mi(PFS_ppml_noCOLI) & inrange(year,1990,2015), graphregion(fcolor(white)) 	legend(label(1 "PFS (non-COLI)")))	///
 						(kdensity PFS_ppml_noCOLI 	if !mi(PFS_ppml) & !mi(PFS_ppml_noCOLI) & inrange(year,1990,2015), graphregion(fcolor(white)) 	legend(label(2 "PFS (COLI adjusted)"))),	///
 						title(Distribution of PFS - with and w/o COLI)	note(COLI is available since 1990)
 		graph	export	"${SNAP_outRaw}/Dist_PFS_COLI.png", as(png) replace
 		graph	close
 	
+		
+		*/
+			
 	
 		
 		
 		*	Use "PFS_noCOLI" as base PFS variable
-		drop	PFS_ppml
-		rename	PFS_ppml_noCOLI	PFS_ppml
-		lab	var	PFS_ppml	"PFS"
+		*drop	PFS_ppml
+		*rename	PFS_ppml_noCOLI	PFS_ppml
+		*lab	var	PFS_ppml	"PFS"
 		
 		*	Keep only observations where citizen ideology IV is available (1977-2015)
 		*	(2023-1-15) Maybe I shouldn't do it, because even if IV is available till 2015, we still use PFS in 2017 and 2019 (Iv regression automatically exclude 2017/2019, since there's no IV there.)
 		*keep	if	inrange(year,1977,2015) & !mi(citi6016)
 
 
-		*	Set globals
-		global	statevars		l2_foodexp_tot_inclFS_pc_1_real	l2_foodexp_tot_inclFS_pc_2_real 
-		global	demovars		rp_age rp_age_sq	rp_nonWhte	rp_married	rp_female	
-		global	econvars		ln_fam_income_pc_real	
-		global	healthvars		rp_disabled
-		global	familyvars		famnum	ratio_child	change_RP
-		global	empvars			rp_employed
-		global	eduvars			rp_NoHS rp_somecol rp_col
-		//global	foodvars		FS_rec_wth
-		global	macrovars		unemp_rate	CPI
-		global	regionvars		rp_state_enum2-rp_state_enum31 rp_state_enum33-rp_state_enum50 	//	Excluding NY (rp_state_enum32) and outside 48 states (1, 52, 53). The latter should be excluded when running regression
-		*global	timevars		year_enum4-year_enum11 year_enum14-year_enum30 //	Exclude year_enum3 (1978) as base category. year_enum12 (1990)  and year_enum13 (1991) are excluded due to lack of lagged data.
-		global	timevars		year_enum4-year_enum11 year_enum14-year_enum30	//	Using year_enum18 (1996) as a base year, when regressing with SNAP index IV (1996-2013)
-		global	indvars			/*ind_female*/ age_ind	age_ind_sq ind_NoHS ind_somecol ind_col /* ind_employed_dummy*/
-		
-
 	
-		
-		
-
 		*	Outcome variables
 		summ	PFS_ppml	PFS_FI_ppml
 		summ	PFS_ppml PFS_FI_ppml	[aw=wgt_long_fam_adj]
@@ -319,6 +493,28 @@
 			*	(2023-7-28) Note: the last benchmark model (SSI as single IV to instrument amount of FS benefit) tested was including "${statevars}" and excluding "lagged PFS"
 			*	(2023-8-01) Drop state-FE based on Nico's suggestion.
 			
+			*	Set globals
+			global	statevars		l2_foodexp_tot_inclFS_pc_1_real	l2_foodexp_tot_inclFS_pc_2_real 
+			global	demovars		rp_age rp_age_sq	rp_nonWhte	rp_married	// rp_female	
+			global	econvars		ln_fam_income_pc_real	
+			global	healthvars		rp_disabled
+			global	familyvars		famnum	ratio_child	change_RP
+			global	empvars			rp_employed
+			global	eduvars			rp_NoHS rp_somecol rp_col
+			//global	foodvars		FS_rec_wth
+			global	macrovars		unemp_rate	CPI
+			global	regionvars		rp_state_enum2-rp_state_enum31 rp_state_enum33-rp_state_enum50 	//	Excluding NY (rp_state_enum32) and outside 48 states (1, 52, 53). The latter should be excluded when running regression
+			*global	timevars		year_enum4-year_enum11 year_enum14-year_enum30 //	Exclude year_enum3 (1978) as base category. year_enum12 (1990)  and year_enum13 (1991) are excluded due to lack of lagged data.
+			global	timevars		year_enum20-year_enum27	//	Using year_enum19 (1997) as a base year, when regressing with SNAP index IV (1996-2013)
+			global	indvars			/*ind_female*/ age_ind	age_ind_sq ind_NoHS ind_somecol ind_col /* ind_employed_dummy*/
+			
+
+		
+		
+		
+		
+			
+			
 			global	FSD_on_FS_X		/*${statevars}*/	${demovars} ${econvars}	${healthvars}	${empvars}	${familyvars}	${eduvars}	${indvars}	//	 ${regionvars}	${macrovars} 
 			global	PFS_est_1st
 			global	PFS_est_2nd
@@ -376,7 +572,20 @@
 				global	endovar		FSdummy	//	FSamt_capita
 				global	IV			SNAP_index_w	//	citi6016	//	inst6017_nom	//	citi6016	//		//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
 				global	IVname		index_w	//	CIM	//	
-	
+				
+				*	Sample and weight choice
+				loc	income_below130	1	//	Keep only individuals who were ever below 130% income line 
+				loc	same_RP_9713	0	//	Keep only individuals were same RP over the period
+				
+				if	`income_below130'==1	{
+					keep if income_ever_below_130_9713==1
+				}
+				if	`same_RP_9713'==1	{
+					keep	if	sameRP_9713==1
+				}
+				
+				global	reg_weight	 [pw=wgt_long_ind]	// [pw=wgt_long_fam]	//		[pw=wgt_long_fam_adj]
+				global	sum_weight	 [aw=wgt_long_ind]	// [aw=wgt_long_fam]	//		[aw=wgt_long_fam_adj]
 				
 				lab	var	age_ind		"Age (ind)"
 				lab	var	age_ind_sq	"Age$^2$ (ind)"
@@ -388,8 +597,8 @@
 					global	Z	${IV}
 					
 					cap	drop reg_sample_all
-					ivreghdfe	${depvar}	 ${FSD_on_FS_X}	${timevars}	 (${endovar} = ${Z})	[aw=wgt_long_fam_adj] if	income_ever_below_200==1	&	!mi(${IV}),	///
-						absorb(/*x11101ll	ib1997.year*/) robust	cluster(x11101ll) //	first  savefirst savefprefix(${IVname})	 
+					ivreghdfe	${depvar}	 ${FSD_on_FS_X}	${timevars}	 (${endovar} = ${Z})	${reg_weight} if	!mi(${Z}),	///
+						absorb(/*x11101ll*/	/*ib1997.year*/) robust	cluster(x11101ll) //	first  savefirst savefprefix(${IVname})	 
 					gen	reg_sample_all=1 if e(sample)
 					lab	var	reg_sample_all "Sample in IV regression (1979-2015)"		
 					
@@ -397,8 +606,8 @@
 					global	Z	${IV}
 					
 					cap	drop reg_sample_9713
-					ivreghdfe	${depvar}	 ${FSD_on_FS_X}	${timevars}	 (${endovar} = ${Z})	[aw=wgt_long_fam_adj] if	income_ever_below_200_9713==1 &	inrange(year,1997,2013)	&	!mi(${IV}),	///
-						absorb(x11101ll	ib1997.year) robust	cluster(x11101ll) //	first  savefirst savefprefix(${IVname})	 
+					ivreghdfe	${depvar}	 ${FSD_on_FS_X}	${timevars}	 (${endovar} = ${Z})	${reg_weight} if	inrange(year,1997,2013)	&	!mi(${Z}),	///
+						absorb(/*x11101ll*/	ib1997.year) robust	cluster(x11101ll) //	first  savefirst savefprefix(${IVname})	 
 					gen	reg_sample_9713=1 if e(sample)
 					lab	var	reg_sample_9713 "Sample in IV regression (1997-2013)"	
 					
@@ -424,13 +633,14 @@
 					
 					}
 			
-			
+				
+				
 				*	OLS
 					
 					foreach	samp	in	/*all*/	9713	{
 						
 						*	Mundlak controls, all sample
-						reghdfe		PFS_ppml	 FSdummy ${FSD_on_FS_X}	${timevars}	${Mundlak_vars}	 [aw=wgt_long_fam_adj] if	reg_sample_`samp'==1,	vce(cluster x11101ll) noabsorb // absorb(ib1997.year)
+						reghdfe		PFS_ppml	 FSdummy ${FSD_on_FS_X}	${timevars}	${Mundlak_vars}		${reg_weight} if	reg_sample_`samp'==1,	vce(cluster x11101ll) noabsorb // absorb(ib1997.year)
 						est	store	mund_ols_`samp'
 						estadd	local	yearFE	"Y"
 							
@@ -444,7 +654,7 @@
 				*	Reduced form
 					foreach	samp	in	/*all*/	9713	{
 					
-						reghdfe		PFS_ppml	 ${IV} ${FSD_on_FS_X}	${timevars}	${Mundlak_vars}	 [aw=wgt_long_fam_adj] if	reg_sample_`samp'==1,	vce(cluster x11101ll) noabsorb // absorb(ib1997.year)
+						reghdfe		PFS_ppml	 ${IV} ${FSD_on_FS_X}	${timevars}	${Mundlak_vars}		${reg_weight}	if	reg_sample_`samp'==1,	vce(cluster x11101ll) noabsorb // absorb(ib1997.year)
 						est	store	mund_red_${IVname}_`samp'
 					
 					}
@@ -464,20 +674,23 @@
 						global	Z		${IV}	
 						global	Zname	${IVname}_Z
 						
-						ivreghdfe	PFS_ppml	${FSD_on_FS_X}	${timevars}	${Mundlak_vars_`samp'}	(FSdummy = ${Z})	/*[pw=wgt_long_fam_adj]*/ if	reg_sample_`samp'==1, ///
-							/*absorb(x11101ll)	*/	cluster (x11101ll)		first savefirst savefprefix(${Zname})	 partial(*_bar`samp')
+						ivreghdfe	PFS_ppml	${FSD_on_FS_X}	${timevars}	${Mundlak_vars_`samp'} 	(FSdummy = ${Z})	${reg_weight} if	reg_sample_`samp'==1, ///
+							/*absorb(x11101ll)*/	cluster (x11101ll)		first savefirst savefprefix(${Zname})	partial(*_bar`samp')
 						estadd	local	Mundlak	"Y"
 						estadd	local	YearFE	"Y"
-						est	store	${Zname}_mund_2nd_`samp'
 						scalar	Fstat_CD_${Zname}	=	 e(cdf)
 						scalar	Fstat_KP_${Zname}	=	e(widstat)
+						summ	PFS_ppml	${sum_weight}	if	reg_sample_`samp'==1
+						estadd	scalar	mean_PFS	=	 r(mean)
+						est	store	${Zname}_mund_2nd_`samp'
 					
 						est	restore	${Zname}${endovar}
 						estadd	local	Mundlak	"Y"
 						estadd	local	YearFE	"Y"
 						estadd	scalar	Fstat_CD	=	Fstat_CD_${Zname}, replace
 						estadd	scalar	Fstat_KP	=	Fstat_KP_${Zname}, replace
-
+						summ	FSdummy	${sum_weight}	if	reg_sample_`samp'==1
+						estadd	scalar	mean_SNAP	=	 r(mean) 
 						est	store	${Zname}_mund_1st_`samp'
 						est	drop	${Zname}${endovar}
 						
@@ -489,26 +702,29 @@
 						global	Zname	${IVname}_Dhat
 						
 						cap	drop	FSdummy_hat
-						logit	FSdummy	${IV}	${FSD_on_FS_X}	${timevars}	${Mundlak_vars_`samp'}	/*[pw=wgt_long_fam_adj]*/ if	reg_sample_`samp'==1, vce(cluster x11101ll) 
+						logit	FSdummy	${IV}	${FSD_on_FS_X}	${timevars}	${Mundlak_vars_`samp'}	${reg_weight}	if	reg_sample_`samp'==1, vce(cluster x11101ll) 
 						*xtlogit	FSdummy	${IV}	${FSD_on_FS_X}	${timevars}	/*${Mundlak_vars_`samp'}*/  if	reg_sample_`samp'==1, vce(cluster x11101ll) 
 						predict	FSdummy_hat
 						lab	var	FSdummy_hat	"Predicted SNAP status"
 						
 						*	2SLS with the predicted value (Dhat) as instrument			
-						ivreghdfe	PFS_ppml	${FSD_on_FS_X}	${timevars}	${Mundlak_vars_`samp'} 	(FSdummy = ${Z})	/*[pw=wgt_long_fam_adj]*/ if	reg_sample_`samp'==1, ///
+						ivreghdfe	PFS_ppml	${FSD_on_FS_X}	${timevars}	${Mundlak_vars_`samp'}  	(FSdummy = ${Z})	${reg_weight} if	reg_sample_`samp'==1, ///
 							/*absorb(x11101ll)*/	cluster (x11101ll)	first savefirst savefprefix(${Zname})	partial(*_bar`samp')
 						estadd	local	Mundlak	"Y"
 						estadd	local	YearFE	"Y"
-						est	store	${Zname}_mund_2nd_`samp'
 						scalar	Fstat_CD_${Zname}	=	 e(cdf)
 						scalar	Fstat_KP_${Zname}	=	e(widstat)
+						summ	PFS_ppml	${sum_weight}	if	reg_sample_`samp'==1
+						estadd	scalar	mean_PFS	=	 r(mean)
+						est	store	${Zname}_mund_2nd_`samp'
 					
 						est	restore	${Zname}${endovar}
 						estadd	local	Mundlak	"Y"
 						estadd	local	YearFE	"Y"
 						estadd	scalar	Fstat_CD	=	Fstat_CD_${Zname}, replace
 						estadd	scalar	Fstat_KP	=	Fstat_KP_${Zname}, replace
-
+						summ	FSdummy	${sum_weight}	if	reg_sample_`samp'==1
+						estadd	scalar	mean_SNAP	=	 r(mean)
 						est	store	${Zname}_mund_1st_`samp'
 						est	drop	${Zname}${endovar}
 			
@@ -524,13 +740,13 @@
 						
 							*	1st stage
 							esttab	`Zname'_Z_mund_1st_`samp' 	`Zname'_Dhat_mund_1st_`samp' 	using "${SNAP_outRaw}/PFS_`Zname'_mund_1st_`samp'.csv", ///
-							cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N YearFE Mundlak	Fstat_CD	Fstat_KP, fmt(0 2) label("N" "Year FE" "Mundlak" "F-stat(CD)" "F-stat(KP)" )) ///
+							cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N mean_SNAP YearFE Mundlak	Fstat_CD	Fstat_KP, fmt(0 2) label("N" "Mean SNAP" "Year FE" "Mundlak" "F-stat(CD)" "F-stat(KP)" )) ///
 							incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/ year_enum*)	///
 							title(PFS on FS dummy)		replace	
 							
 							
 							esttab	`Zname'_Z_mund_1st_`samp' 	`Zname'_Dhat_mund_1st_`samp' 	using "${SNAP_outRaw}/PFS_`Zname'_mund_1st_`samp'.tex", ///
-							cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N YearFE Mundlak	Fstat_CD	Fstat_KP, fmt(0 2) label("N" "Year FE" "Mundlak" "F-stat(CD)" "F-stat(KP)" )) ///
+							cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N mean_SNAP YearFE Mundlak	Fstat_CD	Fstat_KP, fmt(0 2) label("N" "Mean SNAP" "Year FE" "Mundlak" "F-stat(CD)" "F-stat(KP)" )) ///
 							incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/ year_enum*)	///
 							title(PFS on FS dummy)		replace								
 						
@@ -538,12 +754,12 @@
 															
 							*	SNAP index
 							esttab	mund_ols_`samp' 	`Zname'_Z_mund_2nd_`samp'  	`Zname'_Dhat_mund_2nd_`samp' 	using "${SNAP_outRaw}/PFS_`Zname'_mund_2nd_`samp'.csv", ///
-							cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2c YearFE Mundlak Fstat_CD	Fstat_KP pval_Jstat, fmt(0 2) label("N" "R2" "Year FE" "Mundlak" "F-stat(CD)" "F-stat(KP)" "p-val(J-stat)"))	///
+							cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2c mean_PFS YearFE Mundlak Fstat_CD	Fstat_KP , fmt(0 2) label("N" "R2" "Mean PFS" "Year FE" "Mundlak" "F-stat(CD)" "F-stat(KP)"))	///
 							incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/ year_enum* )	///
 							title(PFS on FS dummy)		replace	
 							
 							esttab	mund_ols_`samp' 	`Zname'_Z_mund_2nd_`samp'  	`Zname'_Dhat_mund_2nd_`samp' 	using "${SNAP_outRaw}/PFS_`Zname'_mund_2nd_`samp'.tex", ///
-							cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2c YearFE Mundlak Fstat_CD	Fstat_KP pval_Jstat, fmt(0 2) label("N" "R2" "Year FE" "Mundlak" "F-stat(CD)" "F-stat(KP)" "p-val(J-stat)")) ///
+							cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2c mean_PFS YearFE Mundlak Fstat_CD	Fstat_KP, fmt(0 2) label("N" "R2" "Mean PFS" "Year FE" "Mundlak" "F-stat(CD)" "F-stat(KP)")) ///
 							incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/ year_enum* )	///
 							title(PFS on FS dummy)		replace	
 						}
