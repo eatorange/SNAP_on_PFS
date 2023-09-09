@@ -165,8 +165,11 @@
 		*	(2023-09-01) Use individual weight since the unit of analyse is individual
 			*	For now, generate summ table separately for indvars and fam-level vars, as indvars do not represent full sample if conditiond by !mi(ppml) (need to figure out why)
 				
+				lab	var	age_ind		"Age (years)"
+				lab	var	ind_female 	"Female (=1)"
+				lab	var	ind_col		"College degree (=1)"
 				lab	var	rp_female	"Female (=1)"
-				lab	var	rp_age		"Age"
+				lab	var	rp_age		"Age (years)"
 				lab	var	rp_White	"White (=1)"
 				lab	var	rp_married	"Married (=1)"
 				lab	var	rp_employed "Employed (=1)"
@@ -176,12 +179,12 @@
 				lab	var	rp_somecol	"College w/o degree (=1)"
 				lab	var	rp_col		"College degree (=1)"
 				lab	var	famnum		"Household size"
-				lab	var	ratio_child	"\% of child in household"
+				lab	var	ratio_child	"\% children in household"
 				lab	var	FS_rec_wth	"Received SNAP (=1)"
 				
 				cap	drop	fam_income_month_pc_real_K
 				gen	fam_income_month_pc_real_K	=	(fam_income_pc_real / 1000) / 12
-				lab	var	fam_income_month_pc_real_K	"Monthly income per capita (K)"
+				lab	var	fam_income_month_pc_real_K	"Monthly income per capita (thousands)"
 				
 				lab	var	SNAP_index_uw	"SNAP Policy Index (unweighted)"
 				lab	var	SNAP_index_w	"SNAP Policy Index (weighted)"
@@ -232,9 +235,11 @@
 			
 			
 		*	Regression of PFS on Hh characteristics.
+			*	Note: aweight and pweight gives the same regression coefficient, but sterror differ.
 			
 			*	Set Xs
-			local	HHvars		rp_female	rp_age	rp_White	rp_married	rp_employed rp_disabled	rp_NoHS rp_somecol rp_col	
+			local	indvars		age_ind	ind_col 
+			local	HHvars		rp_female	rp_age	rp_White	rp_married	rp_employed rp_disabled	rp_col	
 			local	famvars		famnum	ratio_child	fam_income_month_pc_real_K
 			local	SNAPvars	FS_rec_wth	
 			
@@ -242,48 +247,95 @@
 			local	timevars		year_enum20-year_enum27	//	Using year_enum19 (1997) as a base year
 			
 			
-			local	depvar	PFS_ppml_noCOLI
+			local	depvar	PFS_ppml
 			
-			*	unweighted, all sample
-			reg	`depvar'	`HHvars'	`famvars'	`SNAPvars'	`regionvars'	`timevars'
-			estadd	local	state_year_FE	"Y", replace
-			estadd	local	wgt		"N", replace
-			summ	`depvar'
-			estadd	scalar	meanPFS	=	r(mean), replace
-			est	store reg_PFS_X_all_nowgt
-			
-			*	Unweighted, inc 130%
-			reg	`depvar'	`HHvars'	`famvars'	`SNAPvars'	`regionvars'	`timevars' if income_ever_below_130_9713==1
-			estadd	local	state_year_FE	"Y", replace
-			estadd	local	wgt		"N", replace
-			summ	`depvar'
-			estadd	scalar	meanPFS	=	r(mean), replace
-			est	store reg_PFS_X_inc130_nowgt
-			
-			*	unweighted, full sapmle
-			reg	`depvar'	`HHvars'	`famvars'	`SNAPvars'	`regionvars'	`timevars' [pw=wgt_long_ind]
-			estadd	local	state_year_FE	"Y", replace
-			estadd	local	wgt		"Y", replace
-			summ	`depvar' [aw=wgt_long_ind]
-			estadd	scalar	meanPFS	=	r(mean), replace
-			est	store reg_PFS_X_all_wgt
-			
-			*	Unweighted, inc 130%
-			reg	`depvar'	`HHvars'	`famvars'	`SNAPvars'	`regionvars'	`timevars'  [pw=wgt_long_ind]	if income_ever_below_130_9713==1
-			estadd	local	state_year_FE	"Y", replace
-			estadd	local	wgt		"Y", replace
-			summ	`depvar' [aw=wgt_long_ind]
-			estadd	scalar	meanPFS	=	r(mean), replace
-			est	store reg_PFS_X_inc130_wgt
+		
+		
 			
 			
-			esttab	reg_PFS_X_all_nowgt		reg_PFS_X_inc130_nowgt	reg_PFS_X_all_wgt	reg_PFS_X_inc130_wgt	/*PFS_noSNAP_9713	PFS_SNAP_9713*/	using "${SNAP_outRaw}/Tab_3_PFS_association.csv", ///
-					cells(b(star fmt(3)) se(fmt(2) par)) stats(N r2 meanPFS state_year_FE wgt, label("N" "R2" "Mean PFS" "State and Year FE" "Weighted")) label legend nobaselevels star(* 0.10 ** 0.05 *** 0.01)	drop(rp_state*	year_enum*)	///
+			*	Unweighted
+			
+				*	full sample, no individual FE
+				*reg		`depvar'	`indvars'	`HHvars'	`famvars'	`SNAPvars'	`regionvars'	`timevars'
+				reghdfe		`depvar'	`indvars'	`HHvars'	`famvars'	`SNAPvars'	``weight'_spec', absorb(year rp_state)
+				estadd	local	wgt			"N", replace
+				estadd	local	ind_FE		"N", replace
+				summ	`depvar'	``weight'_spec'
+				estadd	scalar	meanPFS	=	r(mean), replace
+				est	store PFS_X_all_nowgt_noiFE
+		
+				*	full sample, individual FE
+				*reg		`depvar'	`indvars'	`HHvars'	`famvars'	`SNAPvars'	`regionvars'	`timevars'
+				reghdfe		`depvar'	`indvars'	`HHvars'	`famvars'	`SNAPvars', absorb(year rp_state x11101ll)
+				estadd	local	wgt			"N", replace
+				estadd	local	ind_FE		"Y", replace
+				summ	`depvar'
+				estadd	scalar	meanPFS	=	r(mean), replace
+				est	store PFS_X_all_nowgt_iFE
+				
+				*	inc130%, no individual FE
+				reghdfe		`depvar'	`indvars'	`HHvars'	`famvars'	`SNAPvars'	if	income_ever_below_130_9713==1, absorb(year rp_state)
+				estadd	local	wgt			"N", replace
+				estadd	local	ind_FE		"N", replace
+				summ	`depvar'	if	income_ever_below_130_9713==1
+				estadd	scalar	meanPFS	=	r(mean), replace
+				est	store PFS_X_inc130_nowgt_noiFE			
+				
+				*	inc130%, individual FE
+				reghdfe		`depvar'	`indvars'	`HHvars'	`famvars'	`SNAPvars'	if	income_ever_below_130_9713==1, absorb(year rp_state x11101ll)
+				estadd	local	wgt			"N", replace
+				estadd	local	ind_FE		"Y", replace
+				summ	`depvar'	if	income_ever_below_130_9713==1
+				estadd	scalar	meanPFS	=	r(mean), replace
+				est	store PFS_X_inc130_nowgt_iFE
+				
+			
+			
+			*	Weighted
+			
+				*	full sample, no individual FE
+				*reg		`depvar'	`indvars'	`HHvars'	`famvars'	`SNAPvars'	`regionvars'	`timevars'
+				reghdfe		`depvar'	`indvars'	`HHvars'	`famvars'	`SNAPvars'	[pw=wgt_long_ind], absorb(year rp_state)
+				estadd	local	wgt			"N", replace
+				estadd	local	ind_FE		"N", replace
+				summ	`depvar'	[aw=wgt_long_ind]
+				estadd	scalar	meanPFS	=	r(mean), replace
+				est	store PFS_X_all_wgt_noiFE
+				
+				*	full sample, individual FE
+				*reg		`depvar'	`indvars'	`HHvars'	`famvars'	`SNAPvars'	`regionvars'	`timevars'
+				reghdfe		`depvar'	`indvars'	`HHvars'	`famvars'	`SNAPvars'	[pw=wgt_long_ind], absorb(year rp_state x11101ll)
+				estadd	local	wgt			"N", replace
+				estadd	local	ind_FE		"Y", replace
+				summ	`depvar'	[aw=wgt_long_ind]
+				estadd	scalar	meanPFS	=	r(mean), replace
+				est	store PFS_X_all_wgt_iFE
+				
+				*	inc130%, no individual FE
+				reghdfe		`depvar'	`indvars'	`HHvars'	`famvars'	`SNAPvars'	[pw=wgt_long_ind]	if	income_ever_below_130_9713==1, absorb(year rp_state)
+				estadd	local	wgt			"N", replace
+				estadd	local	ind_FE		"N", replace
+				summ	`depvar'	[aw=wgt_long_ind]	if	income_ever_below_130_9713==1
+				estadd	scalar	meanPFS	=	r(mean), replace
+				est	store PFS_X_inc130_wgt_noiFE
+							
+				*	inc130%, individual FE
+				reghdfe		`depvar'	`indvars'	`HHvars'	`famvars'	`SNAPvars'	[pw=wgt_long_ind]	if	income_ever_below_130_9713==1, absorb(year rp_state x11101ll)
+				estadd	local	wgt			"N", replace
+				estadd	local	ind_FE		"Y", replace
+				summ	`depvar'	[aw=wgt_long_ind]	if	income_ever_below_130_9713==1
+				estadd	scalar	meanPFS	=	r(mean), replace
+				est	store PFS_X_inc130_wgt_iFE
+			
+			
+			*	Unweighted
+			esttab	PFS_X_all_nowgt_noiFE		PFS_X_all_nowgt_iFE	PFS_X_inc130_nowgt_noiFE		PFS_X_inc130_nowgt_iFE	using "${SNAP_outRaw}/Tab_3_PFS_association_uw.csv", ///
+					cells(b(star fmt(3)) se(fmt(2) par)) stats(N r2 meanPFS ind_FE wgt, label("N" "R$^2$" "Mean PFS" "Individual FE" "Weighted")) label legend nobaselevels star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state*	year_enum*)*/	///
 					title(PFS and household covariates) replace
-			
-			esttab	reg_PFS_X_all_nowgt		reg_PFS_X_inc130_nowgt	reg_PFS_X_all_wgt	reg_PFS_X_inc130_wgt	using "${SNAP_outRaw}/Tab_3_PFS_association.tex", ///
-					cells(b(star fmt(3)) se(fmt(2) par)) stats(N r2 meanPFS state_year_FE wgt, fmt(%8.0fc %8.2fc) label("N" "R2" "Mean PFS" "State and Year FE" "Weighted")) ///
-					incelldelimiter() label legend nobaselevels star(* 0.10 ** 0.05 *** 0.01)	drop(rp_state*	year_enum*)	replace		
+	
+			esttab	PFS_X_all_nowgt_noiFE		PFS_X_all_nowgt_iFE	PFS_X_inc130_nowgt_noiFE		PFS_X_inc130_nowgt_iFE	using "${SNAP_outRaw}/Tab_3_PFS_association_uw.tex", ///
+					cells(b(star fmt(3)) se(fmt(2) par)) stats(N r2 meanPFS ind_FE wgt, fmt(%8.0fc %8.2fc) label("N" "R$^2$" "Mean PFS" "Individual FE" "Weighted")) ///
+					incelldelimiter() label legend nobaselevels star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state*	year_enum*)*/	replace		
 				
 		
 		
@@ -307,6 +359,18 @@
 				graph	export	"${SNAP_outRaw}/PFS_kdensities.png", replace
 				graph	close
 		
+		
+		*	Time trend of food insecurity (by PFS) over years
+		loc	var	PFS_FI_06
+		cap	drop	`var'
+		gen		`var'=0	if	!inrange(PFS_ppml,0,0.6)
+		replace	`var'=1	if	inrange(PFS_ppml,0,0.6)
+		
+		
+		preserve
+			collapse	(mean) PFS_FI_ppml PFS_FI_06	HFSM_FI	[aw=wgt_long_ind], by(year)
+			graph	twoway	(line PFS_FI_ppml year) (line PFS_FI_06 year)	(line HFSM_FI year)
+		restore
 		
 	
 		

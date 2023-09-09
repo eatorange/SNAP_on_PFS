@@ -170,7 +170,7 @@
 			*	Health, good or bad
 				*	Note: Not fully available over the entire study period.
 			loc	var	ind_health
-			psid use || `var' [86]ER30527 [88]ER30598 [89]ER30634 [90]ER30671 [91]ER30719 [92]ER30764 [93]ER30827 [94]ER33117 [95]ER33217 [96]ER33317 [97]ER33417 [99]ER33517 [01]ER33617 [03]ER33717 [05]ER33818 [07]ER33918 [09]ER34021 [11]ER34120 [13]ER34231 [15]ER34381 [17]ER34580 [19]ER34788  using  "${SNAP_dtRaw}/Unpacked"  , keepnotes design(any) clear
+			psid use || `var' [86]ER30527 [88]ER30598 [89]ER30634 [90]ER30671 [91]ER30719 [92]ER30764 [93]ER30827 [94]ER33117 [95]ER33217 [96]ER33317 [97]ER33417 [99]ER33517 [01]ER33617 [03]ER33717 [05]ER33818 [07]ER33918 [09]ER34021 [11]ER34120 [13]ER34231 [15]ER34381 [17]ER34580 [19]ER34788  using  "${SNAP_dtRaw}/Unpacked"  , keepnotes design(any) clear 
 			
 			keep	x11101ll	`var'*
 			save	"${SNAP_dtInt}/Ind_vars/`var'", replace
@@ -3914,7 +3914,7 @@
 			loc	var	HFSM_FI
 			cap	drop	`var'
 			gen		`var'=0	if	inlist(HFSM_cat,0,1)
-			replace	`var'=0	if	inlist(HFSM_cat,2,3)
+			replace	`var'=1	if	inlist(HFSM_cat,2,3)
 			
 			label	value	`var'	yes1no0
 			

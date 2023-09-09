@@ -105,8 +105,17 @@
 	
 	*	Keep only 1997-2013 sample
 	keep	if	inrange(year,1997,2013)
-		
-		
+	
+	*	Keep if non-missing PFS
+	keep	if	!mi(PFS_ppml)
+	
+	
+	sort	x11101ll	year
+	
+	bys	x11101ll:	egen num_nonmiss = count(PFS_ppml)
+	lab	var	num_nonmiss	"\# of non-missing PFS"
+	
+	
 		
 		*tsspell, f(L.year == .)
 		*br year _spell _seq _end
@@ -114,32 +123,60 @@
 		*gen f_year_mi=1	if	mi(f.year)
 		
 		*	Generate spell-related variables
-		cap drop	_seq	_spell	_end
-		tsspell, cond(year>=2 & PFS_FI_ppml==1)
+		*	(2023-09-08) Not sure I am gonna use it... If I do, it should be combined with "\# of non-missing values in PFS over the certain years, since we do not want to consider spell with gap period.
+		
+		cap drop	PFS_FI_seq	PFS_FI_spell	PFS_FI_end
+		tsspell, cond(PFS_FI_ppml==1) spell(PFS_FI_spell) seq(PFS_FI_seq) end(PFS_FI_end)
+		/*
 		foreach	var	in	_seq	_spell	_end	{
 		    
 			replace	`var'=.	if	mi(PFS_FI_ppml)
 			
 		}
+		*/
 		
-		br	x11101ll	year	PFS_ppml	PFS_FI_ppml	_seq	_spell	_end
+		br	x11101ll	year	PFS_ppml	PFS_FI_ppml	PFS_FI_seq	PFS_FI_spell		PFS_FI_end
 		
 	
 		
 		
-		*	Before genering FSDs, generate the number of non-missing PFS values over the 5-year (PFS_t, PFS_t-2, PFS_t-4)
+		*	Before genering FSDs, generate the number of non-missing PFS values over the year  (PFS_t, PFS_t-2, PFS_t-4)
 		*	It will vary from 0 to the full length of reference period (currently 3)
-		loc	var	num_nonmissing_PFS
-		cap	drop	`var'
-		gen	`var'=0
-		foreach time in 0 2 4	{
 			
-			replace	`var'	=	`var'+1	if	!mi(l`time'.PFS_ppml)
+			*	5-year
+			loc	var	num_nonmiss_PFS_5
+			cap	drop	`var'
+			gen	`var'=0
+			foreach time in 0 2 4	{
+				
+				replace	`var'	=	`var'+1	if	!mi(l`time'.PFS_ppml)
 
-		}
-		lab	var	`var'	"# of non-missing PFS over 5 years"
+			}
+			lab	var	`var'	"# of non-missing PFS in the last 5 years"
+			
+			*	7-year
+			loc	var	num_nonmiss_PFS_7
+			cap	drop	`var'
+			gen	`var'=0
+			foreach time in 0 2 4 6	{
+				
+				replace	`var'	=	`var'+1	if	!mi(l`time'.PFS_ppml)
+
+			}
+			lab	var	`var'	"# of non-missing PFS in the last 7 years"
+			
+			*	9-year
+			loc	var	num_nonmiss_PFS_9
+			cap	drop	`var'
+			gen	`var'=0
+			foreach time in 0 2 4 6	8 {
+				
+				replace	`var'	=	`var'+1	if	!mi(l`time'.PFS_ppml)
+
+			}
+			lab	var	`var'	"# of non-missing PFS in the last 5 years"
 		
-		
+	
 		*	Spell length variable - the consecutive years of FI experience
 		*	Start with 5-year period (SL_5)
 		*	To utilize biennial data since 1997, I use observations in every two years
@@ -151,11 +188,35 @@
 		
 		loc	var	SL_5
 		cap	drop	`var'
-		gen		`var'=.
-		replace	`var'=0	if	!mi(l4.PFS_FI_ppml)	&	l4.PFS_FI_ppml!=1	//	Food secure in t-4
-		replace	`var'=1	if	!mi(l4.PFS_FI_ppml)	&	l4.PFS_FI_ppml==1	//	Food secure in t-4
-		replace	`var'=2	if	l4.PFS_FI_ppml==1	&	l2.PFS_FI_ppml==1	//	Food insecure in t-4 AND t-2
-		replace	`var'=3	if	l4.PFS_FI_ppml==1	&	l2.PFS_FI_ppml==1	&	PFS_FI_ppml==1	//	Food insecure in (t-4, t-2 AND t)
+		gen		`var'=.	if	num_nonmiss_PFS_5!=3	//	missing if any PFS is missing in the last 5 years
+		replace	`var'=0	if	num_nonmiss_PFS_5==3	&	l4.PFS_FI_ppml==0	//	if food secure in l4, it takes value 0 regardless of status in t-2 and t
+		replace	`var'=1	if	num_nonmiss_PFS_5==3	&	l4.PFS_FI_ppml==1	&	l2.PFS_FI_ppml==0	//	food insecure in t-4, but secure in t-2 (doesn't matter t0 status)
+		replace	`var'=2	if	num_nonmiss_PFS_5==3	&	l4.PFS_FI_ppml==1	&	l2.PFS_FI_ppml==1	&	PFS_FI_ppml==0	//	food insecure in t-4 and t-2, but secure in t0
+		replace	`var'=3	if	num_nonmiss_PFS_5==3	&	l4.PFS_FI_ppml==1	&	l2.PFS_FI_ppml==1	&	PFS_FI_ppml==1	//	food insecure in t-4 and t-2, but secure in t0
+		lab	var	`var'	"Spell length (5-year)"
+		
+		loc	var	SL_7
+		cap	drop	`var'
+		gen		`var'=.	if	num_nonmiss_PFS_7!=4	//	missing if any PFS is missing in the last 7 years
+		replace	`var'=0	if	num_nonmiss_PFS_7==4	&	l6.PFS_FI_ppml==0	//	if food secure in t-6, it takes value 0 regardless of status in t-2 and t
+		replace	`var'=1	if	num_nonmiss_PFS_7==4	&	l6.PFS_FI_ppml==1	&	l4.PFS_FI_ppml==0	//	food insecure in t-6, but secure in t-4 (doesn't matter later status)
+		replace	`var'=2	if	num_nonmiss_PFS_7==4	&	l6.PFS_FI_ppml==1	&	l4.PFS_FI_ppml==1	&	l2.PFS_FI_ppml==0	//	food insecure in t-6 and t-4, but not in t-2 (t0 doesn't matter)
+		replace	`var'=3	if	num_nonmiss_PFS_7==4	&	l6.PFS_FI_ppml==1	&	l4.PFS_FI_ppml==1	&	l2.PFS_FI_ppml==1	&	PFS_FI_ppml==0	//	food insecure in t-6, t-4 and t-2 (but not t0)
+		replace	`var'=4	if	num_nonmiss_PFS_7==4	&	l6.PFS_FI_ppml==1	&	l4.PFS_FI_ppml==1	&	l2.PFS_FI_ppml==1	&	PFS_FI_ppml==1	//	food insecure in t-6, t-4, t-2 and t0
+		lab	var	`var'	"Spell length (7-year)"
+		
+		loc	var	SL_9
+		cap	drop	`var'
+		gen		`var'=.	if	num_nonmiss_PFS_9!=5	//	missing if any PFS is missing in the last 9 years
+		replace	`var'=0	if	num_nonmiss_PFS_9==5	&	l8.PFS_FI_ppml==0	//	if food secure in t-8, it takes value 0 regardless of future
+		replace	`var'=1	if	num_nonmiss_PFS_9==5	&	l8.PFS_FI_ppml==1	&	l6.PFS_FI_ppml==0	//	food insecure in t-8, but secure in t-6 (doesn't matter later status)
+		replace	`var'=2	if	num_nonmiss_PFS_9==5	&	l8.PFS_FI_ppml==1	&	l6.PFS_FI_ppml==1	&	l4.PFS_FI_ppml==0	//	food insecure in t-8 and t-6, but not in t-4
+		replace	`var'=3	if	num_nonmiss_PFS_9==5	&	l8.PFS_FI_ppml==1	&	l6.PFS_FI_ppml==1	&	l4.PFS_FI_ppml==1	&	l2.PFS_FI_ppml==0	//	food insecure in t-8, t-6, t-4 (not t-2)
+		replace	`var'=4	if	num_nonmiss_PFS_9==5	&	l8.PFS_FI_ppml==1	&	l6.PFS_FI_ppml==1	&	l4.PFS_FI_ppml==1	&	l2.PFS_FI_ppml==1	&	PFS_FI_ppml==0	//	food insecure in t-8, t-6, t-4 and t-2 (not t0)
+		replace	`var'=5	if	num_nonmiss_PFS_9==5	&	l8.PFS_FI_ppml==1	&	l6.PFS_FI_ppml==1	&	l4.PFS_FI_ppml==1	&	l2.PFS_FI_ppml==1	&	PFS_FI_ppml==1		//	food insecure in t-8, t-6, t-4 and t-2 (not t0)
+		lab	var	`var'	"Spell length (9-year)"
+		
+		
 		
 		/*	{	This code consideres FI in later periods. For example, if individual is FS in t-4 but FI in t-2 and t, SL5=2	
 			*	SL_5=1 if FI in any of the last 5 years (t, t-2 or t-4)
@@ -178,10 +239,6 @@
 	
 		
 	
-		lab	var	`var'	"# of consecutive FI incidences over the past 5 years (0-3)"
-	
-		br	x11101ll	year	PFS_ppml	PFS_FI_ppml	_seq	_spell	_end SL_5
-		
 		/*
 		
 		*	SL_5=2	if	HH experience FI in two consecutive rounds
@@ -212,21 +269,111 @@
 		
 		*	Permanent approach (TFI and CFI)
 		
-			*	To construct CFI (Chronic Food Insecurity), we need average PFS over time at household-level.
-			*	Since households have different number of non-missing PFS, we cannot simply use "mean" function.
+			*	To construct CFI (Chronic Food Insecurity), we need average PFS over time at unit-level
+			*	Since I use different reference period of non-missing PFS, we cannot simply use "mean" function.
 			*	We add-up all non-missing PFS over time at household-level, and divide it by cut-off PFS of those non-missing years.
 			
 			*	Aggregate PFS and PFS_FI over time (numerator)
-			cap	drop	PFS_ppml_total
-			cap	drop	PFS_FI_ppml_total
+			*	(2023-09-08) Use if all values aggregated are non-missing.
+				
+				cap	drop	PFS_ppml_total_5
+				cap	drop	PFS_FI_ppml_total_5
+				
+				gen	PFS_ppml_total_5	=.	if	num_nonmiss_PFS_5!=3
+				gen	PFS_FI_ppml_total_5	=.	if	num_nonmiss_PFS_5!=3
+				
+				replace	PFS_ppml_total		=	l4.PFS_ppml		+	l2.PFS_ppml		+	PFS_ppml	if	num_nonmiss_PFS_5==3
+				replace	PFS_FI_ppml_total	=	l4.PFS_FI_ppml	+	l2.PFS_FI_ppml	+	PFS_FI_ppml	if	num_nonmiss_PFS_5==3
 			
-			gen	PFS_ppml_total		=	0
-			gen	PFS_FI_ppml_total	=	0
+				
+			
+			
+			*	Generate (normalized) mean-PFS by dividing the numerator into the denominator (Check Calvo & Dercon (2007), page 19)
+			*	(2023-09-08) Since I used balanced observations only, I can simply divide it by 0.5 * years of aggregation
+				PFS_ppml_mean_normal_5	=	PFS_ppml_total_5	/	(0.5*3)
+			
+			
+				lab	var		PFS_ppml_mean_normal_5	"Normalized mean PFS (5 year)"
+			
+			
+			
+			
+			
+			*	Construct SFIG
+			cap	drop	FIG_indiv
+			cap	drop	SFIG_indiv
+			cap	drop	PFS_ppml_normal
+			
+			gen	double	FIG_indiv	=.
+			gen	double	SFIG_indiv	=.
+			gen	double PFS_ppml_normal	=.	
+			
+			
+				*	Normalized PFS (PFS/threshold PFS)	(PFSit/PFS_underbar_t)
+				replace	PFS_ppml_normal	=	PFS_ppml	/	0.5
+				
+				
+				
+				*	Inner term of the food security gap (FIG) and the squared food insecurity gap (SFIG)
+				replace	FIG_indiv	=	(1-PFS_ppml_normal)^1	if	!mi(PFS_ppml_normal)	&	PFS_ppml_normal<1	//	PFS_ppml<0.5
+				replace	FIG_indiv	=	0						if	!mi(PFS_ppml_normal)	&	PFS_ppml_normal>=1	//	PFS_ppml>=0.5
+				replace	SFIG_indiv	=	(1-PFS_ppml_normal)^2	if	!mi(PFS_ppml_normal)	&	PFS_ppml_normal<1	//	PFS_ppml<0.5
+				replace	SFIG_indiv	=	0						if	!mi(PFS_ppml_normal)	&	PFS_ppml_normal>=1	//	PFS_ppml>=0.5
+				
+				
+			*	Total, Transient and Chronic FI
+			
+				*	Total FI	(Average HCR/SFIG over time)
+				cap	drop	TFI_HCR_5
+				cap	drop	TFI_FIG_5
+				cap	drop	TFI_SFIG_5
+				
+				gen	TFI_HCR_5	=	(PFS_FI_ppml_total	/ 3	)								if	num_nonmiss_PFS_5==3
+				gen	TFI_FIG_5	=	(l4.FIG_indiv	+	l2.FIG_indiv	+	FIG_indiv) / 3	if	num_nonmiss_PFS_5==3
+				gen	TFI_SFIG_5	=	(l4.SFIG_indiv	+	l2.SFIG_indiv	+	SFIG_indiv) / 3	if	num_nonmiss_PFS_5==3
+				
+			
+				label	var	TFI_HCR_5	"TFI (HCR): 5-year"
+				label	var	TFI_FIG_5	"TFI (FIG): 5-year"
+				label	var	TFI_SFIG_5	"TFI (SFIG): 5-year"
+				
+				
+				*	Chronic FI (SFIG(with mean PFS))	
+				*	CFI can be easily created by loop
+				foreach	year	in	5	7	9	{
+				
+					cap	drop	CFI_HCR_`year'
+					cap	drop	CFI_FIG_`year'
+					cap	drop	CFI_SFIG_`year'
+					
+					gen		CFI_HCR_`year'=.
+					gen		CFI_FIG_`year'=.
+					gen		CFI_SFIG_`year'=.
+					
+					replace	CFI_HCR_`year'	=	(1-PFS_ppml_mean_normal_`year')^0	if	!mi(PFS_ppml_mean_normal_`year')	&	PFS_ppml_mean_normal_`year'<1	//	Avg PFS < Avg cut-off PFS
+					replace	CFI_FIG_`year'	=	(1-PFS_ppml_mean_normal_`year')^1	if	!mi(PFS_ppml_mean_normal_`year')	&	PFS_ppml_mean_normal_`year'<1	//	Avg PFS < Avg cut-off PFS
+					replace	CFI_SFIG_`year'	=	(1-PFS_ppml_mean_normal_`year')^2	if	!mi(PFS_ppml_mean_normal_`year')	&	PFS_ppml_mean_normal_`year'<1	//	Avg PFS < Avg cut-off PFS
+					
+					
+					replace	CFI_HCR_`year'	=	0								if	!mi(PFS_ppml_mean_normal_`year')	&	PFS_ppml_mean_normal_`year'>=1	//	Avg PFS >= Avg cut-off PFS (thus zero CFI)
+					replace	CFI_FIG_`year'	=	0								if	!mi(PFS_ppml_mean_normal_`year')	&	PFS_ppml_mean_normal_`year'>=1	//	Avg PFS >= Avg cut-off PFS (thus zero CFI)
+					replace	CFI_SFIG_`year'	=	0								if	!mi(PFS_ppml_mean_normal_`year')	&	PFS_ppml_mean_normal_`year'>=1	//	Avg PFS >= Avg cut-off PFS (thus zero CFI)
+					
+					lab	var		CFI_HCR_`year'	"CFI (HCR): `year'-year"
+					lab	var		CFI_FIG_`year'	"CFI (FIG): `year'-year"
+					lab	var		CFI_SFIG_`year'	"CFI (SFIG): `year'-year"
+				
+				}
+				
+				
+				
+			** OLD code
+			/*
 			
 			*	Add non-missing PFS of later periods
 			foreach time in 0 2 4	{
 				
-				replace	PFS_ppml_total		=	PFS_ppml_total		+	l`time'.PFS_ppml		if	!mi(l`time'.PFS_ppml)
+				replace	PFS_ppml_total		=	PFS_ppml_total		+	l`time'.PFS_ppml	if	!mi(l`time'.PFS_ppml)
 				replace	PFS_FI_ppml_total	=	PFS_FI_ppml_total	+	l`time'.PFS_FI_ppml	if	!mi(l`time'.PFS_FI_ppml)
 				
 			}
@@ -318,11 +465,14 @@
 				lab	var		CFI_HCR		"CFI (HCR)"
 				lab	var		CFI_FIG		"CFI (FIG)"
 				lab	var		CFI_SFIG	"CFI (SFIG)"
-		
+				
+				*/
+				
 		*	Save
 		compress
 		save    "${SNAP_dtInt}/SNAP_const",	replace
 		
+	
 	}
 	
 	

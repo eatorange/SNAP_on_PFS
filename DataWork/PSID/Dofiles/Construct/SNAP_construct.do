@@ -100,10 +100,12 @@
 		global	familyvars		famnum	ratio_child
 		global	econvars		ln_fam_income_pc_real	
 		global	foodvars		FS_rec_wth	//	(2023-08-29: Include it for 2 reasons (i) SNAP is an important determinant of food expenditure (ii) Including it will still not violate exclusion restriction, I think?)
-		global	macrovars		unemp_rate	CPI
+		*global	macrovars		unemp_rate	CPI	
 		global	regionvars		rp_state_enum2-rp_state_enum31 rp_state_enum33-rp_state_enum50 	//	Excluding NY (rp_state_enum32) and outside 48 states (1, 52, 53). The latter should be excluded when running regression
 		global	timevars		year_enum4-year_enum11	year_enum14-year_enum30	//	xclude year_enum3 (1979) as base category. year_enum12 (1990)  and year_enum13 (1991) are excluded due to lack of lagged data.
-					
+		global	indvars			/*ind_female*/ age_ind	age_ind_sq ind_NoHS ind_somecol ind_col /* ind_employed_dummy*/	//	NOT included in constructing PFS
+			
+		
 					
 		*label	var	FS_rec_wth	"SNAP received"
 		label	var	foodexp_tot_inclFS_pc			"Food exp (with FS benefit)"
@@ -259,6 +261,8 @@
 		local	run_PFS_reg=0
 		if	`run_PFS_reg'==1	{
 			
+			
+		
 			*	No SNAP status, state and year FE, all sapmle
 			local	depvar	PFS_ppml_noCOLI
 			svy, subpop(if !mi(`depvar')):	///
