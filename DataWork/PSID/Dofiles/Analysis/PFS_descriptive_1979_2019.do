@@ -563,7 +563,9 @@
 				*	Temporarily replace "inapp(education)" as missing
 				recode	ind_edu_cat	(0=.)	
 				
-			graph	box	PFS_ppml_noCOLI		[aw=wgt_long_fam_adj], over(ind_female) over(ind_nonWhite)	over(ind_edu_cat) nooutsides name(outcome_subgroup_ind, replace) title(Food Security by Subgroup) note("")
+			graph	box	PFS_ppml_noCOLI		[aw=wgt_long_fam_adj], over(ind_female, sort(1)) over(ind_nonWhite, sort(1))	over(ind_edu_cat, sort(1)) nooutsides name(outcome_subgroup_ind, replace) title(Food Security by Subgroup) note("")
+			
+			graph display outcome_subgroup_ind, ysize(4) xsize(9.0)
 			graph	export	"${SNAP_outRaw}/PFS_by_ind_subgroup.png", replace	
 			graph	close
 			
