@@ -4907,12 +4907,14 @@
 		
 		
 		di "${money_vars_real}"
+		
+		
 		*	Create lagged variables needed
 		*	(2021-11-27) I start with monetary variables (current, real)
 			
 			*	Set it as survey panel data
 					   
-			svyset	sampcls [pweight=wgt_long_fam_adj], strata(sampstr)	singleunit(scaled)
+			svyset	sampcls [pweight=wgt_long_ind], strata(sampstr)	singleunit(scaled)
 				
 				*	Generate time variable which increases by 1 over wave ("year" ") // can be used to construct panel data (we can't directly use "year" because PSID was collected bieenially since 1997, thus data will treat it as gap period)
 				cap	drop	time
@@ -4936,7 +4938,7 @@
 			
 			*	Create lagged dummes for SNAP status
 			sort	x11101ll	year
-			foreach	lag	in	2	4	{
+			foreach	lag	in	2	4	6	8	{
 				
 				cap	drop	l`lag'_FS_rec_wth
 				gen		l`lag'_FS_rec_wth	=	l`lag'.FS_rec_wth
@@ -4953,9 +4955,10 @@
 			*	NOTE: This is an observational-level variable, NOT individual-level variable
 				*	Suppose an individual's SNAP status over 9 years (t-4, t-2, t, t+2, t+4) is (0,0,1,0,1)
 				*	Then this variable's value will be (1,1,2) in (t-4, t-2 and t)
-			*	I construct "individual-level" SNAP status over the 5-year after the "first" SNAP participation later.
+			*	I construct "individual-level" SNAP status over years after the "first" SNAP participation later.
 				
-				loc	var	SNAP_cum_status
+				*	5-year
+				loc	var	SNAP_cum_status_5
 				cap	drop	`var'	//	SNAP_for_cum
 				egen	`var'	=	group(FS_rec_wth	l2_FS_rec_wth	l4_FS_rec_wth)
 				lab	var	`var'	"Cumulative SNAP status last 5-year"
@@ -4973,10 +4976,11 @@
 				assert	`var'==8	if	l4_FS_rec_wth==1	&	l2_FS_rec_wth==1	&	FS_rec_wth==1
 								
 				lab	define	`var'	1	"Never"		2	"t-4 only"			3	"t-2 only"			4	"t-4 and t-2 only"	///
-											5	"t only"	6	"t-4 and t only"	7	"t-2 and t only"	8	"t-4 t-2 and t", replace
+									5	"t only"	6	"t-4 and t only"	7	"t-2 and t only"	8	"t-4 t-2 and t", replace
 				lab	val	`var'	`var'
 				lab	var	`var'	"SNAP status last 5 years"
 					
+				cap	drop	SNAP_???
 				tab	`var',	gen(`var')
 				rename	`var'?	(SNAP_000	SNAP_100	SNAP_010	SNAP_110	SNAP_001	SNAP_101	SNAP_011	SNAP_111)
 				
@@ -4989,9 +4993,9 @@
 				lab	var	SNAP_011	"SNAP status 5 years: t-2 and t only"
 				lab	var	SNAP_111	"SNAP status 5 years: t-4 t-2 and t"
 				
-			*	Aggregate cumulative dummies by the number of SNAP redemptions over 5-year
+			*	Total # of SNAP redemptions over 5-year
 			*	NOTE: This is an observational-level.
-			loc	var		SNAP_cum_fre
+			loc	var		SNAP_cum_fre_5
 			cap	drop	`var'
 			gen		`var'=.
 			replace	`var'=0		if	inlist(1,SNAP_000)
@@ -5000,8 +5004,189 @@
 			replace	`var'=3		if	inlist(1,SNAP_111)
 			
 			lab	var	`var'		"\# SNAP participation last 5 years"
+			
+			*	Total # of CONTINUOUS SNAP redemptions over 5-year
+			*	This variable captures extensive/intensive margin, by treating non-categories as missing
+				*	For instance, to capture extensive margin, "redemption in t-2 only" should NOT be cateogorzied as zero, but as missing.
+				*	Similarly, to capture intensive margin, "redemption in t-4 and t" should NOT be cateogorzied as zero, but as missing.
+			*	NOTE: This is an observational-level.
+			loc	var	SNAP_cum_fre_cont_5
+			cap	drop	`var'
+			gen		`var'=.
+			replace	`var'=0	if	SNAP_000==1
+			replace	`var'=1	if	SNAP_100==1
+			replace	`var'=2	if	SNAP_110==1
+			replace	`var'=3	if	SNAP_111==1
+			lab	var	`var'	"\# continuous SNAP participation: 5 years"
 		
 			
+			
+			*	7-year period
+			loc	var	SNAP_cum_status_7
+			cap	drop	`var'	
+			egen	`var'	=	group(FS_rec_wth	l2_FS_rec_wth	l4_FS_rec_wth	l6_FS_rec_wth)
+			
+			
+			*	Double-check how each value is assigned.
+			loc	var	SNAP_cum_status_7
+			local	count=1
+			forval	l0val=0/1	{
+				
+				forval	l2val=0/1	{
+					
+					forval	l4val=0/1	{
+						
+						forval	l6val=0/1	{
+										
+							assert	`var'==`count'	if	l6_FS_rec_wth==`l6val'	&	l4_FS_rec_wth==`l4val'	&	l2_FS_rec_wth==`l2val'	&	FS_rec_wth==`l0val'
+							
+							cap	drop	SNAP_`l6val'`l4val'`l2val'`l0val'
+							gen			SNAP_`l6val'`l4val'`l2val'`l0val'=0	if	!mi(SNAP_cum_status_7)
+							replace		SNAP_`l6val'`l4val'`l2val'`l0val'=1	if	!mi(SNAP_cum_status_7)	&	l6_FS_rec_wth==`l6val'	&	l4_FS_rec_wth==`l4val'	&	l2_FS_rec_wth==`l2val'	&	FS_rec_wth==`l0val'
+							loc	count=`count'+1
+							
+						}
+						
+					}
+					
+				}
+			}
+	
+			
+			lab	define	`var'	1	"Never"		2	"t-6 only"			3	"t-4 only"			4	"t-6 and t-4 only"	///
+								5	"t-2 only"	6	"t-6 and t-2 only"	7	"t-4 and t-2 only"	8	"t-6 t-4 and t-2"	///
+								9	"t"		10	"t-6  t"		11	"t-4 t"			12	"t-6 t-4 t"	///
+								13	"t-2 t"	14	"t-6  t-2 t"	15	"t-4  t-2 t"	16	"t-6 t-4  t-2 t"	, replace
+			lab	val	`var'	`var'
+			lab	var	`var'	"SNAP status last 7 years"
+			*egen	SNAP_for_cum	=	group(FS_rec_wth	f2_FS_rec_wth	f4_FS_rec_wth)
+			*lab	var	SNAP_for_cum	"Cumulative SNAP status next 5-year"	
+		
+			*	Total # of SNAP redemptions over 7-year
+			*	NOTE: This is an observational-level.
+			loc	var		SNAP_cum_fre_7
+			cap	drop	`var'
+			gen		`var'=.
+			replace	`var'=0		if	inlist(SNAP_cum_status_7,1) //inlist(1,SNAP_0000)
+			replace	`var'=1		if	inlist(SNAP_cum_status_7,2,3,5,9)	// inlist(1,SNAP_1000,SNAP_0100,SNAP_0010,SNAP_0001)
+			replace	`var'=2		if	inlist(SNAP_cum_status_7,4,6,7,10,11,13)	// inlist(1,SNAP_1100,SNAP_1010,SNAP_1001,SNAP_0110,SNAP_0101,SNAP_0011)
+			replace	`var'=3		if	inlist(SNAP_cum_status_7,8,12,14,15)	//	inlist(1,SNAP_1110,SNAP_1101,SNAP_1011,SNAP_0111)
+			replace	`var'=4		if	inlist(SNAP_cum_status_7,16)	//	inlist(1,SNAP_1111)
+			
+			lab	var	`var'		"\# SNAP participation last 7 years"
+			
+			*	Total # of CONTINUOUS SNAP redemptions over 7-year
+			*	This variable captures extensive/intensive margin, by treating non-categories as missing
+				*	For instance, to capture extensive margin, "redemption in t-2 only" should NOT be cateogorzied as zero, but as missing.
+				*	Similarly, to capture intensive margin, "redemption in t-4 and t" should NOT be cateogorzied as zero, but as missing.
+			*	NOTE: This is an observational-level.
+			loc	var	SNAP_cum_fre_cont_7
+			cap	drop	`var'
+			gen		`var'=.
+			replace	`var'=0	if	SNAP_cum_status_7==1 	//	SNAP_1000==1
+			replace	`var'=1	if	SNAP_cum_status_7==2 	//	SNAP_1000==1
+			replace	`var'=2	if	SNAP_cum_status_7==4	//	SNAP_1100==1
+			replace	`var'=3	if	SNAP_cum_status_7==8	//	SNAP_1110==1
+			replace	`var'=4	if	SNAP_cum_status_7==16	//	SNAP_1111==1
+			lab	var	`var'	"\# continuous SNAP participation: 7 years"
+			
+			
+			
+			
+			*	9-year period
+			loc	var	SNAP_cum_status_9
+			cap	drop	`var'	
+			egen	`var'	=	group(FS_rec_wth	l2_FS_rec_wth	l4_FS_rec_wth	l6_FS_rec_wth	l8_FS_rec_wth)
+			
+			
+			*	Double-check how each value is assigned.
+			loc	var	SNAP_cum_status_9
+			local	count=1
+			forval	l0val=0/1	{
+				
+				forval	l2val=0/1	{
+					
+					forval	l4val=0/1	{
+						
+						forval	l6val=0/1	{
+										
+							forval	l8val=0/1	{
+							
+							assert	`var'==`count'	if	l8_FS_rec_wth==`l8val'	&	l6_FS_rec_wth==`l6val'	&	l4_FS_rec_wth==`l4val'	&	l2_FS_rec_wth==`l2val'	&	FS_rec_wth==`l0val'
+							
+							cap	drop	SNAP_`l8val'`l6val'`l4val'`l2val'`l0val'
+							gen			SNAP_`l8val'`l6val'`l4val'`l2val'`l0val'=0	if	!mi(SNAP_cum_status_9)
+							replace		SNAP_`l8val'`l6val'`l4val'`l2val'`l0val'=1	if	!mi(SNAP_cum_status_9)	&	l8_FS_rec_wth==`l8val'	&	l6_FS_rec_wth==`l6val'	&	l4_FS_rec_wth==`l4val'	&	l2_FS_rec_wth==`l2val'	&	FS_rec_wth==`l0val'
+							loc	count=`count'+1
+							
+							}
+							
+						}
+						
+					}
+					
+				}
+			}
+	
+			
+			lab	define	`var'	1	"Never"		2	"t-8 only"		3	"t-6 only"		4	"t-8 t-6"	///
+								5	"t-4"		6	"t-8  t-4 "		7	"t-6 t-4"		8	"t-8 t-6 t-4"	///
+								9	"t-2"		10	"t-8  t-2"		11	"t-6 t-2"		12	"t-8 t-6 t-2"	///
+								13	"t-4 t-2"	14	"t-8  t-4 t-2"	15	"t-6  t-4 t-2"	16	"t-8 t-6  t-4 t-2"	///
+								17	"t"		18	"t-8 t"		19	"t-6 t"		20	"t-8 t-6 t"	///
+								21	"t-4 t"		22	"t-8  t-4 t"		23	"t-6 t-4 t"			24	"t-8 t-6 t-4 t"	///
+								25	"t-2 t"		26	"t-8  t-2 t"		27	"t-6 t-2 t"			28	"t-8 t-6 t-2 t"	///
+								29	"t-4 t-2 t"	30	"t-8  t-4 t-2 t"	31	"t-6  t-4 t-2 t"	32	"t-8 t-6  t-4 t-2 t", replace
+								
+			lab	val	`var'	`var'
+			lab	var	`var'	"SNAP status last 9 years"
+	
+			*	Total # of SNAP redemptions over 9-year
+			*	NOTE: This is an observational-level.
+			loc	var		SNAP_cum_fre_9
+			cap	drop	`var'
+			egen	`var'	=	rowtotal(FS_rec_wth	l2_FS_rec_wth	l4_FS_rec_wth	l6_FS_rec_wth	l8_FS_rec_wth)	
+			replace	`var'	=.	if	mi(SNAP_cum_status_9)	//	Tag as missing if SNAP status is missing in any time period over 9-year.
+			
+			lab	var	`var'		"\# SNAP participation last 9 years"
+			
+			*	Total # of CONTINUOUS SNAP redemptions over 7-year
+			*	This variable captures extensive/intensive margin, by treating non-categories as missing
+				*	For instance, to capture extensive margin, "redemption in t-2 only" should NOT be cateogorzied as zero, but as missing.
+				*	Similarly, to capture intensive margin, "redemption in t-4 and t" should NOT be cateogorzied as zero, but as missing.
+			*	NOTE: This is an observational-level.
+			loc	var	SNAP_cum_fre_cont_9
+			cap	drop	`var'
+			gen		`var'=.
+			replace	`var'=0	if	SNAP_cum_status_9==1
+			replace	`var'=1	if	SNAP_cum_status_9==2
+			replace	`var'=2	if	SNAP_cum_status_9==4
+			replace	`var'=3	if	SNAP_cum_status_9==8
+			replace	`var'=4	if	SNAP_cum_status_9==16
+			replace	`var'=5	if	SNAP_cum_status_9==32
+			lab	var	`var'	"\# continuous SNAP participation: 9 years"	
+			
+			
+			*	Generate SNAP status from (i) 1990 to 1996 (ii) 1977 to 1996
+			*	Inspecting aggregated outcome over longer-time horizon is based on the hypothesis that SNAP effects last over longer periods.
+			*	This hypothesis requires me to restrict the analysis sample to those who had no prior SNAP experience over the same period.
+			*	I will tag individuals (i) who had no SNAP exposure from 1990 to 1996 (ii) who had no SNAP exposure from 1977 to 1996
+			*	We might need to restrict FSD sample whose value is 0 in either of the two.
+			loc	var	SNAP_1990_1996
+			cap	drop	`var'
+			cap	drop	`var'_tmp
+			bys	x11101ll:	egen	`var'_tmp	=	total(FS_rec_wth)	if	inrange(year,1990,1996)
+			bys	x11101ll:	egen	`var'		=	max(`var'_tmp)
+			drop	`var'_tmp
+			lab	var	`var'	"\# of SNAP participation (1990-1996)"
+			
+			loc	var	SNAP_1977_1996
+			cap	drop	`var'
+			cap	drop	`var'_tmp
+			bys	x11101ll:	egen	`var'_tmp	=	total(FS_rec_wth)	if	inrange(year,1977,1996)
+			bys	x11101ll:	egen	`var'		=	max(`var'_tmp)
+			drop	`var'_tmp
+			lab	var	`var'	"\# of SNAP participation (1977-1996)"
 		
 		*	Drop 1975 and 1990
 		*	I only need those years for 1967 and 1991, which I just imported above (so no longer needed)
@@ -5031,10 +5216,11 @@
 						
 			* Construct the spells of SNAP redemption using "tsspell" command
 			*	NOTE: "replace" option does not work when the variable doesn't exist, so we manually drop them
+			*	(2023-09-10) Start with year==1997, a causal inference period.
 			cap	drop	SNAP_seq
 			cap	drop	SNAP_spell
 			cap	drop	SNAP_end	
-			tsspell, cond(year>=1979 & FS_rec_wth==1) seq(SNAP_seq) spell(SNAP_spell) end(SNAP_end) 
+			tsspell, cond(year>=1997 & FS_rec_wth==1) seq(SNAP_seq) spell(SNAP_spell) end(SNAP_end) 
 			
 			*	Construct standardized year T when T=-4 as "first SNAP participation" (i.e. T=0 means "first SNAP in 4 years ago")
 			*	The reason for not standardizing T when T=0 as "the year first received SNAP" is because, we constructed FSD variables based on PFS status in t-4, t-2 and t
@@ -5054,12 +5240,12 @@
 			}
 			*/
 			
-			replace	`var'=-4	if	l0.SNAP_seq==1	&	l0.SNAP_spell==1	//	T=-4: year first received SNAP
-			replace	`var'=-2	if	l2.SNAP_seq==1	&	l2.SNAP_spell==1	//	T=-2: 2 years after first received SNAP
-			replace	`var'=0		if	l4.SNAP_seq==1	&	l4.SNAP_spell==1	//	T=0:  4 years after first received SNAP
+			replace	`var'=-4	if	l0.SNAP_seq==1	&	l0.SNAP_spell==1	//	T=-4: year first received SNAP since 1997
+			replace	`var'=-2	if	l2.SNAP_seq==1	&	l2.SNAP_spell==1	//	T=-2: 2 years after first received SNAP since 1997
+			replace	`var'=0		if	l4.SNAP_seq==1	&	l4.SNAP_spell==1	//	T=0:  4 years after first received SNAP since 1997
 			
-			replace	`var'=-6	if	f2.SNAP_seq==1	&	f2.SNAP_spell==1	//	T=-6: 2 years prior to first received SNAP
-			replace	`var'=-8	if	f4.SNAP_seq==1	&	f4.SNAP_spell==1	//	T=-8: 4 years prior to first received SNAP, standardize at T=-8
+			replace	`var'=-6	if	f2.SNAP_seq==1	&	f2.SNAP_spell==1	//	T=-6: 2 years prior to first received SNAP since 1997
+			replace	`var'=-8	if	f4.SNAP_seq==1	&	f4.SNAP_spell==1	//	T=-8: 4 years prior to first received SNAP since 1997, standardize at T=-8
 			
 			
 			lab	var	`var'	"Standardized year (=-4 when first received SNAP)"
@@ -5102,9 +5288,9 @@
 		
 			*	Cateogrization of individuals based on the # of cumulative SNAP redemption over 5 years "after" the first redemption (including the first one)
 				*	This variable is needed to categorize "a group of" observations into subgroup.
-					*	(1) Those who redeemped SNAP only once over the 5-year period
-					*	(2) Those who only redeemd SNAP twice over the 5-year period
-					*	(3) Those who got SNAP all 3 periods over the 5-year period (t-4, t-2, t)
+					*	(1) Those who redeemed SNAP only once over the 5-year period
+					*	(2) Those who redeemed SNAP twice over the 5-year period
+					*	(3) Those who redeemed SNAP all 3 periods over the 5-year period (t-4, t-2, t)
 				*	It is to see how PFS change differently over time by different intensity of the fist SNAP exposure.
 				*	NOTE: I could construct it at individual-level since I limit to 5 years since the "first" SNAP exposure. I cannot create individual-level if I use "any" SNAP exposure
 				loc	var	SNAP_cum_fre_1st
@@ -5150,7 +5336,7 @@
 		*	Check discontinuity of final variables by checking weighted average
 		*use	"${SNAP_dtInt}/SNAP_long_const", clear
 		preserve
-			collapse (mean) FS_rec_wth foodexp_tot_exclFS foodexp_tot_inclFS foodexp_tot_exclFS_pc foodexp_tot_inclFS_pc foodexp_W_TFP_pc overTFP_exclFS overTFP_inclFS [aw=wgt_long_fam_adj], by(year)
+			collapse (mean) FS_rec_wth foodexp_tot_exclFS foodexp_tot_inclFS foodexp_tot_exclFS_pc foodexp_tot_inclFS_pc foodexp_W_TFP_pc overTFP_exclFS overTFP_inclFS [aw=wgt_long_ind], by(year)
 			tempfile	foodvar_check
 			save		`foodvar_check'
 		restore
@@ -5181,6 +5367,37 @@
 		
 			
 			*/
+	
+	*	Change in food expenditure
+
+			*	W/O SNAP benefit
+			loc	var	foodexp_exclFS_diff
+			cap	drop	`var'
+			gen	`var'	=	foodexp_tot_exclFS_pc_real	-	l2.foodexp_tot_exclFS_pc_real
+			lab	var	`var'	"Diff in food exp (w/o SNAP)"
+			
+			*	with SNAP benefit
+			loc	var	foodexp_inclFS_diff
+			cap	drop	`var'
+			gen	`var'	=	foodexp_tot_inclFS_pc_real	-	l2.foodexp_tot_inclFS_pc_real
+			lab	var	`var'	"Diff in food exp (with SNAP)"
+				
+	*	Food expenditure normalized at (COLI-adjusted) TFP cost
+
+			*	With SNAP benefit
+			loc	var	foodexp_inclFS_TFP_normal
+			cap	drop	`var'
+			
+			gen	`var'	=	(foodexp_tot_inclFS_pc_real	-	foodexp_W_TFP_pc_COLI_real)	/	foodexp_W_TFP_pc_real
+			lab	var	`var'	"Food exp normalized at TFP - with SNAP"
+			
+			*	Without SNAP benefit
+			loc	var	foodexp_exclFS_TFP_normal
+			cap	drop	`var'
+			
+			gen	`var'	=	(foodexp_tot_exclFS_pc_real	-	foodexp_W_TFP_pc_COLI_real)	/	foodexp_W_TFP_pc_real
+			lab	var	`var'	"Food exp normalized at TFP  - without SNAP"
+				
 		
 		
 		*	Save cleaned
