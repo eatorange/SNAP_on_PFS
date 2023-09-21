@@ -151,7 +151,7 @@
 			*	Please refer to "SNAP_PFS_const_test.do" file for more detail.
 			
 			*	All sample
-			ppmlhdfe	${depvar}	${statevars} ${demovars}	${eduvars} 	${empvars}	${healthvars}	${familyvars}	${econvars}	${foodvars}	[pweight=wgt_long_fam_adj], ///
+			ppmlhdfe	${depvar}	${statevars} ${demovars}	${eduvars} 	${empvars}	${healthvars}	${familyvars}	${econvars}	${foodvars}	[pweight=wgt_long_ind], ///
 				absorb(x11101ll ib31.rp_state ib1979.year) vce(cluster x11101ll) d	
 			
 			ereturn list
@@ -171,7 +171,7 @@
 		local	depvar	e1_foodexp_sq_ppml
 		
 			*	Poisson quasi-MLE
-			ppmlhdfe	`depvar'	${statevars} ${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	${foodvars}	[pweight=wgt_long_fam_adj], ///
+			ppmlhdfe	`depvar'	${statevars} ${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	${foodvars}	[pweight=wgt_long_ind], ///
 				absorb(x11101ll ib31.rp_state ib1979.year) vce(cluster x11101ll) d	
 			est store ppml_step2
 			gen	ppml_step2_sample=1	if	e(sample)==1 
@@ -234,25 +234,9 @@
 			}
 
 		
-		*	Construct FI indicator based on PFS
-		*	For now we use threshold probability as 0.55, referred from Lee et al. (2021) where threshold varied from 0.55 to 0.6
-		
-		loc	var	PFS_FI_ppml	
-		cap	drop	`var'
-		gen		`var'=.
-		replace	`var'=0	if	!mi(PFS_ppml)	&	!inrange(PFS_ppml,0,0.5)
-		replace	`var'=1	if	!mi(PFS_ppml)	&	inrange(PFS_ppml,0,0.5)
-		lab	var	`var'	"HH is food insecure (PFS w/o COLI)"
-		
-		loc	var	PFS_FI_ppml_noCOLI
-		cap	drop	`var'
-		gen		`var'=.
-		replace	`var'=0	if	!mi(PFS_ppml_noCOLI)	&	!inrange(PFS_ppml_noCOLI,0,0.5)
-		replace	`var'=1	if	!mi(PFS_ppml_noCOLI)	&	inrange(PFS_ppml_noCOLI,0,0.5)
-		lab	var	`var'	"HH is food insecure (PFS)"
-		
+		*	Save
+		save	"${SNAP_dtInt}/SNAP_long_PFS", replace
 
-		save    "${SNAP_dtInt}/SNAP_long_PFS",	replace
 		
 		*	Regress PFS on characteristics
 		*	(2023-1-18) This one needs to be re-visited, considering what regression method we will use (svy prefix, weight, fixed effects, etc.)
@@ -309,5 +293,7 @@
 					title(PFS and household covariates) replace
 		
 		}	//	run_PFS_reg
+		
+		
 		
 	}
