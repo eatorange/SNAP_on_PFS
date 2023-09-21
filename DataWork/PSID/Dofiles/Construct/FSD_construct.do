@@ -103,20 +103,66 @@
 				
 	use	"${SNAP_dtInt}/SNAP_long_PFS", clear
 	
-	*	Keep only 1997-2013 sample
-	keep	if	inrange(year,1997,2013)
-	
-	*	Keep if non-missing PFS
-	keep	if	!mi(PFS_ppml)
-	
-	
-	sort	x11101ll	year
-	
-	bys	x11101ll:	egen num_nonmiss = count(PFS_ppml)
-	lab	var	num_nonmiss	"\# of non-missing PFS"
-	
-	
+		*	Keep only 1997-2013 sample
+		keep	if	inrange(year,1997,2013)
 		
+		*	Keep if non-missing PFS
+		keep	if	!mi(PFS_ppml)
+	
+		*	# of non-missing PFS over teh entire period per individual
+		cap	drop	num_nonmiss
+		sort	x11101ll	year
+		bys	x11101ll:	egen num_nonmiss = count(PFS_ppml)
+		lab	var	num_nonmiss	"\# of non-missing PFS"
+		
+		
+		
+		*	Construct FI indicator based on PFS
+		*	In LBH, we used flexible cut-off; set cut-off such that FI(PFS) prevalence rate is equal to the offical FI reported in the annual USDA report.
+		*	In this paper, I match fixed cut-off that best matches FI (FSSS) rate in my study sample during 1999, 2001 and 2003
+		*	I use fixed cut-off=0.4 which best matches the FI (FSSS) rate in our sample during 1999, 2001 and 2003, based on the exercise below.
+
+			*	FI(PFS) with different cutoffs
+				loc	var	PFS_FI_05
+				cap	drop	`var'
+				gen		`var'=0	if	!inrange(PFS_ppml,0,0.5)
+				replace	`var'=1	if	inrange(PFS_ppml,0,0.5)
+				
+				loc	var	PFS_FI_03
+				cap	drop	`var'
+				gen		`var'=0	if	!inrange(PFS_ppml,0,0.3)
+				replace	`var'=1	if	inrange(PFS_ppml,0,0.3)
+				
+				loc	var	PFS_FI_045
+				cap	drop	`var'
+				gen		`var'=0	if	!inrange(PFS_ppml,0,0.45)
+				replace	`var'=1	if	inrange(PFS_ppml,0,0.45)
+				
+			
+			*	Time trend of food insecurity (by PFS) over years, over different cutoffs	
+			*	As we can see, 0.4 is the cut-off that most similarly matches FI prevalence rate (FSSS)
+			preserve		
+				collapse	(mean) PFS_ppml	PFS_FI_05	PFS_FI_03	PFS_FI_045	HFSM_FI	[aw=wgt_long_ind], by(year)	//	weighted average by year
+				
+				
+				*	FI prevalence rate by different cut-offs.
+				twoway	(line PFS_FI_05	year,	lc(green) lp(solid) lwidth(medium) graphregion(fcolor(white)) legend(label(1 "(PFS < 0.5)")))	///
+						(line PFS_FI_045	year, 	lc(blue) lp(dash) lwidth(medium) graphregion(fcolor(white)) legend(label(2 "(PFS < 0.4)"))) 	///
+						(line PFS_FI_03	year, 	lc(red) lp(shortdash_dot) lwidth(medium) graphregion(fcolor(white)) legend(label(3 "(PFS < 0.3)")))	///
+						(line HFSM_FI	year, 		lc(purple) lp(dot) lwidth(medium) graphregion(fcolor(white)) legend(label(4 "FI (FSSS)")row(1) size(small) keygap(0.1) symxsize(5))),	///
+						title("Food Insecurity Rates by Cut-offs") ytitle("Fraction") xtitle("Year") name(FI_prevalence_cutoffs, replace)
+				graph	export	"${SNAP_outRaw}/PFS_FI_rate_cutoffs.png", as(png) replace
+				graph	close	
+			restore
+			
+			drop	PFS_FI_05	PFS_FI_03
+			rename	PFS_FI_045	PFS_FI_ppml
+			lab	var	PFS_FI_ppml	"Food insecure (PFS < 0.4)"
+
+			
+			*	Set global macro for cutoff,
+			global	PFS_cutoff=0.4
+			
 		*tsspell, f(L.year == .)
 		*br year _spell _seq _end
 		
@@ -276,66 +322,108 @@
 			*	Aggregate PFS and PFS_FI over time (numerator)
 			*	(2023-09-08) Use if all values aggregated are non-missing.
 				
-				cap	drop	PFS_ppml_total_5
-				cap	drop	PFS_FI_ppml_total_5
+				foreach	var	in	PFS_ppml	PFS_FI_ppml	{
+					
+					cap	drop	`var'_total_5
+					cap	drop	`var'_total_7
+					cap	drop	`var'_total_9
+					
+					gen	`var'_total_5	=.	if	num_nonmiss_PFS_5!=3
+					gen	`var'_total_7	=.	if	num_nonmiss_PFS_7!=4
+					gen	`var'_total_9	=.	if	num_nonmiss_PFS_9!=5
+					
+					replace	`var'_total_5		=	l4.`var'	+	l2.`var'	+	`var'	if	num_nonmiss_PFS_5==3
+					replace	`var'_total_7		=	l6.`var'	+	l4.`var'	+	l2.`var'	+	`var'	if	num_nonmiss_PFS_7==4
+					replace	`var'_total_9		=	l8.`var'	+	l6.`var'	+	l4.`var'	+	l2.`var'	+	`var'	if	num_nonmiss_PFS_9==5
+					
+					lab	var	`var'_total_5	"`var' (5-year aggregate)"
+					lab	var	`var'_total_7	"`var' (7-year aggregate)"
+					lab	var	`var'_total_9	"`var' (9-year aggregate)"
+				}
 				
-				gen	PFS_ppml_total_5	=.	if	num_nonmiss_PFS_5!=3
-				gen	PFS_FI_ppml_total_5	=.	if	num_nonmiss_PFS_5!=3
-				
-				replace	PFS_ppml_total		=	l4.PFS_ppml		+	l2.PFS_ppml		+	PFS_ppml	if	num_nonmiss_PFS_5==3
-				replace	PFS_FI_ppml_total	=	l4.PFS_FI_ppml	+	l2.PFS_FI_ppml	+	PFS_FI_ppml	if	num_nonmiss_PFS_5==3
 			
-				
 			
 			
 			*	Generate (normalized) mean-PFS by dividing the numerator into the denominator (Check Calvo & Dercon (2007), page 19)
-			*	(2023-09-08) Since I used balanced observations only, I can simply divide it by 0.5 * years of aggregation
-				PFS_ppml_mean_normal_5	=	PFS_ppml_total_5	/	(0.5*3)
-			
+			*	(2023-09-08) Since I used balanced observations only, I can simply divide it by ${PFS_cutoff} * years of aggregation
+				cap	drop	PFS_ppml_mean_normal_5
+				cap	drop	PFS_ppml_mean_normal_7
+				cap	drop	PFS_ppml_mean_normal_9
+				
+				gen		PFS_ppml_mean_normal_5	=	PFS_ppml_total_5	/	(${PFS_cutoff}*3)
+				gen		PFS_ppml_mean_normal_7	=	PFS_ppml_total_7	/	(${PFS_cutoff}*4)
+				gen		PFS_ppml_mean_normal_9	=	PFS_ppml_total_9	/	(${PFS_cutoff}*5)
 			
 				lab	var		PFS_ppml_mean_normal_5	"Normalized mean PFS (5 year)"
+				lab	var		PFS_ppml_mean_normal_7	"Normalized mean PFS (7 year)"
+				lab	var		PFS_ppml_mean_normal_9	"Normalized mean PFS (9 year)"
 			
 			
 			
 			
 			
 			*	Construct SFIG
+			*	The following three variables have no variation across different reference period; only one for obs.
+			cap	drop	PFS_ppml_normal
 			cap	drop	FIG_indiv
 			cap	drop	SFIG_indiv
-			cap	drop	PFS_ppml_normal
 			
+			
+			gen	double	PFS_ppml_normal	=.	
 			gen	double	FIG_indiv	=.
 			gen	double	SFIG_indiv	=.
-			gen	double PFS_ppml_normal	=.	
+			
 			
 			
 				*	Normalized PFS (PFS/threshold PFS)	(PFSit/PFS_underbar_t)
-				replace	PFS_ppml_normal	=	PFS_ppml	/	0.5
-				
-				
-				
+				replace	PFS_ppml_normal	=	PFS_ppml	/	${PFS_cutoff}
+								
 				*	Inner term of the food security gap (FIG) and the squared food insecurity gap (SFIG)
-				replace	FIG_indiv	=	(1-PFS_ppml_normal)^1	if	!mi(PFS_ppml_normal)	&	PFS_ppml_normal<1	//	PFS_ppml<0.5
-				replace	FIG_indiv	=	0						if	!mi(PFS_ppml_normal)	&	PFS_ppml_normal>=1	//	PFS_ppml>=0.5
-				replace	SFIG_indiv	=	(1-PFS_ppml_normal)^2	if	!mi(PFS_ppml_normal)	&	PFS_ppml_normal<1	//	PFS_ppml<0.5
-				replace	SFIG_indiv	=	0						if	!mi(PFS_ppml_normal)	&	PFS_ppml_normal>=1	//	PFS_ppml>=0.5
+				replace	FIG_indiv	=	(1-PFS_ppml_normal)^1	if	!mi(PFS_ppml_normal)	&	PFS_ppml_normal<1	//	PFS_ppml<${PFS_cutoff}
+				replace	FIG_indiv	=	0						if	!mi(PFS_ppml_normal)	&	PFS_ppml_normal>=1	//	PFS_ppml>=${PFS_cutoff}
+				replace	SFIG_indiv	=	(1-PFS_ppml_normal)^2	if	!mi(PFS_ppml_normal)	&	PFS_ppml_normal<1	//	PFS_ppml<${PFS_cutoff}
+				replace	SFIG_indiv	=	0						if	!mi(PFS_ppml_normal)	&	PFS_ppml_normal>=1	//	PFS_ppml>=${PFS_cutoff}
 				
 				
 			*	Total, Transient and Chronic FI
 			
 				*	Total FI	(Average HCR/SFIG over time)
 				cap	drop	TFI_HCR_5
+				cap	drop	TFI_HCR_7
+				cap	drop	TFI_HCR_9
+				
 				cap	drop	TFI_FIG_5
+				cap	drop	TFI_FIG_7
+				cap	drop	TFI_FIG_9
+				
 				cap	drop	TFI_SFIG_5
+				cap	drop	TFI_SFIG_7
+				cap	drop	TFI_SFIG_9
 				
-				gen	TFI_HCR_5	=	(PFS_FI_ppml_total	/ 3	)								if	num_nonmiss_PFS_5==3
-				gen	TFI_FIG_5	=	(l4.FIG_indiv	+	l2.FIG_indiv	+	FIG_indiv) / 3	if	num_nonmiss_PFS_5==3
-				gen	TFI_SFIG_5	=	(l4.SFIG_indiv	+	l2.SFIG_indiv	+	SFIG_indiv) / 3	if	num_nonmiss_PFS_5==3
+				gen	TFI_HCR_5	=	(PFS_FI_ppml_total_5	/ 3	)								if	num_nonmiss_PFS_5==3	//	Average headcount ratio
+				gen	TFI_HCR_7	=	(PFS_FI_ppml_total_7	/ 4	)								if	num_nonmiss_PFS_7==4	//	Average headcount ratio
+				gen	TFI_HCR_9	=	(PFS_FI_ppml_total_9	/ 5	)								if	num_nonmiss_PFS_9==5	//	Average headcount ratio
 				
-			
+				gen	TFI_FIG_5	=	(l4.FIG_indiv	+	l2.FIG_indiv	+	FIG_indiv) / 3											if	num_nonmiss_PFS_5==3
+				gen	TFI_FIG_7	=	(l6.FIG_indiv	+	l4.FIG_indiv	+	l2.FIG_indiv	+	FIG_indiv) / 4						if	num_nonmiss_PFS_7==4
+				gen	TFI_FIG_9	=	(l8.FIG_indiv	+	l6.FIG_indiv	+	l4.FIG_indiv	+	l2.FIG_indiv	+	FIG_indiv) / 5	if	num_nonmiss_PFS_9==5
+				
+				gen	TFI_SFIG_5	=	(l4.SFIG_indiv	+	l2.SFIG_indiv	+	SFIG_indiv) / 3											if	num_nonmiss_PFS_5==3
+				gen	TFI_SFIG_7	=	(l6.SFIG_indiv	+	l4.SFIG_indiv	+	l2.SFIG_indiv	+	SFIG_indiv) / 4						if	num_nonmiss_PFS_7==4
+				gen	TFI_SFIG_9	=	(l8.SFIG_indiv	+	l6.SFIG_indiv	+	l4.SFIG_indiv	+	l2.SFIG_indiv	+	SFIG_indiv) / 5	if	num_nonmiss_PFS_9==5
+				
+				
 				label	var	TFI_HCR_5	"TFI (HCR): 5-year"
+				label	var	TFI_HCR_7	"TFI (HCR): 7-year"
+				label	var	TFI_HCR_9	"TFI (HCR): 9-year"
+				
 				label	var	TFI_FIG_5	"TFI (FIG): 5-year"
+				label	var	TFI_FIG_7	"TFI (FIG): 7-year"
+				label	var	TFI_FIG_9	"TFI (FIG): 9-year"
+				
 				label	var	TFI_SFIG_5	"TFI (SFIG): 5-year"
+				label	var	TFI_SFIG_7	"TFI (SFIG): 7-year"
+				label	var	TFI_SFIG_9	"TFI (SFIG): 9-year"
 				
 				
 				*	Chronic FI (SFIG(with mean PFS))	
@@ -350,14 +438,14 @@
 					gen		CFI_FIG_`year'=.
 					gen		CFI_SFIG_`year'=.
 					
-					replace	CFI_HCR_`year'	=	(1-PFS_ppml_mean_normal_`year')^0	if	!mi(PFS_ppml_mean_normal_`year')	&	PFS_ppml_mean_normal_`year'<1	//	Avg PFS < Avg cut-off PFS
-					replace	CFI_FIG_`year'	=	(1-PFS_ppml_mean_normal_`year')^1	if	!mi(PFS_ppml_mean_normal_`year')	&	PFS_ppml_mean_normal_`year'<1	//	Avg PFS < Avg cut-off PFS
-					replace	CFI_SFIG_`year'	=	(1-PFS_ppml_mean_normal_`year')^2	if	!mi(PFS_ppml_mean_normal_`year')	&	PFS_ppml_mean_normal_`year'<1	//	Avg PFS < Avg cut-off PFS
+					replace	CFI_HCR_`year'	=	(1-PFS_ppml_mean_normal_`year')^0	if	!mi(PFS_ppml_mean_normal_`year')	&	PFS_ppml_mean_normal_`year'<1	//	Normalized mean-PFS < 1
+					replace	CFI_FIG_`year'	=	(1-PFS_ppml_mean_normal_`year')^1	if	!mi(PFS_ppml_mean_normal_`year')	&	PFS_ppml_mean_normal_`year'<1	//	Normalized mean-PFS < 1
+					replace	CFI_SFIG_`year'	=	(1-PFS_ppml_mean_normal_`year')^2	if	!mi(PFS_ppml_mean_normal_`year')	&	PFS_ppml_mean_normal_`year'<1	//	Normalized mean-PFS < 1
 					
 					
-					replace	CFI_HCR_`year'	=	0								if	!mi(PFS_ppml_mean_normal_`year')	&	PFS_ppml_mean_normal_`year'>=1	//	Avg PFS >= Avg cut-off PFS (thus zero CFI)
-					replace	CFI_FIG_`year'	=	0								if	!mi(PFS_ppml_mean_normal_`year')	&	PFS_ppml_mean_normal_`year'>=1	//	Avg PFS >= Avg cut-off PFS (thus zero CFI)
-					replace	CFI_SFIG_`year'	=	0								if	!mi(PFS_ppml_mean_normal_`year')	&	PFS_ppml_mean_normal_`year'>=1	//	Avg PFS >= Avg cut-off PFS (thus zero CFI)
+					replace	CFI_HCR_`year'	=	0								if	!mi(PFS_ppml_mean_normal_`year')	&	PFS_ppml_mean_normal_`year'>=1	//	Normalized mean-PFS >= 1 (thus zero CFI)
+					replace	CFI_FIG_`year'	=	0								if	!mi(PFS_ppml_mean_normal_`year')	&	PFS_ppml_mean_normal_`year'>=1	//	Normalized mean-PFS >= 1 (thus zero CFI)
+					replace	CFI_SFIG_`year'	=	0								if	!mi(PFS_ppml_mean_normal_`year')	&	PFS_ppml_mean_normal_`year'>=1	//	Normalized mean-PFS >= 1 (thus zero CFI)
 					
 					lab	var		CFI_HCR_`year'	"CFI (HCR): `year'-year"
 					lab	var		CFI_FIG_`year'	"CFI (FIG): `year'-year"
@@ -468,6 +556,22 @@
 				
 				*/
 				
+		*	Eyeballing results
+		br	x11101ll	year	PFS_ppml	PFS_FI_ppml	num_nonmiss_PFS_5 num_nonmiss_PFS_7 num_nonmiss_PFS_9 SL_5 SL_7 SL_9	//	PFS_ppml_total_5 PFS_ppml_total_7 PFS_ppml_total_9
+		
+		br	x11101ll	year	PFS_ppml	PFS_FI_ppml	num_nonmiss_PFS_5 num_nonmiss_PFS_7 num_nonmiss_PFS_9 PFS_ppml_total_5 PFS_ppml_total_7 PFS_ppml_total_9	PFS_ppml_mean_normal_5 PFS_ppml_mean_normal_7 PFS_ppml_mean_normal_9
+		br	x11101ll	year	PFS_ppml	PFS_FI_ppml	num_nonmiss_PFS_5 num_nonmiss_PFS_7 num_nonmiss_PFS_9 PFS_FI_ppml_total_5 PFS_FI_ppml_total_7 PFS_FI_ppml_total_9
+		
+		br	x11101ll	year	PFS_ppml	PFS_FI_ppml	num_nonmiss_PFS_5 num_nonmiss_PFS_7 num_nonmiss_PFS_9 PFS_ppml_normal SFIG_indiv FIG_indiv
+		
+		br	x11101ll	year	PFS_ppml	PFS_FI_ppml	num_nonmiss_PFS_5 num_nonmiss_PFS_7 num_nonmiss_PFS_9 PFS_FI_ppml_total_?	TFI_HCR_5 TFI_HCR_7 TFI_HCR_9	
+		br	x11101ll	year	PFS_ppml	PFS_FI_ppml	num_nonmiss_PFS_5 num_nonmiss_PFS_7 num_nonmiss_PFS_9 FIG_indiv	TFI_FIG_5 TFI_FIG_7 TFI_FIG_9
+		br	x11101ll	year	PFS_ppml	PFS_FI_ppml	num_nonmiss_PFS_5 num_nonmiss_PFS_7 num_nonmiss_PFS_9 SFIG_indiv	TFI_SFIG_5 TFI_SFIG_7 TFI_SFIG_9
+		
+		br	x11101ll	year	PFS_ppml	PFS_FI_ppml	num_nonmiss_PFS_5 num_nonmiss_PFS_7 num_nonmiss_PFS_9 PFS_ppml_mean_normal_?	CFI_HCR_?
+		br	x11101ll	year	PFS_ppml	PFS_FI_ppml	num_nonmiss_PFS_5 num_nonmiss_PFS_7 num_nonmiss_PFS_9 PFS_ppml_mean_normal_?	CFI_FIG_?
+		br	x11101ll	year	PFS_ppml	PFS_FI_ppml	num_nonmiss_PFS_5 num_nonmiss_PFS_7 num_nonmiss_PFS_9 PFS_ppml_mean_normal_?	CFI_SFIG_?
+		
 		*	Save
 		compress
 		save    "${SNAP_dtInt}/SNAP_const",	replace
