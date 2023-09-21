@@ -8,13 +8,24 @@
 	*	Open 1979-2019 PFS data, which does NOT have spell constructed
 	
 	use	"${SNAP_dtInt}/SNAP_long_PFS", clear
-	
 	lab	var	PFS_ppml_noCOLI		"PFS"
-	lab	var	PFS_FI_ppml_noCOLI	"Food insecure (PFS < 0.5)"
-
-	*	Keep relevant study sample only
-	keep	if	!mi(PFS_ppml_noCOLI)
 	
+	
+			
+	*	Construct FI indicator based on PFS
+	*	In LBH, we used flexible cut-off; set cut-off such that FI(PFS) prevalence rate is equal to the offical FI reported in the annual USDA report.
+	*	Since this period do not have such reference, we set 0.5 as a benchmark threshold.
+
+		loc	var	PFS_FI_ppml_noCOLI
+		cap	drop	`var'
+		gen		`var'=.
+		replace	`var'=0	if	!mi(PFS_ppml_noCOLI)	&	!inrange(PFS_ppml_noCOLI,0,0.5)
+		replace	`var'=1	if	!mi(PFS_ppml_noCOLI)	&	inrange(PFS_ppml_noCOLI,0,0.5)
+		lab	var	`var'	"Food insecure (PFS < 0.5)"
+
+	
+		*	Keep relevant study sample only
+	keep	if	!mi(PFS_ppml_noCOLI)
 	
 	*	Construct spell length
 		**	IMPORANT NOTE: Since the PFS data has (1) gap period b/w 1988-1991 and (2) changed frequency since 1997, it is not clear how to define "spell"
