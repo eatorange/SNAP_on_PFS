@@ -581,7 +581,7 @@
 			*global	timevars		year_enum4-year_enum11 year_enum14-year_enum30 //	Exclude year_enum3 (1978) as base category. year_enum12 (1990)  and year_enum13 (1991) are excluded due to lack of lagged data.
 			global	timevars		year_enum20-year_enum27	//	Using year_enum19 (1997) as a base year, when regressing with SNAP index IV (1996-2013)
 		
-			
+		
 			
 			global	FSD_on_FS_X_noind	/*${statevars}	${indvars}	*/	${demovars} ${econvars}	${healthvars}	${empvars}	${familyvars}	${eduvars}	//	 ${regionvars}	${macrovars} 		W/o individual constrols. Default
 			global	FSD_on_FS_X_ind		/*${statevars}*/	${indvars}		${demovars} ${econvars}	${healthvars}	${empvars}	${familyvars}	${eduvars}	//	 ${regionvars}	${macrovars} 	With individual controls.		
@@ -592,6 +592,10 @@
 							
 			lab	var	age_ind		"Age (ind)"
 			lab	var	age_ind_sq	"Age$^2$ (ind)"
+			lab	var	rp_age		"Age (RP) (years)"
+			lab	var	rp_age_sq	"Age$^2$ (RP) (years)"
+			lab	var	ind_col		"College degree (ind) (=1)"
+			lab	var	rp_col		"College degree (RP) (=1)"
 			lab	var	FS_rec_wth	"SNAP received"
 					
 			*	Stationarty test
@@ -638,7 +642,7 @@
 				global	IVname		index_w	//	CIM	//	
 				
 				*	Sample and weight choice
-				loc	income_below130	1	//	Keep only individuals who were ever below 130% income line 
+				loc	income_below130	0	//	Keep only individuals who were ever below 130% income line 
 				loc	weighted		1	//	Generate survey-weighted estimates
 				loc	control_ind		1	//	Include individual-level controls
 				
@@ -1166,22 +1170,22 @@
 				
 		
 				*	Lagged SNAP effect
-				*	Include contemporaneous controls only
+				*	Include the earliest
 				foreach	lag	in	l0	l2	l4	l6	{
 						
 					global	Z		`lag'_FSdummy_hat	//	FSdummy_hat	// 
 					global	Zname	SNAPhat
 					global	endoX	`lag'_FSdummy	//	FSdummy	//	
 					
-					ivreghdfe	PFS_ppml	 ${FSD_on_FS_X_`lag'}	${timevars}	${Mundlak_vars_9713}  	(${endoX} = ${Z})	${reg_weight} if	reg_sample_9713==1, ///
+					ivreghdfe	PFS_ppml	 ${FSD_on_FS_X_`lag'}	${timevars}	${Mundlak_vars_9713}  	(${endoX} = ${Z})	${reg_weight} if	reg_sample_9713==1 ${lowincome}, ///
 							/*absorb(x11101ll)*/	cluster(x11101ll)	first savefirst savefprefix(${Zname})	partial(*_bar9713) 
 								
 					estadd	local	Mundlak	"Y"
 					estadd	local	YearFE	"Y"
 					estadd	scalar	Fstat_CD	=	 e(cdf)
 					estadd	scalar	Fstat_KP	=	e(widstat)
-					summ	PFS_ppml	${sum_weight}	if	reg_sample_9713==1
-					estadd	scalar	mean_PFS	=	 r(mean)
+					summ	PFS_ppml	${sum_weight}	if	reg_sample_9713==1 ${lowincome}
+					estadd	scalar	mean_PFS	=	 r(mean) ${lowincome}
 					est	store	${Zname}_`lag'_mund_2nd
 					
 					*	Clean global macro, to make sure it does not mistakenly apply in other settings.
@@ -1195,7 +1199,7 @@
 				
 				*	SNAP (t-4, t-2) effects on PFS
 				*	Use control in t-4 only
-				ivreghdfe	PFS_ppml	 ${FSD_on_FS_X_l4}	${timevars}	${Mundlak_vars_9713}  	(l4_FSdummy	l2_FSdummy  = l4_FSdummy_hat	l2_FSdummy_hat)	${reg_weight} if	reg_sample_9713==1, ///
+				ivreghdfe	PFS_ppml	 ${FSD_on_FS_X_l4}	${timevars}	${Mundlak_vars_9713}  	(l4_FSdummy	l2_FSdummy  = l4_FSdummy_hat	l2_FSdummy_hat)	${reg_weight} if	reg_sample_9713==1 ${lowincome}, ///
 							/*absorb(x11101ll)*/	cluster (x11101ll)	first savefirst savefprefix(${Zname})	partial(*_bar9713) 
 							
 				estadd	local	Mundlak	"Y"
@@ -1203,21 +1207,21 @@
 				scalar	Fstat_CD_${Zname}	=	 e(cdf)
 				*scalar	Fstat_KP_${Zname}	=	e(rkf)
 				estadd	scalar	Fstat_KP	=	e(widstat)
-				summ	PFS_ppml	${sum_weight}	if	reg_sample_9713==1
+				summ	PFS_ppml	${sum_weight}	if	reg_sample_9713==1 ${lowincome}
 				estadd	scalar	mean_PFS	=	 r(mean)
 				est	store	${Zname}_l4l2_mund_2nd
 				
 				
 				*	SNAP (t-2, t) effects on PFS
 				*	Use control in t-2 only
-				ivreghdfe	PFS_ppml	 ${FSD_on_FS_X_l2}	${timevars}	${Mundlak_vars_9713}  	(l2_FSdummy	l0_FSdummy  = l2_FSdummy_hat	l0_FSdummy_hat)	${reg_weight} if	reg_sample_9713==1, ///
+				ivreghdfe	PFS_ppml	 ${FSD_on_FS_X_l2}	${timevars}	${Mundlak_vars_9713}  	(l2_FSdummy	l0_FSdummy  = l2_FSdummy_hat	l0_FSdummy_hat)	${reg_weight} if	reg_sample_9713==1 ${lowincome}, ///
 							/*absorb(x11101ll)*/	cluster (x11101ll)	first savefirst savefprefix(${Zname})	partial(*_bar9713) 				
 				estadd	local	Mundlak	"Y"
 				estadd	local	YearFE	"Y"
 				scalar	Fstat_CD_${Zname}	=	 e(cdf)
 				*scalar	Fstat_KP_${Zname}	=	e(rkf)
 				estadd	scalar	Fstat_KP	=	e(widstat)
-				summ	PFS_ppml	${sum_weight}	if	reg_sample_9713==1
+				summ	PFS_ppml	${sum_weight}	if	reg_sample_9713==1 ${lowincome}
 				estadd	scalar	mean_PFS	=	 r(mean)
 				est	store	${Zname}_l2l0_mund_2nd
 				
@@ -1225,7 +1229,7 @@
 				*	SNAP (t-4, t-2, t-0) effects on PFS
 				*	Use control in t-4 only
 					*	Controls in t-4 only
-				ivreghdfe	PFS_ppml	 ${FSD_on_FS_X_l4}	${timevars}	${Mundlak_vars_9713}  	(l4_FSdummy	l2_FSdummy	l0_FSdummy  = l4_FSdummy_hat	l2_FSdummy_hat	l0_FSdummy_hat)	${reg_weight} if	reg_sample_9713==1, ///
+				ivreghdfe	PFS_ppml	 ${FSD_on_FS_X_l4}	${timevars}	${Mundlak_vars_9713}  	(l4_FSdummy	l2_FSdummy	l0_FSdummy  = l4_FSdummy_hat	l2_FSdummy_hat	l0_FSdummy_hat)	${reg_weight} if	reg_sample_9713==1 ${lowincome}, ///
 							/*absorb(x11101ll)*/	cluster (x11101ll)	first savefirst savefprefix(${Zname})	partial(*_bar9713) 
 							
 				estadd	local	Mundlak	"Y"
@@ -1233,7 +1237,7 @@
 				scalar	Fstat_CD_${Zname}	=	 e(cdf)
 				*scalar	Fstat_KP_${Zname}	=	e(rkf)
 				estadd	scalar	Fstat_KP	=	e(widstat)
-				summ	PFS_ppml	${sum_weight}	if	reg_sample_9713==1
+				summ	PFS_ppml	${sum_weight}	if	reg_sample_9713==1 ${lowincome}
 				estadd	scalar	mean_PFS	=	 r(mean)
 				est	store	${Zname}_l4l2l0_mund_2nd
 				
@@ -1241,7 +1245,7 @@
 				
 				*	SNAP (t-6, t-4, t-2, t-0) effects on PFS
 				*	Use control in t-6 only
-				ivreghdfe	PFS_ppml	 ${FSD_on_FS_X_l6}	${timevars}	${Mundlak_vars_9713}  	(l6_FSdummy	l4_FSdummy	l2_FSdummy	l0_FSdummy  = l6_FSdummy_hat	l4_FSdummy_hat	l2_FSdummy_hat	l0_FSdummy_hat)	${reg_weight} if	reg_sample_9713==1, ///
+				ivreghdfe	PFS_ppml	 ${FSD_on_FS_X_l6}	${timevars}	${Mundlak_vars_9713}  	(l6_FSdummy	l4_FSdummy	l2_FSdummy	l0_FSdummy  = l6_FSdummy_hat	l4_FSdummy_hat	l2_FSdummy_hat	l0_FSdummy_hat)	${reg_weight} if	reg_sample_9713==1 ${lowincome}, ///
 							/*absorb(x11101ll)*/	cluster (x11101ll)	first savefirst savefprefix(${Zname})	partial(*_bar9713) 
 							
 				estadd	local	Mundlak	"Y"
@@ -1249,7 +1253,7 @@
 				scalar	Fstat_CD_${Zname}	=	 e(cdf)
 				*scalar	Fstat_KP_${Zname}	=	e(rkf)
 				estadd	scalar	Fstat_KP	=	e(widstat)
-				summ	PFS_ppml	${sum_weight}	if	reg_sample_9713==1
+				summ	PFS_ppml	${sum_weight}	if	reg_sample_9713==1 ${lowincome}
 				estadd	scalar	mean_PFS	=	 r(mean)
 				est	store	${Zname}_l6l4l2l0_mund_2nd
 				
@@ -1267,7 +1271,7 @@
 
 				di	"${FSD_on_FS_X_5yr}"
 					
-				ivreghdfe	PFS_ppml	 ${FSD_on_FS_X_5yr}	/* ${FSD_on_FS_X_5yr} */	${timevars}	${Mundlak_vars_9713}  	(l4_FSdummy	l2_FSdummy	l0_FSdummy  = l4_FSdummy_hat	l2_FSdummy_hat	l0_FSdummy_hat)	${reg_weight} if	reg_sample_9713==1, ///
+				ivreghdfe	PFS_ppml	 ${FSD_on_FS_X_l}	/* ${FSD_on_FS_X_5yr} */	${timevars}	${Mundlak_vars_9713}  	(l4_FSdummy	l2_FSdummy	l0_FSdummy  = l4_FSdummy_hat	l2_FSdummy_hat	l0_FSdummy_hat)	${reg_weight} if	reg_sample_9713==1 ${lowincome}, ///
 							/*absorb(x11101ll)*/	cluster (x11101ll)	first savefirst savefprefix(${Zname})	partial(*_bar9713) 
 							
 				estadd	local	Mundlak	"Y"
@@ -1275,7 +1279,7 @@
 				scalar	Fstat_CD_${Zname}	=	 e(cdf)
 				*scalar	Fstat_KP_${Zname}	=	e(rkf)
 				estadd	scalar	Fstat_KP	=	e(widstat)
-				summ	PFS_ppml	${sum_weight}	if	reg_sample_9713==1
+				summ	PFS_ppml	${sum_weight}	if	reg_sample_9713==1 ${lowincome}
 				estadd	scalar	mean_PFS	=	 r(mean)
 				est	store	${Zname}_l4l2l0_allX_2nd
 				
