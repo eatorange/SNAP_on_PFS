@@ -638,9 +638,9 @@
 				global	IVname		index_w	//	CIM	//	
 				
 				*	Sample and weight choice
-				loc	income_below130	0	//	Keep only individuals who were ever below 130% income line 
+				loc	income_below130	1	//	Keep only individuals who were ever below 130% income line 
 				loc	weighted		1	//	Generate survey-weighted estimates
-				loc	control_ind		0	//	Include individual-level controls
+				loc	control_ind		1	//	Include individual-level controls
 				
 				*loc	same_RP_9713	0	//	Keep only individuals were same RP over the period
 				
@@ -698,10 +698,14 @@
 				*	Treatment
 				cap	drop	l2_FSdummy
 				cap	drop	l4_FSdummy
+				cap	drop	l6_FSdummy
+				
 				gen	l2_FSdummy	=	l2.FSdummy
 				gen	l4_FSdummy	=	l4.FSdummy
+				gen	l6_FSdummy	=	l6.FSdummy
 				lab	var	l2_FSdummy	"SNAP Received 2 years ago"
 				lab	var	l4_FSdummy	"SNAP Received 4 years ago"
+				lab	var	l6_FSdummy	"SNAP Received 6 years ago"
 				
 				*	Controls
 				*	Reset macros		
@@ -709,6 +713,7 @@
 				global	FSD_on_FS_X_l4l2	//	Controls in l2 and l4
 				global	FSD_on_FS_X_l2		//	Controls in l2
 				global	FSD_on_FS_X_l4		//	Controls in l4
+				global	FSD_on_FS_X_l6		//	Controls in l6
 				
 				foreach	var	of	global	FSD_on_FS_X	{
 					
@@ -716,17 +721,21 @@
 					
 					cap	drop	l2_`var'
 					cap	drop	l4_`var'
+					cap	drop	l6_`var'
 					
 					gen		l2_`var'	=	l2.`var'
 					gen		l4_`var'	=	l4.`var'
+					gen		l6_`var'	=	l6.`var'
 					
 					lab	var	l2_`var'	"(L2) `varlabel'"
 					lab	var	l4_`var'	"(L4) `varlabel'"
+					lab	var	l6_`var'	"(L6) `varlabel'"
 					
 					global	FSD_on_FS_X_l4l2l0	${FSD_on_FS_X_l4l2l0}	l4_`var'	l2_`var'	`var'		
 					global	FSD_on_FS_X_l4l2	${FSD_on_FS_X_l4l2}		l4_`var'	l2_`var'	
 					global	FSD_on_FS_X_l2		${FSD_on_FS_X_l2}		l2_`var'
 					global	FSD_on_FS_X_l4		${FSD_on_FS_X_l4}		l4_`var'
+					global	FSD_on_FS_X_l6		${FSD_on_FS_X_l6}		l6_`var'
 									
 				}
 				
@@ -735,7 +744,7 @@
 				di	"${FSD_on_FS_X_l4l2}"
 				di	"${FSD_on_FS_X_l2}"
 				di	"${FSD_on_FS_X_l4}"			
-		
+				di	"${FSD_on_FS_X_l6}"	
 					
 				
 				*	First we run main IV regression, to use the uniform sample across different FE/specifications
@@ -1058,10 +1067,9 @@
 						estadd	local	Fstat_KP	=	`Fstat_KP'
 						summ	PFS_ppml	${sum_weight}	if	reg_sample_9713==1
 						estadd	scalar	mean_PFS	=	 r(mean)
-						est	store	hetero_2nd_female_nopt
+						est	store	hetero_2nd_female
 						
-						esttab	hetero_2nd_female	hetero_2nd_female_nopt
-						
+	
 					*	NoHS	
 						ivreghdfe	PFS_ppml	${FSD_on_FS_X}	${timevars}	${Mundlak_vars_9713}  	(FSdummy SNAP_NoHS	= FSdummy_hat	SNAPhat_NoHS)	${reg_weight} if	reg_sample_9713==1	${lowincome}, ///
 							/*absorb(x11101ll)*/	cluster(x11101ll)	first savefirst savefprefix(NoHS)	partial(*_bar9713)
@@ -1069,7 +1077,7 @@
 						estadd	local	Controls	"Y"
 						local	Fstat_KP: di % 9.2f e(widstat)
 						estadd	local	Fstat_KP	=	`Fstat_KP'
-						summ	PFS_ppml	${sum_weight}	if	reg_sample_9713==1
+						summ	PFS_ppml	${sum_weight}	if	reg_sample_9713==1 ${lowincome}
 						estadd	scalar	mean_PFS	=	 r(mean)
 						est	store	hetero_2nd_NoHS
 					
@@ -1080,7 +1088,7 @@
 						estadd	local	Controls	"Y"
 						local	Fstat_KP: di % 9.2f e(widstat)
 						estadd	local	Fstat_KP	=	`Fstat_KP'
-						summ	PFS_ppml	${sum_weight}	if	reg_sample_9713==1
+						summ	PFS_ppml	${sum_weight}	if	reg_sample_9713==1 ${lowincome}
 						estadd	scalar	mean_PFS	=	 r(mean)
 						est	store	hetero_2nd_nonWhte
 						
@@ -1091,7 +1099,7 @@
 						estadd	local	Controls	"Y"
 						local	Fstat_KP: di % 9.2f e(widstat)
 						estadd	local	Fstat_KP	=	`Fstat_KP'
-						summ	PFS_ppml	${sum_weight}	if	reg_sample_9713==1
+						summ	PFS_ppml	${sum_weight}	if	reg_sample_9713==1 ${lowincome}
 						estadd	scalar	mean_PFS	=	 r(mean)
 						est	store	hetero_2nd_disab
 						
@@ -1104,7 +1112,7 @@
 						estadd	local	Controls	"Y"
 						local	Fstat_KP: di % 9.2f e(widstat)
 						estadd	local	Fstat_KP	=	`Fstat_KP'
-						summ	PFS_ppml	${sum_weight}	if	reg_sample_9713==1
+						summ	PFS_ppml	${sum_weight}	if	reg_sample_9713==1 ${lowincome}
 						estadd	scalar	mean_PFS	=	 r(mean)
 						est	store	hetero_2nd_all
 						
@@ -1128,11 +1136,14 @@
 			*	Impulse response function (SNAP effects on future PFS)
 				
 				*	Create lagged non-linearly SNAP prediction 
+				
 				cap	drop	l0_FSdummy_hat
 				cap	drop	l2_FSdummy_hat
 				cap	drop	l4_FSdummy_hat
+				cap	drop	l6_FSdummy_hat
 				cap	drop	f2_PFS_ppml
 				cap	drop	f4_PFS_ppml
+			
 				
 				cap	drop	l0_PFS_ppml
 				clonevar	l0_PFS_ppml	=	PFS_ppml
@@ -1141,8 +1152,9 @@
 				clonevar	l0_FSdummy	=	FSdummy
 				
 				clonevar	l0_FSdummy_hat	=	FSdummy_hat
-				gen	l2_FSdummy_hat=l2.FSdummy_hat
-				gen	l4_FSdummy_hat=l4.FSdummy_hat
+				gen	l2_FSdummy_hat	=	l2.FSdummy_hat
+				gen	l4_FSdummy_hat	=	l4.FSdummy_hat
+				gen	l6_FSdummy_hat	=	l6.FSdummy_hat
 				
 				gen	f2_PFS_ppml	=	f2.PFS_ppml
 				gen	f4_PFS_ppml	=	f4.PFS_ppml
@@ -1155,7 +1167,7 @@
 		
 				*	Lagged SNAP effect
 				*	Include contemporaneous controls only
-				foreach	lag	in	/*l0*/	l2	/*l4*/	{
+				foreach	lag	in	l0	l2	l4	l6	{
 						
 					global	Z		`lag'_FSdummy_hat	//	FSdummy_hat	// 
 					global	Zname	SNAPhat
@@ -1198,7 +1210,7 @@
 				
 				*	SNAP (t-2, t) effects on PFS
 				*	Use control in t-2 only
-				ivreghdfe	PFS_ppml	 ${FSD_on_FS_X_l2}	${timevars}	${Mundlak_vars_9713}  	(l2_FSdummy	FSdummy  = l2_FSdummy_hat	FSdummy_hat)	${reg_weight} if	reg_sample_9713==1, ///
+				ivreghdfe	PFS_ppml	 ${FSD_on_FS_X_l2}	${timevars}	${Mundlak_vars_9713}  	(l2_FSdummy	l0_FSdummy  = l2_FSdummy_hat	l0_FSdummy_hat)	${reg_weight} if	reg_sample_9713==1, ///
 							/*absorb(x11101ll)*/	cluster (x11101ll)	first savefirst savefprefix(${Zname})	partial(*_bar9713) 				
 				estadd	local	Mundlak	"Y"
 				estadd	local	YearFE	"Y"
@@ -1224,6 +1236,23 @@
 				summ	PFS_ppml	${sum_weight}	if	reg_sample_9713==1
 				estadd	scalar	mean_PFS	=	 r(mean)
 				est	store	${Zname}_l4l2l0_mund_2nd
+				
+				
+				
+				*	SNAP (t-6, t-4, t-2, t-0) effects on PFS
+				*	Use control in t-6 only
+				ivreghdfe	PFS_ppml	 ${FSD_on_FS_X_l6}	${timevars}	${Mundlak_vars_9713}  	(l6_FSdummy	l4_FSdummy	l2_FSdummy	l0_FSdummy  = l6_FSdummy_hat	l4_FSdummy_hat	l2_FSdummy_hat	l0_FSdummy_hat)	${reg_weight} if	reg_sample_9713==1, ///
+							/*absorb(x11101ll)*/	cluster (x11101ll)	first savefirst savefprefix(${Zname})	partial(*_bar9713) 
+							
+				estadd	local	Mundlak	"Y"
+				estadd	local	YearFE	"Y"
+				scalar	Fstat_CD_${Zname}	=	 e(cdf)
+				*scalar	Fstat_KP_${Zname}	=	e(rkf)
+				estadd	scalar	Fstat_KP	=	e(widstat)
+				summ	PFS_ppml	${sum_weight}	if	reg_sample_9713==1
+				estadd	scalar	mean_PFS	=	 r(mean)
+				est	store	${Zname}_l6l4l2l0_mund_2nd
+				
 				
 				*	SNAP (t-4, t-2, t-0) effects on PFS
 					*	Full controls over 5-years
@@ -1252,13 +1281,16 @@
 				
 				
 				*	2nd stage only
-					esttab	${Zname}_l0_mund_2nd 	${Zname}_l2_mund_2nd	 ${Zname}_l4_mund_2nd	${Zname}_l4l2_mund_2nd	${Zname}_l4l2l0_mund_2nd	/*${Zname}_l4l2l0_allX_2nd*/	using "${SNAP_outRaw}/PFS_${Zname}_mund_2nd_lags.csv", ///
+					esttab	${Zname}_l0_mund_2nd 	${Zname}_l2_mund_2nd	 ${Zname}_l4_mund_2nd	 ${Zname}_l6_mund_2nd	${Zname}_l4l2_mund_2nd	${Zname}_l2l0_mund_2nd	${Zname}_l4l2l0_mund_2nd	${Zname}_l6l4l2l0_mund_2nd	/*${Zname}_l4l2l0_allX_2nd*/	using "${SNAP_outRaw}/PFS_${Zname}_mund_2nd_lags.csv", ///
 					cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2c mean_PFS YearFE Mundlak Fstat_CD	Fstat_KP , fmt(0 2) label("N" "R2" "Mean PFS" "Year FE" "Mundlak" "F-stat(CD)" "F-stat(KP)"))	///
-					incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/ year_enum* )	order(l0_FSdummy	l2_FSdummy	l4_FSdummy)	///
+					incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/ year_enum* )	order(l0_FSdummy	l2_FSdummy	l4_FSdummy l6_FSdummy)	///
 					title(PFS on Lagged FS dummy)		replace	
 		
 		
-
+					esttab	${Zname}_l0_mund_2nd 	${Zname}_l2_mund_2nd	 ${Zname}_l4_mund_2nd	 ${Zname}_l6_mund_2nd	/*${Zname}_l4l2_mund_2nd	${Zname}_l2l0_mund_2nd	${Zname}_l4l2l0_mund_2nd*/	${Zname}_l6l4l2l0_mund_2nd	/*${Zname}_l4l2l0_allX_2nd*/	using "${SNAP_outRaw}/PFS_${Zname}_mund_2nd_lags.tex", ///
+					cells(b(star fmt(%8.3f)) se(fmt(2) par)) stats(N r2c mean_PFS YearFE  Fstat_KP , fmt(0 2) label("N" "R$^2$" "Mean PFS" "Controls" "F-stat(KP)"))	///
+					incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	keep(l0_FSdummy	l2_FSdummy	l4_FSdummy l6_FSdummy )	order(l0_FSdummy	l2_FSdummy	l4_FSdummy l6_FSdummy)	///
+					title(PFS on Lagged FS dummy)		replace	
 				
 				
 
@@ -1279,14 +1311,15 @@
 					clonevar	CFI0	=	CFI_HCR_5
 					local		FSD	TFI0
 
-				*	Create dummies for each continuous SNAP usage (5-year)
-				cap	drop	SNAP_cont_5_?
-				tab SNAP_cum_fre_cont_5, gen(SNAP_cont_5_)
-				rename	(SNAP_cont_5_1	SNAP_cont_5_2	SNAP_cont_5_3	SNAP_cont_5_4)	(SNAP_cont_5_0	SNAP_cont_5_1	SNAP_cont_5_2	SNAP_cont_5_3)
-				lab	var	SNAP_cont_5_0	"No SNAP over 5-year"
-				lab	var	SNAP_cont_5_1	"SNAP once over 5-year"
-				lab	var	SNAP_cont_5_2	"SNAP twice over 5-year"
-				lab	var	SNAP_cont_5_3	"SNAP thrice over 5-year"
+				*	Create dummies for each SNAP usage (5-year)
+				*	(2023-09-22) Chris told me to use cumulative usage, NOT continuous usage.
+				cap	drop	SNAP_cum_5_?
+				tab SNAP_cum_fre_5, gen(SNAP_cum_5_)
+				rename	(SNAP_cum_5_1	SNAP_cum_5_2	SNAP_cum_5_3	SNAP_cum_5_4)	(SNAP_cum_5_0	SNAP_cum_5_1	SNAP_cum_5_2	SNAP_cum_5_3)
+				lab	var	SNAP_cum_5_0	"No SNAP over 5-year"
+				lab	var	SNAP_cum_5_1	"SNAP once over 5-year"
+				lab	var	SNAP_cum_5_2	"SNAP twice over 5-year"
+				lab	var	SNAP_cum_5_3	"SNAP thrice over 5-year"
 
 		
 						
@@ -1297,7 +1330,7 @@
 				global	logit_weight_w	 [pw=wgt_long_ind]
 					
 				
-				foreach	weight	in	uw	w	{
+				foreach	weight	in	/*uw*/	w	{
 						
 						
 						*	Contemporaneous
@@ -1317,7 +1350,7 @@
 						*	SNAP only once (t-4) over 5-year period (binary)
 						*	RHS: SPI_t-4, SPI_t-2, SPI_t, controls over 5-year period, time dummies, Mundlak
 						cap	drop	SNAP1hat_`weight'
-						logit	SNAP_cont_5_1	l4_${IV}	l2_${IV}	${IV}	${FSD_on_FS_X_5yr}	${timevars}	${Mundlak_vars_9713} ${logit_weight_`weight'}	if	reg_sample_9713==1 /* & income_ever_below_130_9713==1 */, vce(cluster x11101ll)
+						logit	SNAP_cum_5_1	l4_${IV}	l2_${IV}	${IV}	${FSD_on_FS_X_5yr}	${timevars}	${Mundlak_vars_9713} ${logit_weight_`weight'}	if	reg_sample_9713==1 /* & income_ever_below_130_9713==1 */, vce(cluster x11101ll)
 						estadd	local	Mundlak	"Y"
 						estadd	local	YearFE	"Y"
 						est	store	SNAP1hat_`weight'
@@ -1327,7 +1360,7 @@
 						*	SNAP twice (t-4, t-2) over 5-year period (binary)
 						*	RHS: SPI_t-4, SPI_t-2, SPI_t, controls over 5-year period, time dummies, Mundlak
 						cap	drop	SNAP2hat_`weight'
-						logit	SNAP_cont_5_2	l4_${IV}	l2_${IV}	${IV} ${FSD_on_FS_X_5yr}	${timevars}	${Mundlak_vars_9713} 	${logit_weight_`weight'}	if	reg_sample_9713==1 /* & income_ever_below_130_9713==1 */, vce(cluster x11101ll)
+						logit	SNAP_cum_5_2	l4_${IV}	l2_${IV}	${IV} ${FSD_on_FS_X_5yr}	${timevars}	${Mundlak_vars_9713} 	${logit_weight_`weight'}	if	reg_sample_9713==1 /* & income_ever_below_130_9713==1 */, vce(cluster x11101ll)
 						estadd	local	Mundlak	"Y"
 						estadd	local	YearFE	"Y"
 						est	store	SNAP2hat_`weight'
@@ -1337,7 +1370,7 @@
 						*	SNAP thrice (t-4, t-2, t-2) over 5-year period (binary)
 						*	RHS: SPI_t-4, SPI_t-2, SPI_t, controls over 5-year period, time dummies, Mundlak
 						cap	drop	SNAP3hat_`weight'
-						logit	SNAP_cont_5_3	l4_${IV}	l2_${IV}	${IV}	 ${FSD_on_FS_X_5yr}	${timevars}	${Mundlak_vars_9713} 	${logit_weight_`weight'}	if	reg_sample_9713==1 /* & income_ever_below_130_9713==1 */, vce(cluster x11101ll)
+						logit	SNAP_cum_5_3	l4_${IV}	l2_${IV}	${IV}	 ${FSD_on_FS_X_5yr}	${timevars}	${Mundlak_vars_9713} 	${logit_weight_`weight'}	if	reg_sample_9713==1 /* & income_ever_below_130_9713==1 */, vce(cluster x11101ll)
 						estadd	local	Mundlak	"Y"
 						estadd	local	YearFE	"Y"
 						est	store	SNAP3hat_`weight'
@@ -1435,7 +1468,7 @@
 						*	Cumulative (continuous) SNAP participation dummies
 						global	Z		SNAP1hat_uw	SNAP2hat_uw	SNAP3hat_uw
 						global	Zname	cumSNAPhat_uw
-						global	endoX	SNAP_cont_5_1	SNAP_cont_5_2	SNAP_cont_5_3	
+						global	endoX	SNAP_cum_5_1	SNAP_cum_5_2	SNAP_cum_5_3	
 						
 						
 						ivreghdfe	`depvar'	 ${FSD_on_FS_X_5yr}		${timevars}	${Mundlak_vars_9713}  (${endoX} = ${Z})	/*[aw=wgt_long_ind]*/ if	reg_sample_9713==1 /* & income_ever_below_130_9713==1 */, ///
@@ -1449,7 +1482,7 @@
 						global	FSD_results	${FSD_results}	`depvar'_${Zname}_2nd
 						esttab	`depvar'_l4_SNAPhat_uw_2nd	 	`depvar'_cumSNAPhat_uw_2nd	using "${SNAP_outRaw}/`depvar'_index_uw_2nd.csv", ///
 								cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2_c YearFE Mundlak Fstat_CD	Fstat_KP pval_Jstat, fmt(0 2) label("N" "R2" "Year FE" "Mundlak" "F-stat(CD)" "F-stat(KP)" "p-val(J-stat)"))	///
-								incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	 drop( year_enum* /**bar9713*/ )  order(l4_FSdummy	SNAP_cont_5_1	SNAP_cont_5_2	SNAP_cont_5_3)	///
+								incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	 drop( year_enum* /**bar9713*/ )  order(l4_FSdummy	SNAP_cum_5_1	SNAP_cum_5_2	SNAP_cum_5_3)	///
 								title(`depvar' on SNAP)		replace
 					
 					
