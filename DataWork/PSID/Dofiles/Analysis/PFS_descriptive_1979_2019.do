@@ -667,7 +667,9 @@
 			*	Distribution of PFS over time, by category
 			*	"lgraph" ssc ins required	 
 				*	Overall 
-				lgraph PFS_ppml_noCOLI year [aw=wgt_long_fam_adj], errortype(iqr) separate(0.01) title(PFS) note(25th and 75th percentile)
+				summ	PFS_ppml_noCOLI	[aw=wgt_long_ind] if year==1997
+				svy, subpop(if year==1997): mean PFS_ppml_noCOLI
+				lgraph PFS_ppml_noCOLI year [aw=wgt_long_ind], errortype(iqr) separate(0.01) title(PFS) note(25th and 75th percentile)
 				graph	export	"${SNAP_outRaw}/PFS_annual.png", replace
 				graph	close
 				
