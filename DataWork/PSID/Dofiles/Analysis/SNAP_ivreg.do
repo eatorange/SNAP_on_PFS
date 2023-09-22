@@ -642,7 +642,7 @@
 				global	IVname		index_w	//	CIM	//	
 				
 				*	Sample and weight choice
-				loc	income_below130	0	//	Keep only individuals who were ever below 130% income line 
+				loc	income_below130	1	//	Keep only individuals who were ever below 130% income line 
 				loc	weighted		1	//	Generate survey-weighted estimates
 				loc	control_ind		1	//	Include individual-level controls
 				
@@ -929,7 +929,7 @@
 						
 			
 				}
-			
+
 				*	Save estimates with different names, depending on the inclusion of individual controls
 				*	Need to export combined tex file.
 				if	`control_ind'==1	{
@@ -1168,10 +1168,9 @@
 				di	"${FSD_on_FS_X_l0}"
 				
 				
-		
 				*	Lagged SNAP effect
 				*	Include the earliest
-				foreach	lag	in	l0	l2	l4	l6	{
+				foreach	lag	in	l0	 l2	l4	l6 	{
 						
 					global	Z		`lag'_FSdummy_hat	//	FSdummy_hat	// 
 					global	Zname	SNAPhat
@@ -1296,8 +1295,19 @@
 					incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	keep(l0_FSdummy	l2_FSdummy	l4_FSdummy l6_FSdummy )	order(l0_FSdummy	l2_FSdummy	l4_FSdummy l6_FSdummy)	///
 					title(PFS on Lagged FS dummy)		replace	
 				
+				est	restore	${Zname}_l6l4l2l0_mund_2nd
+				test	l6_FSdummy + l4_FSdummy + l2_FSdummy + l0_FSdummy=0
 				
-
+				est	restore	${Zname}_l4l2l0_mund_2nd
+				test	 l4_FSdummy + l2_FSdummy + l0_FSdummy=0
+				
+				
+				
+				
+				
+				
+				
+				
 			*	Regressing FSD on predicted FS, using the model we find above
 				*	SNAP weighted policy index, Dhat only, Mundlak controls.
 				global	depvar		PFS_ppml
@@ -1410,7 +1420,7 @@
 					
 					
 						*	Generate lagged vars
-					foreach	var	in	SNAPhat_uw	SNAPhat_w	{
+					foreach	var	in	/* SNAPhat_uw */	SNAPhat_w	{
 						
 						loc	varlabel:	var	label	`var'
 						
