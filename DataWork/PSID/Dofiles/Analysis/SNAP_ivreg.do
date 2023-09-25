@@ -638,7 +638,12 @@
 				
 				restore
 			}	//	stationarity test
-					
+		
+		
+		
+		
+		
+		
 			*	IV - Switch between Weighted Policy index, CIM and GIM
 				
 				*	Setup
@@ -649,7 +654,7 @@
 				
 				*	Sample and weight choice
 				loc	income_below130	0	//	Keep only individuals who were ever below 130% income line 
-				loc	weighted		1	//	Generate survey-weighted estimates
+				loc	weighted		0	//	Generate survey-weighted estimates
 				loc	control_ind		1	//	Include individual-level controls
 				
 				*loc	same_RP_9713	0	//	Keep only individuals were same RP over the period
@@ -869,7 +874,12 @@
 					title(PFS on ${IVname})		replace	
 		
 			
-				
+						
+/*
+						reg	FSdummy	SNAP_index_w ${FSD_on_FS_X}	${timevars}	${Mundlak_vars_`samp'} 	${reg_weight} if	reg_sample_9713==1	${lowincome}, ///
+							/*absorb(x11101ll)*/	cluster (x11101ll)	
+						predict temp
+*/
 				*	2SLS
 				
 				foreach	samp	in	9713	/*all*/		{
@@ -911,6 +921,8 @@
 						*xtlogit	FSdummy	${IV}	${FSD_on_FS_X}	${timevars}	/*${Mundlak_vars_`samp'}*/  if	reg_sample_`samp'==1, vce(cluster x11101ll) 
 						predict	FSdummy_hat
 						lab	var	FSdummy_hat	"Predicted SNAP"
+						margins, dydx(${IV})
+						est	store	logit_SNAP_index
 						
 						*	2SLS with the predicted value (Dhat) as instrument			
 						ivreghdfe	${depvar}	${FSD_on_FS_X}	${timevars}	${Mundlak_vars_`samp'}  	(FSdummy = ${Z})	${reg_weight} if	reg_sample_`samp'==1	${lowincome}, ///
@@ -936,13 +948,14 @@
 			
 				}
 				
-				reg	${depvar}	FSdummy	SNAP_index_w	${FSD_on_FS_X}	${timevars}	${Mundlak_vars_9713} ${reg_weight} if	reg_sample_9713==1	${lowincome}, cluster (x11101ll)	
+				*reg	${depvar}	FSdummy	SNAP_index_w	${FSD_on_FS_X}	${timevars}	${Mundlak_vars_9713} ${reg_weight} if	reg_sample_9713==1	${lowincome}, cluster (x11101ll)	
 				
+				/*
 				ivreghdfe	${depvar}	${FSD_on_FS_X}	${timevars}	${Mundlak_vars_9713}  	(FSdummy = ${Z})	${reg_weight} if	reg_sample_9713==1	${lowincome}, ///
 							cluster (x11101ll)	first savefirst savefprefix(${Zname})	partial(*_bar9713)
+				*/			
 							
-							
-				plausexog	uci		PFS_ppml	${FSD_on_FS_X}	${timevars}	${Mundlak_vars_9713} 		(FSdummy = FSdummy_hat)	${reg_weight} if reg_sample_9713==1	${lowincome}, cluster (x11101ll) gmin(0) gmax(0) partial(*_bar9713)
+				*plausexog	uci		PFS_ppml	${FSD_on_FS_X}	${timevars}	${Mundlak_vars_9713} 		(FSdummy = FSdummy_hat)	${reg_weight} if reg_sample_9713==1	${lowincome}, cluster (x11101ll) gmin(0) gmax(0) partial(*_bar9713)
 				
 
 				*	Save estimates with different names, depending on the inclusion of individual controls
@@ -1319,8 +1332,8 @@
 				
 				
 				
-				
-				
+				logit	FSdummy	${IV}	${FSD_on_FS_X}	${timevars}	${Mundlak_vars_9713}	${reg_weight}		if	reg_sample_9713==1	${lowincome}, vce(cluster x11101ll) 
+				logit	FSdummy	${IV}	${FSD_on_FS_X}	${timevars}	${Mundlak_vars_9713}	${logit_weight_uw} 	if	reg_sample_9713==1 /* & income_ever_below_130_9713==1 */,  vce(cluster x11101ll) 
 				
 				
 			*	Regressing FSD on predicted FS, using the model we find above
@@ -1359,7 +1372,7 @@
 				global	logit_weight_w	 [pw=wgt_long_ind]
 					
 				
-				foreach	weight	in	/*uw*/	w	{
+				foreach	weight	in	uw	w	{
 						
 						
 						*	Contemporaneous
@@ -1435,7 +1448,7 @@
 					
 					
 						*	Generate lagged vars
-					foreach	var	in	/* SNAPhat_uw */	SNAPhat_w	{
+					foreach	var	in	 SNAPhat_uw 	SNAPhat_w	{
 						
 						loc	varlabel:	var	label	`var'
 						
@@ -1467,6 +1480,14 @@
 					
 					//global	depvar		TFI_HCR_5	//		SL_5	//	CFI2_5	//		TFI2_5	//	CFI_FIG_5	//	TFI_FIG_5	//	CFI_HCR_5	//		
 					global	FSD_results
+					global	Z	FSdummy
+					
+					graph	twoway	(kdensity	l4_FSdummy)	(kdensity	l4_SNAPhat_uw)
+								
+					ivreghdfe	PFS_ppml	 ${FSD_on_FS_X_l4} 	${timevars}	${Mundlak_vars_9713}  (l4_FSdummy = l4_SNAP_index_w /* l4_SNAPhat_uw */)	/*[aw=wgt_long_ind]*/ if	reg_sample_9713==1 & income_ever_below_130_9713==1, ///
+							/*absorb(x11101ll)*/	cluster (x11101ll)	first savefirst savefprefix(${Zname})  partial(*_bar9713)
+					
+					
 					foreach	depvar	in	SL_5	TFI_HCR_5	CFI_HCR_5	TFI_FIG_5	CFI_FIG_5	TFI2_5	CFI2_5	{
 									
 						*	SNAP on t-4 only
@@ -1475,7 +1496,7 @@
 						global	endoX	l4_${endovar}
 						
 						
-						ivreghdfe	`depvar'	 ${FSD_on_FS_X_l4}	${timevars}	${Mundlak_vars_9713} (${endoX} = ${Z})	/*[aw=wgt_long_ind]*/ if	reg_sample_9713==1 /* & income_ever_below_130_9713==1 */, ///
+						ivreghdfe	`depvar'	 ${FSD_on_FS_X_l4}	${timevars}	${Mundlak_vars_9713}  (${endoX} = ${Z})	/*[aw=wgt_long_ind]*/ if	reg_sample_9713==1 /* & income_ever_below_130_9713==1 */, ///
 							/*absorb(x11101ll)*/	cluster (x11101ll)	first savefirst savefprefix(${Zname})  partial(*_bar9713)
 						estadd	local	Mundlak	"Y"
 						estadd	local	YearFE	"Y"
@@ -1500,7 +1521,7 @@
 						global	endoX	SNAP_cum_5_1	SNAP_cum_5_2	SNAP_cum_5_3	
 						
 						
-						ivreghdfe	`depvar'	 ${FSD_on_FS_X_5yr}		${timevars}	${Mundlak_vars_9713}  (${endoX} = ${Z})	/*[aw=wgt_long_ind]*/ if	reg_sample_9713==1 /* & income_ever_below_130_9713==1 */, ///
+						ivreghdfe	`depvar'	 ${FSD_on_FS_X_l4}		${timevars}	${Mundlak_vars_9713}  (${endoX} = ${Z})	/*[aw=wgt_long_ind]*/ if	reg_sample_9713==1  /* & income_ever_below_130_9713==1 */, ///
 							/*absorb(x11101ll)*/	cluster (x11101ll)	first savefirst savefprefix(${Zname})  partial(*_bar9713)
 						estadd	local	Mundlak	"Y"
 						estadd	local	YearFE	"Y"
