@@ -232,7 +232,110 @@
 				lab	var	l4_`var'	"(L4) `varlabel'"
 				
 			}
-
+		
+		
+		
+		*	(2023-09-24) Repeat for foodexp w/o SNAP (as a supplementary analyses)
+		global	depvar		foodexp_tot_exclFS_pc_real	/*IHS_foodexp*/
+		
+			*	Summary state of dep.var
+			summ	${depvar}, d
+			*unique x11101ll if in_sample==1	&	!mi(foodexp_tot_inclFS_pc)
+		
+		*	Step 1
+		*	Compared to Lee et al. (2021), I changed as followings
+			*	I exclude a binary indicator whether HH received SNAP or not (FS_rec_wth), as including it will violate exclusion restriction of IV
+			*	I do NOT use survey structure (but still use weight)
+			*	I use Poisson quasi-MLE estimation, instead of ppml with Gamma in the original PFS paper
+			*	I include individual-FE
+			*	Please refer to "SNAP_PFS_const_test.do" file for more detail.
+			
+			*	All sample
+			ppmlhdfe	${depvar}	${statevars} ${demovars}	${eduvars} 	${empvars}	${healthvars}	${familyvars}	${econvars}	${foodvars}	[pweight=wgt_long_ind], ///
+				absorb(x11101ll ib31.rp_state ib1979.year) vce(cluster x11101ll) d	
+			
+			ereturn list
+			est	sto	ppml_step1_exclFS
+				
+			*	Predict fitted value and residual
+			gen		ppml_step1_sample_exclFS=1	if	e(sample)==1 // e(sample) includes both subpopulation and non-subpopulation, so we need to include subpop condition here to properly restrict regression sample.
+			predict double mean1_foodexp_ppml_exclFS	if	ppml_step1_sample_exclFS==1
+			predict double e1_foodexp_ppml_exclFS			if	ppml_step1_sample_exclFS==1,r
+			gen e1_foodexp_sq_ppml_exclFS = (e1_foodexp_ppml_exclFS)^2	if	ppml_step1_sample_exclFS==1
+			
+		
+		br x11101ll year ${depvar} mean1_foodexp_ppml_exclFS e1_foodexp_ppml_exclFS e1_foodexp_sq_ppml_exclFS
+		
+		*	Step 2
+		*	(2023-1-18) Possion with FE now converges, and it does better job compared to Gaussian regression. So we use it.
+		local	depvar	e1_foodexp_sq_ppml_exclFS
+		
+			*	Poisson quasi-MLE
+			ppmlhdfe	`depvar'	${statevars} ${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	${foodvars}	[pweight=wgt_long_ind], ///
+				absorb(x11101ll ib31.rp_state ib1979.year) vce(cluster x11101ll) d	
+			est store ppml_step2_exclFS
+			gen	ppml_step2_sample_exclFS=1	if	e(sample)==1 
+			predict	double	var1_foodexp_ppml_exclFS	if	ppml_step2_sample_exclFS==1	// (2023-06-21) Poisson quasi-MLE does not seem to generate negative predicted value, which is good (no need to square them)
+			gen	sd_foodexp_ppml_exclFS	=	sqrt(abs(var1_foodexp_ppml_exclFS))	//	Take square root of absolute value, since predicted value can be negative which does not have square root.
+			gen	error_var1_ppml_exclFS	=	abs(var1_foodexp_ppml_exclFS - e1_foodexp_sq_ppml_exclFS)	//	prediction error. 
+			*br	e1_foodexp_sq_ppml	var1_foodexp_ppml	error_var1_ppml
+			
+		*	Output
+		**	For AER manuscript, we omit asterisk(*) to display significance as AER requires not to use.
+		**	If we want to diplay star, renable "star" option inside "cells" and "star(* 0.10 ** 0.05 *** 0.01)"
+		
+			esttab	ppml_step1_exclFS	ppml_step2_exclFS	using "${SNAP_outRaw}/ppml_pooled_exclFS.csv", ///
+					cells(b(star fmt(%8.2f)) se(fmt(2) par)) stats(N_sub /*r2*/) label legend nobaselevels star(* 0.10 ** 0.05 *** 0.01)	///
+					title(Conditional Mean and Variance of Food Expenditure per capita) 	replace
+					
+			esttab	ppml_step1_exclFS	ppml_step2_exclFS	using "${SNAP_outRaw}/ppml_pooled_exclFS.tex", ///
+					cells(b(nostar fmt(%8.3f)) & se(fmt(2) par)) stats(N_sub, fmt(%8.0fc)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(_cons)*/	///
+					title(Conditional Mean and Variance of Food Expenditure per capita)		replace		
+			
+		
+		*	Step 3
+			
+			*	Gamma
+			*	(2021-11-28) I temporarily don't use expected residual (var1_foodexp_ppml) as it goes crazy. I will temporarily use expected residual from step 1 (e1_foodexp_sq_ppml)
+			*	(2021-11-30) It kinda works after additional cleaning (ex. dropping Latino sample), but its distribution is kinda different from what we saw in PFS paper.
+			gen alpha1_foodexp_pc_ppml_exclFS	= (mean1_foodexp_ppml_exclFS)^2 / var1_foodexp_ppml_exclFS	//	shape parameter of Gamma (alpha)
+			gen beta1_foodexp_pc_ppml_exclFS	= var1_foodexp_ppml_exclFS / mean1_foodexp_ppml_exclFS		//	scale parameter of Gamma (beta)
+			
+			*	Generate PFS by constructing CDF
+			*	I create two versions - without COLI and with COLI.
+			
+				*	Without COLI adjustment (used for PFS descriptive paper)
+				global	TFP_threshold	foodexp_W_TFP_pc_real	/*IHS_TFP*/
+				cap	drop	PFS_ppml_noCOLI_exclFS
+				gen			PFS_ppml_noCOLI_exclFS = gammaptail(alpha1_foodexp_pc_ppml_exclFS, ${TFP_threshold}/beta1_foodexp_pc_ppml_exclFS)	//	gammaptail(a,(x-g)/b)=(1-gammap(a,(x-g)/b)) where g is location parameter (g=0 in this case)
+				label	var	PFS_ppml_noCOLI_exclFS "PFS (w/o COLI) - excluding SNAP benefit"
+			
+				*	With COLI adjustment (main caufal inference)
+				global	TFP_threshold	foodexp_W_TFP_pc_COLI_real	/*IHS_TFP*/
+				cap	drop	PFS_ppml_exclFS
+				gen 		PFS_ppml_exclFS	 = gammaptail(alpha1_foodexp_pc_ppml_exclFS, ${TFP_threshold}/beta1_foodexp_pc_ppml_exclFS)	//	gammaptail(a,(x-g)/b)=(1-gammap(a,(x-g)/b)) where g is location parameter (g=0 in this case)
+				label	var	PFS_ppml_exclFS "PFS - excluding SNAP benefit"
+			
+			
+			
+			*	Generate lagged PFS
+			foreach	var	in	PFS_ppml_exclFS	PFS_ppml_noCOLI_exclFS		{
+				
+				loc	varlabel:	var	label	`var'
+				
+				cap	drop	l2_`var'
+				gen	l2_`var'	=	l2.`var'
+				lab	var	l2_`var'	"(L2) `varlabel'"
+				
+				cap	drop	l4_`var'
+				gen	l4_`var'	=	l4.`var'
+				lab	var	l4_`var'	"(L4) `varlabel'"
+				
+			}
+		
+		
+		
+		
 		
 		*	Save
 		save	"${SNAP_dtInt}/SNAP_long_PFS", replace
