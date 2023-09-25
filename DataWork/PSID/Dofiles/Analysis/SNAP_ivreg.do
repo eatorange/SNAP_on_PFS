@@ -367,21 +367,27 @@
 		
 		*	Distribution of food expenditure difference
 			
-			twoway	(kdensity foodexp_exclFS_diff	if	FS_rec_wth==0, lc(blue) lp(dash) lwidth(medium) graphregion(fcolor(white)) legend(label(1 "Non-SNAP users"))) 	///
-					(kdensity foodexp_exclFS_diff	if	FS_rec_wth==1, lc(purple) lp(solid) lwidth(medium) graphregion(fcolor(white)) legend(label(2 "SNAP user"))), 	///
-					title("Difference in food expenditure over 2-year") ytitle("Density") xtitle("Food expenditure difference") name(dist_multires_pov_nut, replace)	///
-					note(Food expenditure in real dollars. SNAP benefit excluded)
-			graph	export	"${SNAP_outRaw}/foodexp_diff_dist.png", as(png) replace
-		
-		*	Food expenditure normalized at TFP cost.
-		
-		twoway	(kdensity foodexp_inclFS_TFP_normal	if	FS_rec_wth==1, lc(blue) lp(dash) lwidth(medium) graphregion(fcolor(white)) legend(label(1 "SNAP users - with benefit"))) 	///
-				(kdensity foodexp_exclFS_TFP_normal	if	FS_rec_wth==1, lc(purple) lp(solid) lwidth(medium) graphregion(fcolor(white)) legend(label(2 "SNAP users - w/o benefit"))) 	///
-				(kdensity foodexp_exclFS_TFP_normal	if	FS_rec_wth==0, lc(red) lp(shortdash_dot) lwidth(medium) graphregion(fcolor(white)) legend(label(3 "Non SNAP users"))), 	///
-				title("Food expenditure normalized at TFP cost") ytitle("Density") xtitle("Food expenditure - normalized") name(dist_multires_pov_nut, replace)
-		graph	export	"${SNAP_outRaw}/foodexp_dist_TFP_normal.png", as(png) replace
-		*graph	export	"${results}/multi_resil_pov_nut.png", as(png) replace
+		twoway	(kdensity foodexp_exclFS_diff	[aw=wgt_long_ind]	if	FS_rec_wth==0, lc(blue) lp(dash) lwidth(medium) graphregion(fcolor(white)) legend(label(1 "Non-SNAP users"))) 	///
+				(kdensity foodexp_exclFS_diff	[aw=wgt_long_ind]	if	FS_rec_wth==1, lc(purple) lp(solid) lwidth(medium) graphregion(fcolor(white)) legend(label(2 "SNAP user"))), 	///
+				title("Difference in food expenditure over 2-year") ytitle("Density") xtitle("Food expenditure difference") name(dist_multires_pov_nut, replace)	///
+				note(Food expenditure in real dollars. SNAP benefit excluded)
+		graph	export	"${SNAP_outRaw}/foodexp_diff_dist.png", as(png) replace
 	
+		*	Food expenditure normalized at TFP cost.
+		twoway	(kdensity foodexp_inclFS_TFP_normal	[aw=wgt_long_ind]	if	FS_rec_wth==1 & inrange(foodexp_inclFS_TFP_normal,-2,2), lc(blue) lp(dash) lwidth(medium) graphregion(fcolor(white)) legend(label(1 "SNAP users - with benefit"))) 	///
+				(kdensity foodexp_exclFS_TFP_normal	[aw=wgt_long_ind]	if	FS_rec_wth==1 & inrange(foodexp_exclFS_TFP_normal,-2,2), lc(purple) lp(solid) lwidth(medium) graphregion(fcolor(white)) legend(label(2 "SNAP users - w/o benefit"))), 	///
+				title("Food expenditure normalized at TFP cost") ytitle("Density") xline(0) xtitle("Food expenditure - normalized") name(dist_multires_pov_nut, replace)
+		graph	export	"${SNAP_outRaw}/foodexp_dist_TFP_normal.png", as(png) replace
+		
+		*	PFS with cutoff
+		twoway	(kdensity PFS_ppml			[aw=wgt_long_ind]	if	FS_rec_wth==1, lc(blue) lp(dash) lwidth(medium) graphregion(fcolor(white)) legend(label(1 "SNAP users - with benefit"))) 	///
+				(kdensity PFS_ppml_exclFS	[aw=wgt_long_ind]	if	FS_rec_wth==1, lc(purple) lp(solid) lwidth(medium) graphregion(fcolor(white)) legend(label(2 "SNAP users - w/o benefit"))), 	///
+				title("PFS") ytitle("Density") xtitle("PFS") xline(0.45) name(dist_multires_pov_nut, replace)
+		
+		*graph	export	"${results}/multi_resil_pov_nut.png", as(png) replace
+		
+		*	PFS normalized at 
+
 		
 		/*
 		local	demovars	rp_NoHS rp_HS rp_somecol rp_col rp_employed rp_disabled famnum ratio_child
@@ -636,13 +642,13 @@
 			*	IV - Switch between Weighted Policy index, CIM and GIM
 				
 				*	Setup
-				global	depvar		PFS_ppml
+				global	depvar		PFS_ppml	//	PFS_FI_ppml	//	
 				global	endovar		FSdummy	//	FSamt_capita
 				global	IV			SNAP_index_w	//	citi6016	//	inst6017_nom	//	citi6016	//		//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
 				global	IVname		index_w	//	CIM	//	
 				
 				*	Sample and weight choice
-				loc	income_below130	1	//	Keep only individuals who were ever below 130% income line 
+				loc	income_below130	0	//	Keep only individuals who were ever below 130% income line 
 				loc	weighted		1	//	Generate survey-weighted estimates
 				loc	control_ind		1	//	Include individual-level controls
 				
@@ -780,7 +786,7 @@
 				*	(2023-08-20) Let's think carefully the right way to aggregate time dumies
 					
 					*	Mundlak var of regressors, including time dummy					
-					foreach	samp	in	/*all*/9713	{
+					foreach	samp	in	/*all*/ 9713	{
 					
 						*	All sample
 						cap	drop	*_bar`samp'
@@ -834,7 +840,7 @@
 					foreach	samp	in	/*all*/	9713	{
 						
 						*	Mundlak controls, all sample
-						reghdfe		PFS_ppml	 FSdummy ${FSD_on_FS_X}	${timevars}	${Mundlak_vars}		${reg_weight} if	reg_sample_`samp'==1	${lowincome},	///
+						reghdfe		${depvar}	 FSdummy ${FSD_on_FS_X}	${timevars}	${Mundlak_vars}		${reg_weight} if	reg_sample_`samp'==1	${lowincome},	///
 							vce(cluster x11101ll) noabsorb // absorb(ib1997.year)
 						estadd	local	HH_controls	"Y"
 						estadd	scalar	r2c	=	e(r2)
@@ -852,7 +858,7 @@
 				*	Reduced form
 					foreach	samp	in	/*all*/	9713	{
 					
-						reghdfe		PFS_ppml	 ${IV} ${FSD_on_FS_X}	${timevars}	${Mundlak_vars}		${reg_weight}	if	reg_sample_`samp'==1	${lowincome},	///
+						reghdfe		${depvar}	 ${IV} ${FSD_on_FS_X}	${timevars}	${Mundlak_vars}		${reg_weight}	if	reg_sample_`samp'==1	${lowincome},	///
 							vce(cluster x11101ll) noabsorb // absorb(ib1997.year)
 						est	store	mund_red_${IVname}_`samp'
 					
@@ -873,7 +879,7 @@
 						global	Z		${IV}	
 						global	Zname	${IVname}_Z
 						
-						ivreghdfe	PFS_ppml	${FSD_on_FS_X}	${timevars}	${Mundlak_vars_`samp'} 	(FSdummy = ${Z})	${reg_weight} if	reg_sample_`samp'==1	${lowincome}, ///
+						ivreghdfe	${depvar}	${FSD_on_FS_X}	${timevars}	${Mundlak_vars_`samp'} 	(FSdummy = ${Z})	${reg_weight} if	reg_sample_`samp'==1	${lowincome}, ///
 							/*absorb(x11101ll)*/	cluster (x11101ll)		first savefirst savefprefix(${Zname})	partial(*_bar`samp')
 						estadd	local	Mundlak	"Y"
 						estadd	local	HH_controls	"Y"
@@ -907,7 +913,7 @@
 						lab	var	FSdummy_hat	"Predicted SNAP"
 						
 						*	2SLS with the predicted value (Dhat) as instrument			
-						ivreghdfe	PFS_ppml	${FSD_on_FS_X}	${timevars}	${Mundlak_vars_`samp'}  	(FSdummy = ${Z})	${reg_weight} if	reg_sample_`samp'==1	${lowincome}, ///
+						ivreghdfe	${depvar}	${FSD_on_FS_X}	${timevars}	${Mundlak_vars_`samp'}  	(FSdummy = ${Z})	${reg_weight} if	reg_sample_`samp'==1	${lowincome}, ///
 							/*absorb(x11101ll)*/	cluster (x11101ll)	first savefirst savefprefix(${Zname})	partial(*_bar`samp')
 						estadd	local	Mundlak	"Y"
 						estadd	local	HH_controls	"Y"
@@ -929,6 +935,15 @@
 						
 			
 				}
+				
+				reg	${depvar}	FSdummy	SNAP_index_w	${FSD_on_FS_X}	${timevars}	${Mundlak_vars_9713} ${reg_weight} if	reg_sample_9713==1	${lowincome}, cluster (x11101ll)	
+				
+				ivreghdfe	${depvar}	${FSD_on_FS_X}	${timevars}	${Mundlak_vars_9713}  	(FSdummy = ${Z})	${reg_weight} if	reg_sample_9713==1	${lowincome}, ///
+							cluster (x11101ll)	first savefirst savefprefix(${Zname})	partial(*_bar9713)
+							
+							
+				plausexog	uci		PFS_ppml	${FSD_on_FS_X}	${timevars}	${Mundlak_vars_9713} 		(FSdummy = FSdummy_hat)	${reg_weight} if reg_sample_9713==1	${lowincome}, cluster (x11101ll) gmin(0) gmax(0) partial(*_bar9713)
+				
 
 				*	Save estimates with different names, depending on the inclusion of individual controls
 				*	Need to export combined tex file.
