@@ -845,7 +845,7 @@
 					foreach	samp	in	/*all*/	9713	{
 						
 						*	Mundlak controls, all sample
-						reghdfe		${depvar}	 FSdummy ${FSD_on_FS_X}	${timevars}	${Mundlak_vars}		${reg_weight} if	reg_sample_`samp'==1	${lowincome},	///
+						reghdfe		${depvar}	 FSdummy ${FSD_on_FS_X}	${timevars}	${Mundlak_vars_`samp'}		${reg_weight} if	reg_sample_`samp'==1	${lowincome},	///
 							vce(cluster x11101ll) noabsorb // absorb(ib1997.year)
 						estadd	local	HH_controls	"Y"
 						estadd	scalar	r2c	=	e(r2)
