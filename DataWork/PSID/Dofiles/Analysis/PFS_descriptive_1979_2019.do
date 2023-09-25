@@ -10,7 +10,7 @@
 	use	"${SNAP_dtInt}/SNAP_long_PFS", clear
 	lab	var	PFS_ppml_noCOLI		"PFS"
 	
-	
+	sort	x11101ll	year
 			
 	*	Construct FI indicator based on PFS
 	*	In LBH, we used flexible cut-off; set cut-off such that FI(PFS) prevalence rate is equal to the offical FI reported in the annual USDA report.
@@ -22,6 +22,30 @@
 		replace	`var'=0	if	!mi(PFS_ppml_noCOLI)	&	!inrange(PFS_ppml_noCOLI,0,0.5)
 		replace	`var'=1	if	!mi(PFS_ppml_noCOLI)	&	inrange(PFS_ppml_noCOLI,0,0.5)
 		lab	var	`var'	"Food insecure (PFS < 0.5)"
+			
+	
+		*	Generate FS variable (the opposite of FI)
+		foreach	var	in	ppml_noCOLI	{
+			
+			cap	drop	PFS_FS_`var'
+			clonevar	PFS_FS_`var'	=	PFS_FI_`var'
+			recode		PFS_FS_`var'	(1=0)	(0=1)
+			
+		}
+		
+		*lab	var	PFS_FS_ppml			"HH is food secure (PFS)"
+		lab	var	PFS_FS_ppml_noCOLI	"HH is food secure (PFS w/o COLI)"
+				
+		*	Generate lagged PFS variable
+		foreach	var	in		PFS_FI_ppml_noCOLI	PFS_FS_ppml_noCOLI	{
+			
+			cap	drop	l2_`var'
+			local	label:	variable	label	`var'
+			di	"`label'"
+			gen	l2_`var'	=	l2.`var'
+			lab	var	l2_`var'	"Lagged `label'"
+			
+		}
 
 	
 		*	Keep relevant study sample only
@@ -219,13 +243,13 @@
 		
 		
 		*	Individual-vars
-		estpost tabstat	${indvars}	[aw=wgt_long_fam_adj]	if	!mi(num_waves_in_FU_uniq),	statistics(count	mean	sd	min		/*median	p95*/	max) columns(statistics)		// save
+		estpost tabstat	${indvars}	[aw=wgt_long_ind]	if	!mi(num_waves_in_FU_uniq),	statistics(count	mean	sd	min		/*median	p95*/	max) columns(statistics)		// save
 		est	store	sumstat_ind
-		*estpost tabstat	${indvars}	[aw=wgt_long_fam_adj]	if	!mi(num_waves_in_FU_uniq) & income_below_200==1,	statistics(count	mean	sd	min	median	p95	max) columns(statistics)		// save
+		*estpost tabstat	${indvars}	[aw=wgt_long_ind]	if	!mi(num_waves_in_FU_uniq) & income_below_200==1,	statistics(count	mean	sd	min	median	p95	max) columns(statistics)		// save
 		*est	store	sumstat_ind_incbelow200
 		
 		*	Ind-year vars (observation level)
-		estpost tabstat	${summvars_obs}	[aw=wgt_long_fam_adj],	statistics(count	mean	sd	min	median	/*p95*/	max) columns(statistics)		// save
+		estpost tabstat	${summvars_obs}	[aw=wgt_long_ind],	statistics(count	mean	sd	min	median	/*p95*/	max) columns(statistics)		// save
 		est	store	sumstat_indyear
 
 		
@@ -243,11 +267,11 @@
 			preserve
 				collapse	(count)	num_waves_in_sample=PFS_FI_ppml_noCOLI	///	//	# of waves in sample
 							(sum)	total_SNAP_used=FS_rec_wth	///	# of SNAP redemption
-							(mean)	wgt_long_fam_adj_avg=wgt_long_fam_adj ///	//	weighted family wgt
+							(mean)	wgt_long_ind_avg=wgt_long_ind ///	//	weighted family wgt
 								if !mi(PFS_FI_ppml_noCOLI), by(x11101ll)
 				lab	var	num_waves_in_sample	"# of waves in sample"
 				lab	var	total_SNAP_used		"# of SNAP participation in sample"
-				lab	var	wgt_long_fam_adj_avg	"Avg longitudinal family wgt - adjusted"
+				lab	var	wgt_long_ind_avg	"Avg longitudinal individual wgt"
 				
 				tempfile	col1
 				save	`col1', replace
@@ -255,18 +279,18 @@
 			*	Second, collapse data into (# of waves x # of SNAP) level. This can be weighted or unweighted (NOT sure which one is correct)
 				
 				*	weighted
-				collapse	(count) wgt_long_fam_adj_avg [pw=wgt_long_fam_adj_avg], by(num_waves_in_sample total_SNAP_used)
+				collapse	(count) wgt_long_ind_avg [pw=wgt_long_ind_avg], by(num_waves_in_sample total_SNAP_used)
 				
-				*twoway	contour	wgt_long_fam_adj_avg	total_SNAP_used	num_waves_in_sample // contour plot - looks very odd
+				*twoway	contour	wgt_long_ind_avg	total_SNAP_used	num_waves_in_sample // contour plot - looks very odd
 				
-				twoway	(scatter total_SNAP_used num_waves_in_sample [pw=wgt_long_fam_adj_avg], msymbol(circle_hollow)),	///
+				twoway	(scatter total_SNAP_used num_waves_in_sample [pw=wgt_long_ind_avg], msymbol(circle_hollow)),	///
 					title(Joint distribution of survey waves and SNAP participation)	///
 					note(Weighted by longitudinal individual survey weight.)
 				graph	export	"${SNAP_outRaw}/joint_waves_SNAP_w.png", replace	
 				graph	close
 				
 				/*	disable other version not used.
-				twoway	(scatter total_SNAP_used num_waves_in_sample [pw=wgt_long_fam_adj_avg] if total_SNAP_used>=1, msymbol(circle_hollow)),	///
+				twoway	(scatter total_SNAP_used num_waves_in_sample [pw=wgt_long_ind_avg] if total_SNAP_used>=1, msymbol(circle_hollow)),	///
 					title(Joint distribution of survey waves and SNAP participation)	///
 					note(Weighted by longitudinal individual survey weight. Zero SNAP participation excluded.)
 				graph	export	"${SNAP_outRaw}/joint_waves_SNAP_w_nozero.png", replace	
@@ -275,16 +299,16 @@
 				*	Unweighted
 				use	`col1', clear
 				
-				collapse	(count) wgt_long_fam_adj_avg /*[pw=wgt_long_fam_adj_avg]*/, by(num_waves_in_sample total_SNAP_used)
+				collapse	(count) wgt_long_ind_avg /*[pw=wgt_long_ind_avg]*/, by(num_waves_in_sample total_SNAP_used)
 				
-				*twoway	contour	wgt_long_fam_adj_avg	total_SNAP_used	num_waves_in_sample // contour plot - still looks very odd
-				twoway	(scatter total_SNAP_used num_waves_in_sample [pw=wgt_long_fam_adj_avg], msymbol(circle_hollow)),	///
+				*twoway	contour	wgt_long_ind_avg	total_SNAP_used	num_waves_in_sample // contour plot - still looks very odd
+				twoway	(scatter total_SNAP_used num_waves_in_sample [pw=wgt_long_ind_avg], msymbol(circle_hollow)),	///
 					title(Joint distribution of survey waves and SNAP participation)	///
 					note(Unweighted.)
 				graph	export	"${SNAP_outRaw}/joint_waves_SNAP_uw.png", replace	
 				graph	close
 				
-				twoway	(scatter total_SNAP_used num_waves_in_sample [pw=wgt_long_fam_adj_avg] if total_SNAP_used>=1, msymbol(circle_hollow)),	///
+				twoway	(scatter total_SNAP_used num_waves_in_sample [pw=wgt_long_ind_avg] if total_SNAP_used>=1, msymbol(circle_hollow)),	///
 					title(Joint distribution of survey waves and SNAP participation)	///
 					note(Zero SNAP participation excluded. Unweighted)
 				graph	export	"${SNAP_outRaw}/joint_waves_SNAP_uw_nozero.png", replace	
@@ -309,7 +333,7 @@
 								PFS_ppml_noCOLI	NME	PFS_FI_ppml_noCOLI	NME_below_1	FSSS_FI	FSSS_FI_v2	//	Outcome variables	
 		
 		*	All population
-			collapse (mean) `collapse_vars' (median)	rp_age_med=rp_age	[pw=wgt_long_fam_adj], by(year)
+			collapse (mean) `collapse_vars' (median)	rp_age_med=rp_age	[pw=wgt_long_ind], by(year)
 			
 			lab	var	rp_female	"Female (RP)"
 			lab	var	rp_nonWhte	"Non-White (RP)"
@@ -550,7 +574,7 @@
 		
 		
 			*	PFS by RP's gender and race and education
-			graph	box	PFS_ppml_noCOLI		[aw=wgt_long_fam_adj], over(rp_female) over(rp_nonWhte)	over(rp_edu_cat) nooutsides name(outcome_subgroup_rp, replace) title(Food Security by Subgroup) note("")
+			graph	box	PFS_ppml_noCOLI		[aw=wgt_long_ind], over(rp_female) over(rp_nonWhte)	over(rp_edu_cat) nooutsides name(outcome_subgroup_rp, replace) title(Food Security by Subgroup) note("")
 			graph	export	"${SNAP_outRaw}/PFS_by_rp_subgroup.png", replace	
 			graph	close
 			
@@ -563,7 +587,7 @@
 				*	Temporarily replace "inapp(education)" as missing
 				recode	ind_edu_cat	(0=.)	
 				
-			graph	box	PFS_ppml_noCOLI		[aw=wgt_long_fam_adj], over(ind_female, sort(1)) over(ind_nonWhite, sort(1))	over(ind_edu_cat, sort(1)) nooutsides name(outcome_subgroup_ind, replace) title(Food Security by Subgroup) note("")
+			graph	box	PFS_ppml_noCOLI		[aw=wgt_long_ind], over(ind_female, sort(1)) over(ind_nonWhite, sort(1))	over(ind_edu_cat, sort(1)) nooutsides name(outcome_subgroup_ind, replace) title(Food Security by Subgroup) note("")
 			
 			graph display outcome_subgroup_ind, ysize(4) xsize(9.0)
 			graph	export	"${SNAP_outRaw}/PFS_by_ind_subgroup.png", replace	
@@ -577,47 +601,47 @@
 			*	PFS and NME
 			{	/*
 				*	By gender and race
-				graph	box	PFS_ppml_noCOLI	NME	[aw=wgt_long_fam_adj], over(rp_female) over(rp_nonWhte) nooutsides name(outcome_gen_race, replace) title(Food Security by Gender and Race)
+				graph	box	PFS_ppml_noCOLI	NME	[aw=wgt_long_ind], over(rp_female) over(rp_nonWhte) nooutsides name(outcome_gen_race, replace) title(Food Security by Gender and Race)
 				graph	export	"${SNAP_outRaw}/PFS_NME_by_gen_race.png", replace	
 				graph	close
 				
 				*	By educational attainment
-				graph	box	PFS_ppml_noCOLI	NME	[aw=wgt_long_fam_adj], over(rp_edu_cat) nooutsides name(outcome_edu, replace) title(Food Security by Education)
+				graph	box	PFS_ppml_noCOLI	NME	[aw=wgt_long_ind], over(rp_edu_cat) nooutsides name(outcome_edu, replace) title(Food Security by Education)
 				graph	export	"${SNAP_outRaw}/PFS_NME_by_edu.png", replace
 				graph	close
 				
 				*	By region
-				graph	box	PFS_ppml_noCOLI	NME	[aw=wgt_long_fam_adj], over(rp_region) nooutsides name(outcome_region, replace) title(Food Security by Region)
+				graph	box	PFS_ppml_noCOLI	NME	[aw=wgt_long_ind], over(rp_region) nooutsides name(outcome_region, replace) title(Food Security by Region)
 				graph	export	"${SNAP_outRaw}/PFS_NME_by_region.png", replace
 				graph	close
 				
 				*	By disability
-				graph	box	PFS_ppml_noCOLI	NME	[aw=wgt_long_fam_adj], over(rp_disabled) nooutsides name(outcome_region, replace) title(Food Security by Disability)
+				graph	box	PFS_ppml_noCOLI	NME	[aw=wgt_long_ind], over(rp_disabled) nooutsides name(outcome_region, replace) title(Food Security by Disability)
 				graph	export	"${SNAP_outRaw}/PFS_NME_by_disab.png", replace
 				graph	close
 			
 			*	Dummies (PFS<0.5 and NME<1)
 				
 				*	By Gender and Race
-				graph bar PFS_FI_ppml NME_below_1	[aw=wgt_long_fam_adj], over(rp_female) over(rp_nonWhte) blabel(total, format(%12.2f))	///
+				graph bar PFS_FI_ppml NME_below_1	[aw=wgt_long_ind], over(rp_female) over(rp_nonWhte) blabel(total, format(%12.2f))	///
 					legend(lab (1 "PFS < 0.5") lab(2 "NME < 1") rows(1))	title(Food Insecurity Status by Gender and Race)
 				graph	export	"${SNAP_outRaw}/PFS_NME_dummies_by_gen_race.png", replace	
 				graph	close
 					
 				*	By Educational attainment
-				graph bar PFS_FI_ppml NME_below_1	[aw=wgt_long_fam_adj], over(rp_edu_cat) blabel(total, format(%12.2f))	///
+				graph bar PFS_FI_ppml NME_below_1	[aw=wgt_long_ind], over(rp_edu_cat) blabel(total, format(%12.2f))	///
 					legend(lab (1 "PFS < 0.5") lab(2 "NME < 1") rows(1))	title(Food Insecurity Status by Education)
 				graph	export	"${SNAP_outRaw}/PFS_NME_dummies_by_edu.png", replace
 				graph	close
 					
 				*	By Region
-				graph bar PFS_FI_ppml NME_below_1	[aw=wgt_long_fam_adj], over(rp_region) blabel(total, format(%12.2f))	///
+				graph bar PFS_FI_ppml NME_below_1	[aw=wgt_long_ind], over(rp_region) blabel(total, format(%12.2f))	///
 					legend(lab (1 "PFS < 0.5") lab(2 "NME < 1") rows(1))	title(Food Insecurity Status by Region)
 				graph	export	"${SNAP_outRaw}/PFS_NME_dummies_by_region.png", replace
 				graph	close
 				
 				*	By disability
-				graph bar PFS_FI_ppml NME_below_1	[aw=wgt_long_fam_adj], over(rp_disabled) blabel(total, format(%12.2f))	///
+				graph bar PFS_FI_ppml NME_below_1	[aw=wgt_long_ind], over(rp_disabled) blabel(total, format(%12.2f))	///
 					legend(lab (1 "PFS < 0.5") lab(2 "NME < 1") rows(1))	title(Food Insecurity Status by Disability)
 				graph	export	"${SNAP_outRaw}/PFS_NME_dummies_by_disab.png", replace
 				graph	close	
@@ -626,25 +650,25 @@
 			*	SNAP redemption
 				
 				*	By Gender and Race
-				graph bar FS_rec_wth	[aw=wgt_long_fam_adj], over(rp_female) over(rp_nonWhte) blabel(total, format(%12.2f))	///
+				graph bar FS_rec_wth	[aw=wgt_long_ind], over(rp_female) over(rp_nonWhte) blabel(total, format(%12.2f))	///
 						legend(lab (1 "Participated in FS") rows(1))	title(Food Stamp Participation by Gender and Race)
 				graph	export	"${SNAP_outRaw}/FS_by_gen_race.png", replace	
 				graph	close
 				
 				*	By Educational attainment
-				graph bar FS_rec_wth	[aw=wgt_long_fam_adj], over(rp_edu_cat) blabel(total, format(%12.2f))	///
+				graph bar FS_rec_wth	[aw=wgt_long_ind], over(rp_edu_cat) blabel(total, format(%12.2f))	///
 						legend(lab (1 "Participated in FS") rows(1))	title(Food Stamp Participation by Education)
 				graph	export	"${SNAP_outRaw}/FS_by_edu.png", replace	
 				graph	close
 				
 				*	Region
-				graph bar FS_rec_wth	[aw=wgt_long_fam_adj], over(rp_region) blabel(total, format(%12.2f))	///
+				graph bar FS_rec_wth	[aw=wgt_long_ind], over(rp_region) blabel(total, format(%12.2f))	///
 						legend(lab (1 "Participated in FS") rows(1))	title(Food Stamp Participation by Region)
 				graph	export	"${SNAP_outRaw}/FS_by_region.png", replace	
 				graph	close
 				
 				*	Disability
-				graph bar FS_rec_wth	[aw=wgt_long_fam_adj], over(rp_disabled) blabel(total, format(%12.2f))	///
+				graph bar FS_rec_wth	[aw=wgt_long_ind], over(rp_disabled) blabel(total, format(%12.2f))	///
 						legend(lab (1 "Participated in FS") rows(1))	title(Food Stamp Participation by Disability)
 				graph	export	"${SNAP_outRaw}/FS_by_disab.png", replace	
 				graph	close	
@@ -667,8 +691,11 @@
 			*	Distribution of PFS over time, by category
 			*	"lgraph" ssc ins required	 
 				*	Overall 
+				
+				*	These two lone show that they generate the same mean estimates.
 				summ	PFS_ppml_noCOLI	[aw=wgt_long_ind] if year==1997
 				svy, subpop(if year==1997): mean PFS_ppml_noCOLI
+				
 				lgraph PFS_ppml_noCOLI year [aw=wgt_long_ind], errortype(iqr) separate(0.01) title(PFS) note(25th and 75th percentile)
 				graph	export	"${SNAP_outRaw}/PFS_annual.png", replace
 				graph	close
@@ -677,19 +704,19 @@
 				*	By gender
 				lab	define	rp_female	0	"Male"	1	"Female", replace
 				lab	val	rp_female	rp_female
-				lgraph PFS_ppml_noCOLI year rp_female	[aw=wgt_long_fam_adj], errortype(iqr) separate(0.01)  title(PFS by Gender) note(25th and 75th percentile)
+				lgraph PFS_ppml_noCOLI year rp_female	[aw=wgt_long_ind], errortype(iqr) separate(0.01)  title(PFS by Gender) note(25th and 75th percentile)
 				graph	export	"${SNAP_outRaw}/PFS_annual_gender.png", replace
 				graph	close
 			
 				*	By race
 				lab	define	rp_nonWhte	0	"White"	1	"non-White", replace
 				lab	val	rp_nonWhte	rp_nonWhte
-				lgraph PFS_ppml_noCOLI year rp_nonWhte	[aw=wgt_long_fam_adj], errortype(iqr) separate(0.01)  title(PFS by Race) note(25th and 75th percentile)
+				lgraph PFS_ppml_noCOLI year rp_nonWhte	[aw=wgt_long_ind], errortype(iqr) separate(0.01)  title(PFS by Race) note(25th and 75th percentile)
 				graph	export	"${SNAP_outRaw}/PFS_annual_race.png", replace
 				graph	close
 			
 				*	By educational attainment
-				lgraph PFS_ppml_noCOLI year rp_edu_cat	[aw=wgt_long_fam_adj], separate(0.01)  title(PFS by Education) note(25th and 75th percentile)
+				lgraph PFS_ppml_noCOLI year rp_edu_cat	[aw=wgt_long_ind], separate(0.01)  title(PFS by Education) note(25th and 75th percentile)
 				graph	export	"${SNAP_outRaw}/PFS_annual_education.png", replace
 				graph	close
 			
@@ -697,7 +724,7 @@
 				*	By marital status
 				lab	define	rp_married	0	"Single or spouse-absent"	1	"Spouse present", replace
 				lab	val	rp_married	rp_married
-				lgraph PFS_ppml_noCOLI year rp_married	[aw=wgt_long_fam_adj], errortype(iqr)	separate(0.01)  title(PFS by marital status) note(25th and 75th percentile)
+				lgraph PFS_ppml_noCOLI year rp_married	[aw=wgt_long_ind], errortype(iqr)	separate(0.01)  title(PFS by marital status) note(25th and 75th percentile)
 			
 				graph	export	"${SNAP_outRaw}/PFS_annual_marital.png", replace
 				graph	close
@@ -732,7 +759,7 @@
 				{	/*
 					
 					*	Overall
-					lgraph SL_5 year [aw=wgt_long_fam_adj] if PFS_FI_ppml==1, separate(0.01)  ///
+					lgraph SL_5 year [aw=wgt_long_ind] if PFS_FI_ppml==1, separate(0.01)  ///
 					xline(1983 1992 2007, axis(1) lcolor(black) lpattern(solid))	///
 					xline(1987 1988, lwidth(23) lc(gs12)) xlabel(1980 1987 1992 2000 2007 2010)  ///
 					title(Spell length) ytitle(average length) note(spell length longer than 3 waves are capped at 3)
@@ -743,7 +770,7 @@
 					*	By gender
 					lab	define	rp_female	0	"Male"	1	"Female", replace
 					lab	val	rp_female	rp_female
-					lgraph SL_5 year rp_female [aw=wgt_long_fam_adj] if PFS_FI_ppml==1, separate(0.01)  ///
+					lgraph SL_5 year rp_female [aw=wgt_long_ind] if PFS_FI_ppml==1, separate(0.01)  ///
 					xline(1983 1992 2007, axis(1) lcolor(black) lpattern(solid))	///
 					xline(1987 1988, lwidth(23) lc(gs12)) xlabel(1980 1987 1992 2000 2007 2010)  ///
 					title(Spell length by gender) ytitle(average length) note(spell length longer than 3 waves are capped at 3)
@@ -754,7 +781,7 @@
 					*	By race
 					lab	define	rp_nonWhte	0	"White"	1	"non-White", replace
 					lab	val	rp_nonWhte	rp_nonWhte
-					lgraph SL_5 year rp_nonWhte [aw=wgt_long_fam_adj] if PFS_FI_ppml==1, separate(0.01)  ///
+					lgraph SL_5 year rp_nonWhte [aw=wgt_long_ind] if PFS_FI_ppml==1, separate(0.01)  ///
 					xline(1983 1992 2007, axis(1) lcolor(black) lpattern(solid))	///
 					xline(1987 1988, lwidth(23) lc(gs12)) xlabel(1980 1987 1992 2000 2007 2010)  ///
 					title(Spell length by race) ytitle(average length) note(spell length longer than 3 waves are capped at 3)
@@ -770,7 +797,7 @@
 					lab	define	`var'	0	"Some college or above"	1	"High school or less", replace
 					lab	val	`var'	`var'
 					
-					lgraph SL_5 year rp_HS_less [aw=wgt_long_fam_adj] if PFS_FI_ppml==1 & dyn_sample_5yr==1, separate(0.01)  ///
+					lgraph SL_5 year rp_HS_less [aw=wgt_long_ind] if PFS_FI_ppml==1 & dyn_sample_5yr==1, separate(0.01)  ///
 					xline(1983 1992 2007, axis(1) lcolor(black) lpattern(solid))	///
 					xline(1987 1988, lwidth(23) lc(gs12)) xlabel(1980 1987 1992 2000 2007 2010)  ///
 					title(Spell length by education) ytitle(average length) note(spell length longer than 3 waves are capped at 3)
@@ -850,24 +877,24 @@
 				*	State and year FE, no individual vars
 					
 					*	No individual vars
-					reghdfe	PFS_ppml_noCOLI ${demovars}	${eduvars} 	${empvars}	${healthvars}	${familyvars}	${econvars}	${foodvars}	/*${indvars}*/		[aweight=wgt_long_fam_adj],	///
+					reghdfe	PFS_ppml_noCOLI ${demovars}	${eduvars} 	${empvars}	${healthvars}	${familyvars}	${econvars}	${foodvars}	/*${indvars}*/		[aweight=wgt_long_ind],	///
 						vce(cluster x11101ll) absorb(rp_state year)	/*noabsorb*/
 					est	store	PFS_ysFE_noind
 					
 					*	Individual vars
-					reghdfe	PFS_ppml_noCOLI ${demovars}	${eduvars} 	${empvars}	${healthvars}	${familyvars}	${econvars}	${foodvars}	${indvars}		[aweight=wgt_long_fam_adj],	///
+					reghdfe	PFS_ppml_noCOLI ${demovars}	${eduvars} 	${empvars}	${healthvars}	${familyvars}	${econvars}	${foodvars}	${indvars}		[aweight=wgt_long_ind],	///
 						vce(cluster x11101ll) absorb(rp_state year)	/*noabsorb*/
 					est	store	PFS_ysFE_ind
 				
 				*	State- and Year-FE, Individual FE
 					
 					*	OLS
-					reghdfe	PFS_ppml_noCOLI ${demovars}	${eduvars} 	${empvars}	${healthvars}	${familyvars}	${econvars}	${foodvars}	/*${indvars}*/		[aweight=wgt_long_fam_adj],	///
+					reghdfe	PFS_ppml_noCOLI ${demovars}	${eduvars} 	${empvars}	${healthvars}	${familyvars}	${econvars}	${foodvars}	/*${indvars}*/		[aweight=wgt_long_ind],	///
 						vce(cluster x11101ll) absorb(rp_state year	x11101ll)	/*noabsorb*/
 					est	store	PFS_ysiFE_noind
 					
 					*	Individual vars
-					reghdfe	PFS_ppml_noCOLI ${demovars}	${eduvars} 	${empvars}	${healthvars}	${familyvars}	${econvars}	${foodvars}	${indvars}		[aweight=wgt_long_fam_adj],	///
+					reghdfe	PFS_ppml_noCOLI ${demovars}	${eduvars} 	${empvars}	${healthvars}	${familyvars}	${econvars}	${foodvars}	${indvars}		[aweight=wgt_long_ind],	///
 						vce(cluster x11101ll) absorb(rp_state year	x11101ll)	/*noabsorb*/
 					est	store	PFS_ysiFE_ind
 				
@@ -888,15 +915,30 @@
 					
 		
 		use	"${SNAP_dtInt}/SNAP_descdta_1979_2019", clear
-		svyset	sampcls [pweight=wgt_long_fam_adj] ,strata(sampstr)   singleunit(scaled)	
+		svyset	sampcls [pweight=wgt_long_ind] ,strata(sampstr)   singleunit(scaled)	
 		
 			*	Spell length by subgroup
 			cap	mat	drop	summstat_spell_length
+			
+				*	Note that the following two line generate the different results, wonder why...
+				*	For now I will simply use wgt_long_ind without adjusting survey structure, to be consistent with earlier estiamtes.
+				*svy, subpop(if _end==1): mean _seq
+				*summ	_seq if _end==1
+			
+			
+			summ	_seq if _end==1
+			mat	summstat_spell_length	=	r(N), r(mean), r(sd)
+			mat	list	summstat_spell_length
+			
+			*	The following commands are when using svy-structure adjusted estimates.
+			/*
 			svy, subpop(if _end==1): mean _seq
 			estat sd
 			mat	summstat_spell_length	=	e(N_sub), r(mean), r(sd)
 			mat	list	summstat_spell_length
+			*/
 
+			
 			
 			*	By category (gender, race, education, region, disability)
 			foreach	catvar	in	rp_female rp_nonWhte	rp_edu_cat	rp_region rp_disabled	{
@@ -924,9 +966,16 @@
 				foreach	val	of	local	catval	{		
 					
 					di	"value is `val'"
+					qui	summ	_seq	if	_end==1	&	`catvar'==`val'
+					mat	summstat_spell_length	=	summstat_spell_length	\		(r(N), r(mean), r(sd))
+					
+					
+					*	For svy-structure adjusted estimates.
+					/*
 					qui	svy, subpop(if _end==1	&	`catvar'==`val'): mean _seq
 					estat	sd
 					mat	summstat_spell_length	=	summstat_spell_length	\		(e(N_sub), r(mean), r(sd))
+					*/
 					
 				}	//	val		
 				
@@ -953,12 +1002,13 @@
 		cap	mat	drop	spell_pct_all
 		
 		*	All sample
-		tab	_seq	[aw=wgt_long_fam_adj]	if	_end==1,	matcell(spell_freq_w)
-		mat	list	spell_freq_w
-		local	N=r(N)
-		mat	spell_pct_tot	=	spell_freq_w	/	r(N)
-		
-		mat	spell_pct_all		=	nullmat(spell_pct_all),	spell_pct_tot
+			tab	_seq	[aw=wgt_long_ind]	if	_end==1,	matcell(spell_freq_w)
+			mat	list	spell_freq_w
+			local	N=r(N)
+			mat	spell_pct_tot	=	spell_freq_w	/	r(N)
+			
+			mat	spell_pct_all		=	nullmat(spell_pct_all),	spell_pct_tot
+			mat	list	spell_pct_all
 		
 		*	By category
 		*	We use categories by - gender, race and college degree (dummy for each category)
@@ -968,7 +1018,7 @@
 			
 			foreach	val	in	0 1	{
 				
-				tab	_seq	[aw=wgt_long_fam_adj]	if	_end==1	&	`catvar'==`val',	matcell(spell_freq_`catvar'_`val')
+				tab	_seq	[aw=wgt_long_ind]	if	_end==1	&	`catvar'==`val',	matcell(spell_freq_`catvar'_`val')
 				mat	list	spell_freq_`catvar'_`val'
 				local	N=r(N)
 				mat	spell_pct_`catvar'_`val'	=	spell_freq_`catvar'_`val'	/	r(N)	
@@ -1001,7 +1051,7 @@
 			
 			*	All population
 			graph hbar spell_pct_all, over(spell_length, sort(spell_percent_w) /*descending*/	label(labsize(vsmall)))	legend(lab (1 "Fraction") size(small) rows(1))	///
-				bar(1, fcolor(gs03*0.5)) /*bar(2, fcolor(gs10*0.6))*/	graphregion(color(white)) bgcolor(white) title(Distribution of Spell Length) ytitle(Fraction)
+				bar(1, fcolor(gs03*0.5)) /*bar(2, fcolor(gs10*0.6))*/ graphregion(color(white)) bgcolor(white) title(Distribution of Spell Length) ytitle(Fraction)
 		
 			graph	export	"${SNAP_outRaw}/Spell_length_dist.png", replace
 			graph	close
@@ -1035,30 +1085,7 @@
 		
 		
 	*	 (2023-08-10) Transition matrix
-	sort	x11101ll	year
-	
-		*	Generate FS variable (the opposite of FI)
-		foreach	var	in	ppml_noCOLI	{
-			
-			cap	drop	PFS_FS_`var'
-			clonevar	PFS_FS_`var'	=	PFS_FI_`var'
-			recode		PFS_FS_`var'	(1=0)	(0=1)
-			
-		}
-		
-		*lab	var	PFS_FS_ppml			"HH is food secure (PFS)"
-		lab	var	PFS_FS_ppml_noCOLI	"HH is food secure (PFS w/o COLI)"
-				
-		*	Generate lagged PFS variable
-		foreach	var	in		PFS_FI_ppml_noCOLI	PFS_FS_ppml_noCOLI	{
-			
-			cap	drop	l2_`var'
-			local	label:	variable	label	`var'
-			di	"`label'"
-			gen	l2_`var'	=	l2.`var'
-			lab	var	l2_`var'	"Lagged `label'"
-			
-		}
+
 		*	Gender
 		
 		*	Declare macros for each categorical condition
@@ -1099,16 +1126,16 @@
 			
 		
 			*	Joint
-			tab		l2_PFS_FS_ppml_noCOLI	PFS_FS_ppml_noCOLI	[aw=wgt_long_fam_adj]		if	``cat'_cond'	& inrange(year,1981,2019), cell matcell(trans_2by2_joint_`cat')
+			tab		l2_PFS_FS_ppml_noCOLI	PFS_FS_ppml_noCOLI	[aw=wgt_long_ind]		if	``cat'_cond'	& inrange(year,1981,2019), cell matcell(trans_2by2_joint_`cat')
 			scalar	samplesize_`cat'	=	trans_2by2_joint_`cat'[1,1] + trans_2by2_joint_`cat'[1,2] + trans_2by2_joint_`cat'[2,1] + trans_2by2_joint_`cat'[2,2]	//	calculate sample size by adding up all
 			mat trans_2by2_joint_`cat' = trans_2by2_joint_`cat'[1,1], trans_2by2_joint_`cat'[1,2], trans_2by2_joint_`cat'[2,1], trans_2by2_joint_`cat'[2,2]	//	Make it as a row matrix
 			mat trans_2by2_joint_`cat' = trans_2by2_joint_`cat'/samplesize_`cat'	//	Divide it by sample size to compute relative frequency
 			mat	list	trans_2by2_joint_`cat'	
 			
 			*	Marginal
-			tab		PFS_FS_ppml_noCOLI	[aw=wgt_long_fam_adj]			if	l2_PFS_FS_ppml_noCOLI==0	& inrange(year,1981,2019)	&	``cat'_cond', matcell(temp)	//	Previously FI
+			tab		PFS_FS_ppml_noCOLI	[aw=wgt_long_ind]			if	l2_PFS_FS_ppml_noCOLI==0	& inrange(year,1981,2019)	&	``cat'_cond', matcell(temp)	//	Previously FI
 			scalar	persistence_`cat'	=  temp[1,1] / (temp[1,1] + temp[2,1])	//	Persistence rate (FI, FI)
-			tab		PFS_FS_ppml_noCOLI	[aw=wgt_long_fam_adj]			if	l2_PFS_FS_ppml_noCOLI==1	& inrange(year,1981,2019)	&	``cat'_cond', matcell(temp)	//	Previously FS
+			tab		PFS_FS_ppml_noCOLI	[aw=wgt_long_ind]			if	l2_PFS_FS_ppml_noCOLI==1	& inrange(year,1981,2019)	&	``cat'_cond', matcell(temp)	//	Previously FS
 			scalar	entry_`cat'			=  temp[1,1] / (temp[1,1] + temp[2,1])	//	Persistence rate (FI, FI)
 				
 			*	Combined (Joint + marginal)
@@ -1146,14 +1173,14 @@
 		
 		
 			
-		use	"${SNAP_dtInt}/SNAP_descdta_1979_2019", clear
-		*keep	x11101ll	year	wgt_long_fam_adj	sampstr sampcls year	l2_PFS_FI_ppml_noCOLI PFS_FI_ppml_noCOLI
+		*use	"${SNAP_dtInt}/SNAP_descdta_1979_2019", clear
+		*keep	x11101ll	year	wgt_long_ind	sampstr sampcls year	l2_PFS_FI_ppml_noCOLI PFS_FI_ppml_noCOLI
 		*	2 X 2 (FS, FI)	-	FS status over two subsequent periods
 		
 		*svy:	tab	l2_PFS_FI_ppml_noCOLI PFS_FI_ppml_noCOLI  if inrange(year,1981,2019), missing
 		*tab year if mi(l2_PFS_FI_ppml_noCOLI) & inrange(year,1981,2019)
 		*svy, subpop(if year==1983): tab 	l2_PFS_FI_ppml_noCOLI PFS_FI_ppml_noCOLI, missing
-		*tab	l2_PFS_FI_ppml PFS_FI_ppml [aw=wgt_long_fam_adj] if year==1999	, missing // give the same ratio
+		*tab	l2_PFS_FI_ppml PFS_FI_ppml [aw=wgt_long_ind] if year==1999	, missing // give the same ratio
 		*local	sample_popsize_total=e(N_subpop)
 		*mat	trans_change_1999 = e(b)[1,5], e(b)[1,2], e(b)[1,8]
 		*mat list trans_change_1999
@@ -1170,47 +1197,77 @@
 		global	transyear	1981 1982 1983 1984 1985 1986 1987 1994 1995 1996 1997 1999 2001 2003 2005 2007 2009 2011 2013 2015 2017 2019	//	Years I will use to generate figures
 		*	Make a matrix of year matrix
 		
-		local	run_fig3=0	//	Estimates sub-group level persistence. Takes a long time to run.
+		
+		*	We test whether svy-structure adjusted and non-svy-structure adjusted give the same results.
+			*	NOT using svy-structure adjusted 
+			tab	l2_PFS_FI_ppml_noCOLI PFS_FI_ppml_noCOLI	[aw=wgt_long_ind] if year==1997, missing matcell(temp_1997)
+			mat temp2_1997 = temp_1997 / r(N)
+			
+			mat list temp_1997
+			mat list temp2_1997
+			
+			mat	trans_change_1997 = temp2_1997[2,2], temp2_1997[1,2], temp2_1997[3,2]
+			mat list trans_change_1997
+		
+			*	Using svy-structure adjusted
+			**	They give the same result!
+			svy, subpop(if year==1997): tab 	l2_PFS_FI_ppml_noCOLI PFS_FI_ppml_noCOLI, missing
+			mat list e(b)
+			mat	trans_change_1997 = e(b)[1,4], e(b)[1,2], e(b)[1,6]	//	Still FI, newly FI, previous status unknown.
+			mat list trans_change_1997
 		
 		
 		
-		foreach	year	of	global	transyear	{			
+		local	run_fig3=0	//	Estimates sub-group level persistence. Takes a long time to run. (2023-09-24) Conformality error happens. Need to figure out so turn it off until then.
+		foreach	year of	global	transyear {			
 
+			di	"year is `year'"
+		
 			*	Make a matrix of years
 			mat	trans_years	=	nullmat(trans_years)	\	`year'
 		
 			*	Change in Status - entire population
 			**	Note: here we do NOT limit our sample to non-missing values, as we need the ratio of those with missing values.
-			svy, subpop(if year==`year'): tab 	l2_PFS_FI_ppml_noCOLI PFS_FI_ppml_noCOLI, missing
-			local	sample_popsize_total=e(N_subpop)
-			mat	trans_change_`year' = e(b)[1,5], e(b)[1,2], e(b)[1,8]
-			mat	trans_change_year	=	nullmat(trans_change_year)	\	trans_change_`year'
+				
+				*	We found that svy-adjusted and non-svy-adjusted give the same estimates, from the test above
+				*	But we still need to run "svy, subpop" to get the # of subpopulation (cannot be generated under general "summarize" command)
+				*	Thus, we use svy-adjusted way.
+				svy, subpop(if year==`year'): tab 	l2_PFS_FI_ppml_noCOLI PFS_FI_ppml_noCOLI, missing
+				local	sample_popsize_total=e(N_subpop)
+				mat	trans_change_`year' = e(b)[1,4], e(b)[1,2], e(b)[1,6]
+				mat	trans_change_year	=	nullmat(trans_change_year)	\	trans_change_`year'
 			
 			
 			*	Change in status - by group
 			if	`run_fig3'==1	{	
 			cap	mat	drop	Pop_ratio
-			cap	mat	drop	FI_still_`year'	FI_newly_`year'	FI_persist_rate_`year'	FI_entry_rate_`year'
+			cap	mat	drop	FI_still_`year'	FI_newly_`year'	FI_unknown_`year'	FI_persist_rate_`year'	FI_entry_rate_`year'	FI_unknown_rate_`year'
 				
 				
-				foreach	edu	in	0	1	{	//	College, no college
-					foreach	race	in	0	1	{	//	People of colors, white
-						foreach	gender	in	1	0	{	//	Female, male
+				foreach	edu	in	0	 1 	{	//	College, no college
+					foreach	race	in	0	 1 	{	//	People of colors, white
+						foreach	gender	in	1	 0 	{	//	Female, male
 							
-								
-							qui	svy, subpop(if	rp_female==`gender' & rp_White==`race' & rp_col==`edu'	&	year==`year'):	tab l2_PFS_FI_ppml_noCOLI PFS_FI_ppml_noCOLI, missing
+							di	"rp_edu=`edu', rp_race=`race', rp_gender=`gender'"
+							
+							*	Svy-adjusted way
+							svy, subpop(if	rp_female==`gender' & rp_White==`race' & rp_col==`edu'	&	year==`year'):	tab l2_PFS_FI_ppml_noCOLI PFS_FI_ppml_noCOLI, missing
 												
 							local	Pop_ratio	=	e(N_subpop)/`sample_popsize_total'
-							local	FI_still_`year'		=	e(b)[1,5]*`Pop_ratio'	//	% of still FI HH in specific group x share of that population in total sample = fraction of HH in that group still FI in among total sample
+							local	FI_still_`year'		=	e(b)[1,4]*`Pop_ratio'	//	% of still FI HH in specific group x share of that population in total sample = fraction of HH in that group still FI in among total sample
 							local	FI_newly_`year'		=	e(b)[1,2]*`Pop_ratio'	//	% of newly FI HH in specific group x share of that population in total sample = fraction of HH in that group newly FI in among total sample
-							local	FI_persist_rate_`year'		=	e(b)[1,5]
+							local	FI_unknown_`year'	=	e(b)[1,6]*`Pop_ratio'	//	% of previous status unknown 
+							local	FI_persist_rate_`year'		=	e(b)[1,4]
 							local	FI_entry_rate_`year'		=	e(b)[1,2]
+							local	FI_unknown_rate_`year'		=	e(b)[1,6]
 							
 							*mat	Pop_ratio	=	nullmat(Pop_ratio)	\	`Pop_ratio'	//	(2023-07-21) Disable it, as we don't need to stack population ratio over years.
-							mat	FI_still_`year'	=	nullmat(FI_still_`year')	\	`FI_still_`year''
-							mat	FI_newly_`year'	=	nullmat(FI_newly_`year')	\	`FI_newly_`year''
+							mat	FI_still_`year'		=	nullmat(FI_still_`year')	\	`FI_still_`year''
+							mat	FI_newly_`year'		=	nullmat(FI_newly_`year')	\	`FI_newly_`year''
+							mat	FI_unknown_`year'	=	nullmat(FI_unknown_`year')	\	`FI_newly_`year''
 							mat	FI_persist_rate_`year'	=	nullmat(FI_persist_rate_`year')	\	`FI_persist_rate_`year''
 							mat	FI_entry_rate_`year'	=	nullmat(FI_entry_rate_`year')	\	`FI_entry_rate_`year''
+							mat	FI_unknown_rate_`year'	=	nullmat(FI_unknown_rate_`year')	\	`FI_unknown_rate_`year''
 							
 						}	//	gender
 					}	//	race
@@ -1218,8 +1275,10 @@
 				
 				mat	FI_still_year_all			=	nullmat(FI_still_year_all),	FI_still_`year'
 				mat	FI_newly_year_all			=	nullmat(FI_newly_year_all),	FI_newly_`year'
+				mat	FI_unknown_year_all			=	nullmat(FI_unknown_year_all),	FI_newly_`year'
 				mat	FI_persist_rate_year_all	=	nullmat(FI_persist_rate_year_all),	FI_persist_rate_`year'
 				mat	FI_entry_rate_year_all		=	nullmat(FI_entry_rate_year_all),	FI_entry_rate_`year'
+				mat	FI_unknown_rate_year_all	=	nullmat(FI_unknown_rate_year_all),	FI_unknown_rate_`year'
 			
 			}	//	run_fig3
 		
@@ -1239,25 +1298,29 @@
 				svmat	trans_years
 				svmat	trans_change_year
 				rename	(trans_years1 trans_change_year1 trans_change_year2 trans_change_year3)	(year	still_FI	newly_FI	status_unknown)
-				drop	status_unknown
+				*drop	status_unknown
 				label var	still_FI		"Still food insecure"
 				label var	newly_FI		"Newly food insecure"
+				label var	status_unknown	"Previous status unknown"
 				
-				egen	FI_prevalence	=	rowtotal(still_FI	newly_FI)
+				egen	FI_prevalence	=	rowtotal(still_FI	newly_FI	status_unknown)
 				label	var	FI_prevalence	"Annual FI prevalence (<0.5)"
 				
 				*	Matrix for Figure 3
 				**	(FI_still_year_all, FI_newly_year_all) have years in column and category as row, so they need to be transposed)
+				*	Disable for now, as we don't do sub-group analyses for now
+				/*
 				foreach	fs_category	in	FI_still_year_all	FI_newly_year_all	{
 					
 					mat		`fs_category'_tr=`fs_category''
 					svmat 	`fs_category'_tr
 				}
+				*/
 				
 				*	Figure 2	(Change in food security status by year)
 					
 					*	B&W 
-					graph bar still_FI newly_FI, over(year, label(angle(vertical))) stack legend(lab (1 "Still FI") lab(2 "Newly FI")	rows(1))	///
+					graph bar still_FI newly_FI	status_unknown, over(year, label(angle(vertical))) stack legend(lab (1 "Still FI") 	lab(2 "Newly FI")	lab(3 "Previously unknown")rows(1))	///
 					graphregion(color(white)) bgcolor(white)  bar(1, fcolor(gs11)) bar(2, fcolor(gs6)) bar(3, fcolor(gs1))	///
 					ytitle(Fraction of Population) title(Change in Food Security Status)	ylabel(0(.025)0.125) 	
 					graph	export	"${SNAP_outRaw}/change_in_status_7919.png", replace
@@ -1274,6 +1337,7 @@
 				
 				*	Figure 3
 				*	Figure 3a
+				/*
 				graph bar FI_newly_year_all_tr?, over(year, label(labsize(small))) stack	graphregion(color(white)) bgcolor(white)	ytitle(Fraction of Population)	ylabel(0(.025)0.05)	///
 							legend(lab (1 "Col/Non-White/Female ") lab(2 "Col/Non-White/Male") lab(3 "Col/White/Female")	lab(4 "Col/White/Male") 	///
 							lab (5 "HS/Non-White/Female") lab(6 "HS/Non-White/Male") lab(7 "HS/White/Female")	lab(8 "HS/White/Male") size(vsmall) rows(3))	///
@@ -1292,7 +1356,7 @@
 				grc1leg Newly_FI Still_FI, rows(2) legendfrom(Newly_FI)	graphregion(color(white)) /*(white)*/
 				graph	export	"${SNAP_outRaw}/change_in_status_by_group.png", replace
 				graph	close
-				
+				*/
 			
 			restore
 			
