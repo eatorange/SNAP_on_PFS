@@ -376,13 +376,15 @@
 		*	Food expenditure normalized at TFP cost.
 		twoway	(kdensity foodexp_inclFS_TFP_normal	[aw=wgt_long_ind]	if	FS_rec_wth==1 & inrange(foodexp_inclFS_TFP_normal,-2,2), lc(blue) lp(dash) lwidth(medium) graphregion(fcolor(white)) legend(label(1 "SNAP users - with benefit"))) 	///
 				(kdensity foodexp_exclFS_TFP_normal	[aw=wgt_long_ind]	if	FS_rec_wth==1 & inrange(foodexp_exclFS_TFP_normal,-2,2), lc(purple) lp(solid) lwidth(medium) graphregion(fcolor(white)) legend(label(2 "SNAP users - w/o benefit"))), 	///
-				title("Food expenditure normalized at TFP cost") ytitle("Density") xline(0) xtitle("Food expenditure - normalized") name(dist_multires_pov_nut, replace)
+				title("Food expenditure normalized at TFP cost") ytitle("Density") xline(0) xtitle("Food expenditure - normalized") name(foodexp_dist_SNAP, replace)
 		graph	export	"${SNAP_outRaw}/foodexp_dist_TFP_normal.png", as(png) replace
 		
 		*	PFS with cutoff
 		twoway	(kdensity PFS_ppml			[aw=wgt_long_ind]	if	FS_rec_wth==1, lc(blue) lp(dash) lwidth(medium) graphregion(fcolor(white)) legend(label(1 "SNAP users - with benefit"))) 	///
 				(kdensity PFS_ppml_exclFS	[aw=wgt_long_ind]	if	FS_rec_wth==1, lc(purple) lp(solid) lwidth(medium) graphregion(fcolor(white)) legend(label(2 "SNAP users - w/o benefit"))), 	///
-				title("PFS") ytitle("Density") xtitle("PFS") xline(0.45) name(dist_multires_pov_nut, replace)
+				title("PFS") ytitle("Density") xtitle("PFS") xline(0.45) xlabel(0.25 0.45 "FI Cutoff (0.45)" 0.75 1.0) name(PFS_dist_SNAP, replace)
+		graph	export	"${SNAP_outRaw}/PFS_dist.png", as(png) replace
+		
 		
 		*graph	export	"${results}/multi_resil_pov_nut.png", as(png) replace
 		
@@ -647,14 +649,14 @@
 			*	IV - Switch between Weighted Policy index, CIM and GIM
 				
 				*	Setup
-				global	depvar		PFS_ppml	//	PFS_FI_ppml	//	
+				global	depvar		PFS_ppml	//		PFS_FI_ppml	//	
 				global	endovar		FSdummy	//	FSamt_capita
 				global	IV			SNAP_index_w	//	citi6016	//	inst6017_nom	//	citi6016	//		//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
 				global	IVname		index_w	//	CIM	//	
 				
 				*	Sample and weight choice
-				loc	income_below130	0	//	Keep only individuals who were ever below 130% income line 
-				loc	weighted		0	//	Generate survey-weighted estimates
+				loc	income_below130	1	//	Keep only individuals who were ever below 130% income line 
+				loc	weighted		1	//	Generate survey-weighted estimates
 				loc	control_ind		1	//	Include individual-level controls
 				
 				*loc	same_RP_9713	0	//	Keep only individuals were same RP over the period
@@ -998,6 +1000,9 @@
 					}	
 					
 				}
+				
+				summ	PFS_ppml	[aw=wgt_long_ind]	if	PFS_FI_ppml==1, d	//	full sample
+				summ	PFS_ppml	[aw=wgt_long_ind]	if	PFS_FI_ppml==1 & income_ever_below_130_9713==1, d	//	full sample
 				
 					*	Tabulate results comparing OLS and IV
 												
