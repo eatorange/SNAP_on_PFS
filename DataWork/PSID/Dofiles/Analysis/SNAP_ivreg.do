@@ -386,6 +386,17 @@
 		graph	export	"${SNAP_outRaw}/PFS_dist.png", as(png) replace
 		
 		
+		*	PFS with different group (full, low-income)
+		twoway	(kdensity PFS_ppml	[aw=wgt_long_ind], lc(blue) lp(dash) lwidth(medium) graphregion(fcolor(white)) legend(label(1 "Full sample"))) 	///
+				(kdensity PFS_ppml	[aw=wgt_long_ind]	if	income_ever_below_130_9713==1, lc(purple) lp(solid) lwidth(medium) graphregion(fcolor(white)) legend(label(2 "Low-income population"))), 	///
+				title("PFS Distribution") ytitle("Density") xtitle("PFS") xline(0.45) xlabel(0.25 0.45 "FI Cutoff (0.45)" 0.75 1.0) name(PFS_dist_SNAP, replace)
+		graph	export	"${SNAP_outRaw}/PFS_dist_byinc.png", as(png) replace
+				
+		
+		
+		summ	PFS_FI_ppml [aw=wgt_long_ind]
+		summ	PFS_FI_ppml [aw=wgt_long_ind] if income_ever_below_130_9713==1
+		
 		*graph	export	"${results}/multi_resil_pov_nut.png", as(png) replace
 		
 		*	PFS normalized at 
@@ -641,11 +652,7 @@
 				restore
 			}	//	stationarity test
 		
-		
-		
-		
-		
-		
+
 			*	IV - Switch between Weighted Policy index, CIM and GIM
 				
 				*	Setup
@@ -1235,7 +1242,7 @@
 					estadd	scalar	Fstat_KP	=	e(widstat)
 					summ	PFS_ppml	${sum_weight}	if	reg_sample_9713==1 ${lowincome}
 					estadd	scalar	mean_PFS	=	 r(mean) 
-					est	store	${Zname}_`lag'_mund_2nd
+					est	store	${Zname}_`lag'_mund_2nd_lowinc
 					
 					*	Clean global macro, to make sure it does not mistakenly apply in other settings.
 					global	Z		
@@ -1351,6 +1358,14 @@
 				est	restore	${Zname}_l4l2l0_mund_2nd
 				test	 l4_FSdummy + l2_FSdummy + l0_FSdummy=0
 				
+				
+				
+				*	Coefplot of IR coefficients
+				*	(NOTE: I should run IR seprately, one for full sample and one for low-inc sample, and save with "_full" and "_lowinc" prefix.)
+				coefplot 	${Zname}_l0_mund_2nd_full ${Zname}_l2_mund_2nd_full ${Zname}_l4_mund_2nd_full ${Zname}_l6_mund_2nd_full, bylabel(Full sample) ||	///
+			${Zname}_l0_mund_2nd_lowinc	${Zname}_l2_mund_2nd_lowinc ${Zname}_l4_mund_2nd_lowinc	${Zname}_l6_mund_2nd_lowinc, bylabel(Low-income population) ||,	///
+			keep(l0_FSdummy l2_FSdummy l4_FSdummy l6_FSdummy) byopts(compact cols(1) legend(off)) vertical // title(Lagged SNAP Effects on PFS)
+				graph	export	"${SNAP_outRaw}/IR_full_lowinc.png", as(png) replace
 				
 				
 				
