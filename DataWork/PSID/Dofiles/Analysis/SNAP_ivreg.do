@@ -716,13 +716,16 @@
 				cap	drop	l2_FSdummy
 				cap	drop	l4_FSdummy
 				cap	drop	l6_FSdummy
+				cap	drop	l8_FSdummy
 				
 				gen	l2_FSdummy	=	l2.FSdummy
 				gen	l4_FSdummy	=	l4.FSdummy
 				gen	l6_FSdummy	=	l6.FSdummy
-				lab	var	l2_FSdummy	"SNAP Received 2 years ago"
-				lab	var	l4_FSdummy	"SNAP Received 4 years ago"
-				lab	var	l6_FSdummy	"SNAP Received 6 years ago"
+				gen	l8_FSdummy	=	l8.FSdummy
+				lab	var	l2_FSdummy	"SNAP 2 years ago"
+				lab	var	l4_FSdummy	"SNAP 4 years ago"
+				lab	var	l6_FSdummy	"SNAP 6 years ago"
+				lab	var	l8_FSdummy	"SNAP 8 years ago"
 				
 				*	Controls
 				*	Reset macros		
@@ -731,6 +734,7 @@
 				global	FSD_on_FS_X_l2		//	Controls in l2
 				global	FSD_on_FS_X_l4		//	Controls in l4
 				global	FSD_on_FS_X_l6		//	Controls in l6
+				global	FSD_on_FS_X_l8		//	Controls in l8
 				
 				foreach	var	of	global	FSD_on_FS_X	{
 					
@@ -739,20 +743,24 @@
 					cap	drop	l2_`var'
 					cap	drop	l4_`var'
 					cap	drop	l6_`var'
+					cap	drop	l8_`var'
 					
 					gen		l2_`var'	=	l2.`var'
 					gen		l4_`var'	=	l4.`var'
 					gen		l6_`var'	=	l6.`var'
+					gen		l8_`var'	=	l8.`var'
 					
 					lab	var	l2_`var'	"(L2) `varlabel'"
 					lab	var	l4_`var'	"(L4) `varlabel'"
 					lab	var	l6_`var'	"(L6) `varlabel'"
+					lab	var	l8_`var'	"(L8) `varlabel'"
 					
 					global	FSD_on_FS_X_l4l2l0	${FSD_on_FS_X_l4l2l0}	l4_`var'	l2_`var'	`var'		
 					global	FSD_on_FS_X_l4l2	${FSD_on_FS_X_l4l2}		l4_`var'	l2_`var'	
 					global	FSD_on_FS_X_l2		${FSD_on_FS_X_l2}		l2_`var'
 					global	FSD_on_FS_X_l4		${FSD_on_FS_X_l4}		l4_`var'
 					global	FSD_on_FS_X_l6		${FSD_on_FS_X_l6}		l6_`var'
+					global	FSD_on_FS_X_l8		${FSD_on_FS_X_l8}		l8_`var'
 									
 				}
 				
@@ -762,6 +770,7 @@
 				di	"${FSD_on_FS_X_l2}"
 				di	"${FSD_on_FS_X_l4}"			
 				di	"${FSD_on_FS_X_l6}"	
+				di	"${FSD_on_FS_X_l8}"	
 					
 				
 				*	First we run main IV regression, to use the uniform sample across different FE/specifications
@@ -839,9 +848,7 @@
 					
 				}	
 				
-			
-				
-				
+		
 				*	OLS
 					
 					foreach	samp	in	/*all*/	9713	{
@@ -1001,8 +1008,15 @@
 					
 				}
 				
-				summ	PFS_ppml	[aw=wgt_long_ind]	if	PFS_FI_ppml==1, d	//	full sample
-				summ	PFS_ppml	[aw=wgt_long_ind]	if	PFS_FI_ppml==1 & income_ever_below_130_9713==1, d	//	full sample
+				cap	drop	PFS_FI_ppml_exclFS
+				gen			PFS_FI_ppml_exclFS=0	if	!mi(PFS_ppml_exclFS)	&	!inrange(PFS_ppml_exclFS,0,0.45)
+				replace		PFS_FI_ppml_exclFS=1	if	!mi(PFS_ppml_exclFS)	&	inrange(PFS_ppml_exclFS,0,0.45)
+				
+				summ	PFS_ppml	[aw=wgt_long_ind]	if	PFS_FI_ppml==1 & FSdummy==0, d	//	full sample
+				summ	PFS_ppml	[aw=wgt_long_ind]	if	PFS_FI_ppml==1  & FSdummy==0 & income_ever_below_130_9713==1, d	//	full sample
+				
+				summ	PFS_ppml_exclFS	[aw=wgt_long_ind]	if	PFS_FI_ppml_exclFS==1, d	//	full sample
+				summ	PFS_ppml_exclFS	[aw=wgt_long_ind]	if	PFS_FI_ppml_exclFS==1 & income_ever_below_130_9713==1, d	//	low-income
 				
 					*	Tabulate results comparing OLS and IV
 												
@@ -1178,6 +1192,7 @@
 				cap	drop	l2_FSdummy_hat
 				cap	drop	l4_FSdummy_hat
 				cap	drop	l6_FSdummy_hat
+				cap	drop	l8_FSdummy_hat
 				cap	drop	f2_PFS_ppml
 				cap	drop	f4_PFS_ppml
 			
@@ -1192,6 +1207,7 @@
 				gen	l2_FSdummy_hat	=	l2.FSdummy_hat
 				gen	l4_FSdummy_hat	=	l4.FSdummy_hat
 				gen	l6_FSdummy_hat	=	l6.FSdummy_hat
+				gen	l8_FSdummy_hat	=	l8.FSdummy_hat
 				
 				gen	f2_PFS_ppml	=	f2.PFS_ppml
 				gen	f4_PFS_ppml	=	f4.PFS_ppml
@@ -1201,9 +1217,10 @@
 				di	"${FSD_on_FS_X_l0}"
 				
 				
+			
 				*	Lagged SNAP effect
 				*	Include the earliest
-				foreach	lag	in	l0	 l2	l4	l6 	{
+				foreach	lag	in	l0	 l2	l4	l6	l8 	{
 						
 					global	Z		`lag'_FSdummy_hat	//	FSdummy_hat	// 
 					global	Zname	SNAPhat
@@ -1217,7 +1234,7 @@
 					estadd	scalar	Fstat_CD	=	 e(cdf)
 					estadd	scalar	Fstat_KP	=	e(widstat)
 					summ	PFS_ppml	${sum_weight}	if	reg_sample_9713==1 ${lowincome}
-					estadd	scalar	mean_PFS	=	 r(mean) ${lowincome}
+					estadd	scalar	mean_PFS	=	 r(mean) 
 					est	store	${Zname}_`lag'_mund_2nd
 					
 					*	Clean global macro, to make sure it does not mistakenly apply in other settings.
@@ -1317,15 +1334,15 @@
 				
 				
 				*	2nd stage only
-					esttab	${Zname}_l0_mund_2nd 	${Zname}_l2_mund_2nd	 ${Zname}_l4_mund_2nd	 ${Zname}_l6_mund_2nd	${Zname}_l4l2_mund_2nd	${Zname}_l2l0_mund_2nd	${Zname}_l4l2l0_mund_2nd	${Zname}_l6l4l2l0_mund_2nd	/*${Zname}_l4l2l0_allX_2nd*/	using "${SNAP_outRaw}/PFS_${Zname}_mund_2nd_lags.csv", ///
+					esttab		${Zname}_l8_mund_2nd ${Zname}_l6_mund_2nd  ${Zname}_l4_mund_2nd	 ${Zname}_l2_mund_2nd	${Zname}_l0_mund_2nd  ${Zname}_l4l2_mund_2nd	${Zname}_l2l0_mund_2nd	${Zname}_l4l2l0_mund_2nd	${Zname}_l6l4l2l0_mund_2nd		/*${Zname}_l4l2l0_allX_2nd*/	using "${SNAP_outRaw}/PFS_${Zname}_mund_2nd_lags.csv", ///
 					cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2c mean_PFS YearFE Mundlak Fstat_CD	Fstat_KP , fmt(0 2) label("N" "R2" "Mean PFS" "Year FE" "Mundlak" "F-stat(CD)" "F-stat(KP)"))	///
-					incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/ year_enum* )	order(l0_FSdummy	l2_FSdummy	l4_FSdummy l6_FSdummy)	///
+					incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/ year_enum* )	order(l0_FSdummy	l2_FSdummy	l4_FSdummy l6_FSdummy	l8_FSdummy)	///
 					title(PFS on Lagged FS dummy)		replace	
 		
 		
-					esttab	${Zname}_l0_mund_2nd 	${Zname}_l2_mund_2nd	 ${Zname}_l4_mund_2nd	 ${Zname}_l6_mund_2nd	/*${Zname}_l4l2_mund_2nd	${Zname}_l2l0_mund_2nd	${Zname}_l4l2l0_mund_2nd*/	${Zname}_l6l4l2l0_mund_2nd	/*${Zname}_l4l2l0_allX_2nd*/	using "${SNAP_outRaw}/PFS_${Zname}_mund_2nd_lags.tex", ///
+					esttab	 ${Zname}_l6_mund_2nd  ${Zname}_l4_mund_2nd	 ${Zname}_l2_mund_2nd	${Zname}_l0_mund_2nd 	/*${Zname}_l4l2_mund_2nd	${Zname}_l2l0_mund_2nd	${Zname}_l4l2l0_mund_2nd	${Zname}_l6l4l2l0_mund_2nd	${Zname}_l4l2l0_allX_2nd*/	using "${SNAP_outRaw}/PFS_${Zname}_mund_2nd_lags.tex", ///
 					cells(b(star fmt(%8.3f)) se(fmt(2) par)) stats(N r2c mean_PFS YearFE  Fstat_KP , fmt(0 2) label("N" "R$^2$" "Mean PFS" "Controls" "F-stat(KP)"))	///
-					incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	keep(l0_FSdummy	l2_FSdummy	l4_FSdummy l6_FSdummy )	order(l0_FSdummy	l2_FSdummy	l4_FSdummy l6_FSdummy)	///
+					incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	keep(l0_FSdummy	l2_FSdummy	l4_FSdummy l6_FSdummy )	order(l0_FSdummy	l2_FSdummy	l4_FSdummy l6_FSdummy	l8_FSdummy)	///
 					title(PFS on Lagged FS dummy)		replace	
 				
 				est	restore	${Zname}_l6l4l2l0_mund_2nd
@@ -1339,6 +1356,12 @@
 				
 				logit	FSdummy	${IV}	${FSD_on_FS_X}	${timevars}	${Mundlak_vars_9713}	${reg_weight}		if	reg_sample_9713==1	${lowincome}, vce(cluster x11101ll) 
 				logit	FSdummy	${IV}	${FSD_on_FS_X}	${timevars}	${Mundlak_vars_9713}	${logit_weight_uw} 	if	reg_sample_9713==1 /* & income_ever_below_130_9713==1 */,  vce(cluster x11101ll) 
+				
+				
+				
+				
+				
+				
 				
 				
 			*	Regressing FSD on predicted FS, using the model we find above
