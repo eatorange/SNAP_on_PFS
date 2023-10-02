@@ -49,11 +49,11 @@
 	
 	
 	*	Control variable specification
-	global	indvars			/*ind_female*/ age_ind	age_ind_sq /*ind_NoHS ind_somecol*/ ind_col /* ind_employed_dummy*/
+	global	indvars			/*ind_female*/ age_ind	age_ind_sq /*ind_NoHS ind_somecol*//*  ind_col */ /* ind_employed_dummy*/
 	global	demovars		rp_female	rp_age  rp_age_sq 	rp_nonWhte	rp_married	
 	global	econvars		ln_fam_income_pc_real	
 	global	healthvars		rp_disabled
-	global	familyvars		//	ratio_child	famnum	change_RP	//  
+	global	familyvars		change_RP	//	ratio_child	famnum		//  
 	global	empvars			rp_employed
 	global	eduvars			/*rp_NoHS rp_somecol*/ rp_col
 	//global	foodvars		FS_rec_wth
@@ -63,33 +63,69 @@
 	global	timevars		year_enum20-year_enum27	//	Using year_enum19 (1997) as a base year, when regressing with SNAP index IV (1996-2013)
 
 
-	global	FSD_on_FS_X		 ${indvars}	//	${eduvars}	//	${empvars}		//	${healthvars}	//	${demovars} 	 ${econvars}	${familyvars}		 ${regionvars}	${macrovars} 	With individual controls.		
+	global	FSD_on_FS_X		${demovars}  ${healthvars}	/* 	${familyvars}	 */	/* ${empvars} */	${eduvars}	//			//		 ${econvars}		${indvars}	 ${regionvars}	${macrovars} 	With individual controls.		
 	
 	
 	*	RHS
-	global	RHS	 	famnum	// ${FSD_on_FS_X}	// ${timevars} ${Mundlak_vars_9713} //    // 
+	global	RHS	 ${FSD_on_FS_X}	//	// ${timevars} ${Mundlak_vars_9713} //    // 
 	
 	
-	reg	PFS_ppml	FSdummy	if	reg_sample_9713==1	${lowincome},	cluster(x11101ll)
+	*reg	PFS_ppml	FSdummy	if	reg_sample_9713==1	${lowincome},	cluster(x11101ll)
+	
+	
+	
+	
+	
+
+	
+	*	Mundlak var of regressors, including time dummy					
+		foreach	samp	in	/*all*/ 9713	{
+		
+			*	All sample
+			cap	drop	*_bar`samp'
+			
+			
+			*	W/o individual controls (default)
+			ds	${RHS} ${timevars}
+			foreach	var	in	`r(varlist)'	{
+				bys	x11101ll:	egen	`var'_bar`samp'	=	mean(`var')	if	reg_sample_`samp'==1	
+			}
+			qui	ds	*_bar`samp'
+			global	Mundlak_vars_`samp'	`r(varlist)'
+			
+		
+		
+		}
+						
+				
+	
 	
 	*	MLE
 	cap	drop	FSdummy_hat
-	logit	FSdummy	SNAP_index_w	${RHS} 	${reg_weight}	if	reg_sample_9713==1	${lowincome}, vce(cluster x11101ll) 
+	logit	FSdummy	SNAP_index_w	${RHS} 	  ${timevars} ${Mundlak_vars_9713} ${reg_weight}	if	reg_sample_9713==1	${lowincome}, vce(cluster x11101ll) 
 	predict	FSdummy_hat
+	
+	cap	drop	FSdummy_hat_Z
+	reg		FSdummy SNAP_index_w	${RHS}		 ${timevars} ${Mundlak_vars_9713}  ${reg_weight}	if	reg_sample_9713==1	${lowincome}, vce(cluster x11101ll) 
+	predict	FSdummy_hat_Z
+	
+	summ	FSdummy_hat	FSdummy_hat_Z
+	
 
 	foreach	depvar	in	PFS_ppml	PFS_FI_ppml	{
 		
 		foreach	Z	in	FSdummy_hat	SNAP_index_w	{
 			
 		
-			ivreghdfe	`depvar'	  ${RHS} 	(FSdummy = `Z')	${reg_weight} if	reg_sample_9713==1	${lowincome},	cluster(x11101ll) first savefirst savefprefix(${Zname}) //	partial(*_bar9713)
+			ivreghdfe	`depvar'	  ${RHS} 	 ${timevars} ${Mundlak_vars_9713} 	(FSdummy = `Z')	${reg_weight} if	reg_sample_9713==1	${lowincome},	cluster(x11101ll) first savefirst savefprefix(${Zname}) partial(*_bar9713)
 			est	store	`depvar'_`Z'
 		}
 		
 	}
 	
 	
-	esttab	PFS_ppml_FSdummy_hat	PFS_ppml_SNAP_index_w	PFS_FI_ppml_FSdummy_hat	PFS_FI_ppml_SNAP_index_w
+	esttab	PFS_ppml_FSdummy_hat	PFS_ppml_SNAP_index_w	PFS_FI_ppml_FSdummy_hat	PFS_FI_ppml_SNAP_index_w //, keep(FSdummy ${RHS})
+	
 	
 	esttab	PFS_ppml_FSdummy_hat	PFS_ppml_SNAP_index_w	PFS_FI_ppml_FSdummy_hat	PFS_FI_ppml_SNAP_index_w	using "${SNAP_outRaw}/FI_diagnosis.csv", ///
 							cells(b(star fmt(%8.3f)) se(fmt(2) par)) stats(N, fmt(0 2) label("N" )) ///

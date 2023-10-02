@@ -587,11 +587,11 @@
 			
 			*	Set globals
 			*global	statevars		l2_foodexp_tot_inclFS_pc_1_real	l2_foodexp_tot_inclFS_pc_2_real 
-			global	indvars			/*ind_female*/ age_ind	age_ind_sq /*ind_NoHS ind_somecol*/ ind_col /* ind_employed_dummy*/
+			global	indvars			/*ind_female*/ age_ind	age_ind_sq /*ind_NoHS ind_somecol*//*  ind_col  *//* ind_employed_dummy*/
 			global	demovars		rp_female	rp_age  rp_age_sq 	rp_nonWhte	rp_married	
 			global	econvars		ln_fam_income_pc_real	
 			global	healthvars		rp_disabled
-			global	familyvars		famnum	ratio_child	change_RP
+			global	familyvars		change_RP	//	famnum	ratio_child	
 			global	empvars			rp_employed
 			global	eduvars			/*rp_NoHS rp_somecol*/ rp_col
 			//global	foodvars		FS_rec_wth
@@ -602,8 +602,8 @@
 		
 		
 			
-			global	FSD_on_FS_X_noind	/*${statevars}	${indvars}	*/	${demovars} ${econvars}	${healthvars}	${empvars}	${familyvars}	${eduvars}	//	 ${regionvars}	${macrovars} 		W/o individual constrols. Default
-			global	FSD_on_FS_X_ind		/*${statevars}*/	${indvars}		${demovars} ${econvars}	${healthvars}	${empvars}	${familyvars}	${eduvars}	//	 ${regionvars}	${macrovars} 	With individual controls.		
+			global	FSD_on_FS_X_noind	${demovars}	${healthvars}		${eduvars}		//	${empvars}		${familyvars}	 ${econvars}	 ${regionvars}	${macrovars} 		W/o individual constrols. Default
+			global	FSD_on_FS_X_ind		${FSD_on_FS_X_noind}	${indvars}		//	 ${regionvars}	${macrovars} 	With individual controls.		
 			global	PFS_est_1st
 			global	PFS_est_2nd
 			global	PFS_est_1st
@@ -656,13 +656,13 @@
 			*	IV - Switch between Weighted Policy index, CIM and GIM
 				
 				*	Setup
-				global	depvar		PFS_ppml	//		PFS_FI_ppml	//	
+				global	depvar		PFS_FI_ppml	//	PFS_ppml	//					
 				global	endovar		FSdummy	//	FSamt_capita
 				global	IV			SNAP_index_w	//	citi6016	//	inst6017_nom	//	citi6016	//		//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
 				global	IVname		index_w	//	CIM	//	
 				
 				*	Sample and weight choice
-				loc	income_below130	0	//	Keep only individuals who were ever below 130% income line 
+				loc	income_below130	1	//	Keep only individuals who were ever below 130% income line 
 				loc	weighted		1	//	Generate survey-weighted estimates
 				loc	control_ind		1	//	Include individual-level controls
 				
