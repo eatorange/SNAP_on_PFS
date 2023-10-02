@@ -142,6 +142,7 @@
 			*	Time trend of food insecurity (by PFS) over years, over different cutoffs	
 			*	As we can see, 0.4 is the cut-off that most similarly matches FI prevalence rate (FSSS)
 			preserve		
+				
 				collapse	(mean) PFS_ppml	PFS_FI_05	PFS_FI_03	PFS_FI_045	HFSM_FI	[aw=wgt_long_ind], by(year)	//	weighted average by year
 				
 				
@@ -157,11 +158,11 @@
 			
 			drop	PFS_FI_05	PFS_FI_03
 			rename	PFS_FI_045	PFS_FI_ppml
-			lab	var	PFS_FI_ppml	"Food insecure (PFS < 0.4)"
+			lab	var	PFS_FI_ppml	"Food insecure (PFS < 0.45)"
 
 			
 			*	Set global macro for cutoff,
-			global	PFS_cutoff=0.4
+			global	PFS_cutoff=0.45
 			
 		*tsspell, f(L.year == .)
 		*br year _spell _seq _end
@@ -320,7 +321,7 @@
 			*	We add-up all non-missing PFS over time at household-level, and divide it by cut-off PFS of those non-missing years.
 			
 			*	Aggregate PFS and PFS_FI over time (numerator)
-			*	(2023-09-08) Use if all values aggregated are non-missing.
+			*	(2023-09-08) Use if all values aggregated are non-missing (balanced).
 				
 				foreach	var	in	PFS_ppml	PFS_FI_ppml	{
 					

@@ -664,7 +664,7 @@
 				*	Sample and weight choice
 				loc	income_below130	1	//	Keep only individuals who were ever below 130% income line 
 				loc	weighted		1	//	Generate survey-weighted estimates
-				loc	control_ind		1	//	Include individual-level controls
+				loc	control_ind		0	//	Include individual-level controls
 				
 				*loc	same_RP_9713	0	//	Keep only individuals were same RP over the period
 				
@@ -1242,7 +1242,7 @@
 					estadd	scalar	Fstat_KP	=	e(widstat)
 					summ	PFS_ppml	${sum_weight}	if	reg_sample_9713==1 ${lowincome}
 					estadd	scalar	mean_PFS	=	 r(mean) 
-					est	store	${Zname}_`lag'_mund_2nd_lowinc
+					est	store	${Zname}_`lag'_2nd_lowinc
 					
 					*	Clean global macro, to make sure it does not mistakenly apply in other settings.
 					global	Z		
@@ -1265,7 +1265,7 @@
 				estadd	scalar	Fstat_KP	=	e(widstat)
 				summ	PFS_ppml	${sum_weight}	if	reg_sample_9713==1 ${lowincome}
 				estadd	scalar	mean_PFS	=	 r(mean)
-				est	store	${Zname}_l4l2_mund_2nd
+				est	store	${Zname}_l42_2nd_lowinc
 				
 				
 				*	SNAP (t-2, t) effects on PFS
@@ -1279,7 +1279,7 @@
 				estadd	scalar	Fstat_KP	=	e(widstat)
 				summ	PFS_ppml	${sum_weight}	if	reg_sample_9713==1 ${lowincome}
 				estadd	scalar	mean_PFS	=	 r(mean)
-				est	store	${Zname}_l2l0_mund_2nd
+				est	store	${Zname}_l20_2nd_lowinc
 				
 				
 				*	SNAP (t-4, t-2, t-0) effects on PFS
@@ -1295,7 +1295,7 @@
 				estadd	scalar	Fstat_KP	=	e(widstat)
 				summ	PFS_ppml	${sum_weight}	if	reg_sample_9713==1 ${lowincome}
 				estadd	scalar	mean_PFS	=	 r(mean)
-				est	store	${Zname}_l4l2l0_mund_2nd
+				est	store	${Zname}_l420_2nd_lowinc
 				
 				
 				
@@ -1311,9 +1311,10 @@
 				estadd	scalar	Fstat_KP	=	e(widstat)
 				summ	PFS_ppml	${sum_weight}	if	reg_sample_9713==1 ${lowincome}
 				estadd	scalar	mean_PFS	=	 r(mean)
-				est	store	${Zname}_l6l4l2l0_mund_2nd
+				est	store	${Zname}_l6420_2nd_lowinc
 				
 				
+/*
 				*	SNAP (t-4, t-2, t-0) effects on PFS
 					*	Full controls over 5-years
 					*	For covariates that is less likely to be time-variant, I include only those at t-4 (i.e. age, gender, education)
@@ -1340,30 +1341,32 @@
 				est	store	${Zname}_l4l2l0_allX_2nd
 				
 				
+*/
 				*	2nd stage only
-					esttab		${Zname}_l8_mund_2nd ${Zname}_l6_mund_2nd  ${Zname}_l4_mund_2nd	 ${Zname}_l2_mund_2nd	${Zname}_l0_mund_2nd  ${Zname}_l4l2_mund_2nd	${Zname}_l2l0_mund_2nd	${Zname}_l4l2l0_mund_2nd	${Zname}_l6l4l2l0_mund_2nd		/*${Zname}_l4l2l0_allX_2nd*/	using "${SNAP_outRaw}/PFS_${Zname}_mund_2nd_lags.csv", ///
+					esttab		${Zname}_l8_2nd_lowinc ${Zname}_l6_2nd_lowinc  ${Zname}_l4_2nd_lowinc	 ${Zname}_l2_2nd_lowinc	${Zname}_l0_2nd_lowinc	///
+								${Zname}_l42_2nd_lowinc	${Zname}_l20_2nd_lowinc	${Zname}_l420_2nd_lowinc	${Zname}_l6420_2nd_lowinc		using "${SNAP_outRaw}/PFS_${Zname}_2nd_lags.csv", ///
 					cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2c mean_PFS YearFE Mundlak Fstat_CD	Fstat_KP , fmt(0 2) label("N" "R2" "Mean PFS" "Year FE" "Mundlak" "F-stat(CD)" "F-stat(KP)"))	///
 					incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	drop(/*rp_state_enum**/ year_enum* )	order(l0_FSdummy	l2_FSdummy	l4_FSdummy l6_FSdummy	l8_FSdummy)	///
 					title(PFS on Lagged FS dummy)		replace	
 		
 		
-					esttab	 ${Zname}_l6_mund_2nd  ${Zname}_l4_mund_2nd	 ${Zname}_l2_mund_2nd	${Zname}_l0_mund_2nd 	/*${Zname}_l4l2_mund_2nd	${Zname}_l2l0_mund_2nd	${Zname}_l4l2l0_mund_2nd	${Zname}_l6l4l2l0_mund_2nd	${Zname}_l4l2l0_allX_2nd*/	using "${SNAP_outRaw}/PFS_${Zname}_mund_2nd_lags.tex", ///
+					esttab	 ${Zname}_l6_2nd  ${Zname}_l4_2nd	 ${Zname}_l2_2nd	${Zname}_l0_2nd 	/*${Zname}_l4l2_2nd	${Zname}_l2l0_2nd	${Zname}_l4l2l0_2nd	${Zname}_l6l4l2l0_2nd	${Zname}_l4l2l0_allX_2nd*/	using "${SNAP_outRaw}/PFS_${Zname}_2nd_lags.tex", ///
 					cells(b(star fmt(%8.3f)) se(fmt(2) par)) stats(N r2c mean_PFS YearFE  Fstat_KP , fmt(0 2) label("N" "R$^2$" "Mean PFS" "Controls" "F-stat(KP)"))	///
 					incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	keep(l0_FSdummy	l2_FSdummy	l4_FSdummy l6_FSdummy )	order(l0_FSdummy	l2_FSdummy	l4_FSdummy l6_FSdummy	l8_FSdummy)	///
 					title(PFS on Lagged FS dummy)		replace	
 				
-				est	restore	${Zname}_l6l4l2l0_mund_2nd
+				est	restore	${Zname}_l6l4l2l0_2nd
 				test	l6_FSdummy + l4_FSdummy + l2_FSdummy + l0_FSdummy=0
 				
-				est	restore	${Zname}_l4l2l0_mund_2nd
+				est	restore	${Zname}_l4l2l0_2nd
 				test	 l4_FSdummy + l2_FSdummy + l0_FSdummy=0
 				
 				
 				
 				*	Coefplot of IR coefficients
 				*	(NOTE: I should run IR seprately, one for full sample and one for low-inc sample, and save with "_full" and "_lowinc" prefix.)
-				coefplot 	${Zname}_l0_mund_2nd_full ${Zname}_l2_mund_2nd_full ${Zname}_l4_mund_2nd_full ${Zname}_l6_mund_2nd_full, bylabel(Full sample) ||	///
-			${Zname}_l0_mund_2nd_lowinc	${Zname}_l2_mund_2nd_lowinc ${Zname}_l4_mund_2nd_lowinc	${Zname}_l6_mund_2nd_lowinc, bylabel(Low-income population) ||,	///
+				coefplot 	${Zname}_l0_2nd_full ${Zname}_l2_2nd_full ${Zname}_l4_2nd_full ${Zname}_l6_2nd_full, bylabel(Full sample) ||	///
+			${Zname}_l0_2nd_lowinc	${Zname}_l2_2nd_lowinc ${Zname}_l4_2nd_lowinc	${Zname}_l6_2nd_lowinc, bylabel(Low-income population) ||,	///
 			keep(l0_FSdummy l2_FSdummy l4_FSdummy l6_FSdummy) byopts(compact cols(1) legend(off)) vertical // title(Lagged SNAP Effects on PFS)
 				graph	export	"${SNAP_outRaw}/IR_full_lowinc.png", as(png) replace
 				
