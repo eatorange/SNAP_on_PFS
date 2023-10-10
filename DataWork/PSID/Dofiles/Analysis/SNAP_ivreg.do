@@ -662,7 +662,7 @@
 				global	IVname		index_w	//	CIM	//	
 				
 				*	Sample and weight choice
-				loc	income_below130	1	//	Keep only individuals who were ever below 130% income line 
+				loc	income_below130	0	//	Keep only individuals who were ever below 130% income line 
 				loc	weighted		1	//	Generate survey-weighted estimates
 				loc	control_ind		0	//	Include individual-level controls
 				

@@ -75,7 +75,6 @@
 	
 	
 	
-	
 
 	
 	*	Mundlak var of regressors, including time dummy					
@@ -97,7 +96,25 @@
 		
 		}
 						
-				
+	*	OLS
+	*	Benchmark specificaddtion: weight-adjusted, clustered at individual-level
+	global	depvar	PFS_ppml
+	
+		*	Bivariate
+		reg	${depvar}	FSdummy ${reg_weight}, cluster(x11101ll)
+		
+		*	Bivariate, with time FE
+		reg	${depvar}	FSdummy  i.year	${reg_weight}, cluster(x11101ll)
+		
+		*	Bivariate, individual FE
+		reghdfe	${depvar}	FSdummy  ${reg_weight}, absorb(x11101ll) cluster(x11101ll)
+	
+		
+		
+		*	Adding controls
+		*	Demogrpahic only
+		
+		
 	
 	
 	*	MLE
@@ -127,11 +144,13 @@
 	esttab	PFS_ppml_FSdummy_hat	PFS_ppml_SNAP_index_w	PFS_FI_ppml_FSdummy_hat	PFS_FI_ppml_SNAP_index_w //, keep(FSdummy ${RHS})
 	
 	
+/*
 	esttab	PFS_ppml_FSdummy_hat	PFS_ppml_SNAP_index_w	PFS_FI_ppml_FSdummy_hat	PFS_FI_ppml_SNAP_index_w	using "${SNAP_outRaw}/FI_diagnosis.csv", ///
 							cells(b(star fmt(%8.3f)) se(fmt(2) par)) stats(N, fmt(0 2) label("N" )) ///
 							incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	keep(FSdummy)	///
 							title(SNAP on PFS)		replace				
 	
+*/
 
 	
 	
