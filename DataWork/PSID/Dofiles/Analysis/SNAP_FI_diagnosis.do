@@ -72,12 +72,70 @@
 	
 	*reg	PFS_ppml	FSdummy	if	reg_sample_9713==1	${lowincome},	cluster(x11101ll)
 	
+
+						
+	*	Benchmark specification: weight-adjusted, clustered at individual-level
+	**	From the codes below, we find individual FE captures huge variations.
+	global	depvar	PFS_ppml
+	local	income_below130=1
 	
+	if	`income_below130'==1	{
+		
+		global	lowincome	if	income_ever_below_130_9713==1	//	Add condition for low-income population.
+		*keep if income_ever_below_130_9713==1
+	}
+	else	{
+		
+		global	lowincome	//	null macro
+		
+	}
 	
+	di	"${lowincome}"
 	
 
 	
-	*	Mundlak var of regressors, including time dummy					
+		*	Bivariate
+			
+			*	No time FE
+			reg		${depvar}	FSdummy ${reg_weight} ${lowincome}, cluster(x11101ll)	//	OLS
+			ivreghdfe	${depvar}	(FSdummy = SNAP_index_w)	${reg_weight} ${lowincome}, 	cluster(x11101ll)	first savefirst savefprefix(${Zname})	//	IV-SPI
+			cap	drop	FSdummy_hat
+			logit	FSdummy	SNAP_index_w	${reg_weight} ${lowincome}, vce(cluster x11101ll) 
+			predict	FSdummy_hat
+			ivreghdfe	${depvar}	(FSdummy=FSdummy_hat)	${reg_weight} ${lowincome}, cluster(x11101ll)	first savefirst savefprefix(${Zname})	//	IV-SNAPhat
+			
+			*	Bivariate, with time FE
+			reg	${depvar}	FSdummy ${timevars}	${reg_weight} ${lowincome}, cluster(x11101ll) // OLS
+			ivreghdfe	${depvar}	 ${timevars} (FSdummy = SNAP_index_w)	${reg_weight} ${lowincome}, 	cluster(x11101ll)	first savefirst savefprefix(${Zname})	//	IV-SPI
+			cap	drop	FSdummy_hat
+			logit	FSdummy	SNAP_index_w  ${timevars}	${reg_weight} ${lowincome}, vce(cluster x11101ll) 
+			predict	FSdummy_hat
+			ivreghdfe	${depvar}  ${timevars}	(FSdummy=FSdummy_hat)	${reg_weight} ${lowincome}, cluster(x11101ll)	first savefirst savefprefix(${Zname})	//	IV-SNAPhat
+			
+			*	Bivariate, individual FE (no time FE)
+			reghdfe	${depvar}	FSdummy  ${reg_weight} ${lowincome}, absorb(x11101ll) cluster(x11101ll) // OLS
+			ivreghdfe	${depvar}	(FSdummy = SNAP_index_w)	${reg_weight} ${lowincome}, 	absorb(x11101ll) cluster(x11101ll)	first savefirst savefprefix(${Zname})	//	IV-SPI
+			cap	drop	FSdummy_hat
+			xtlogit	FSdummy	SNAP_index_w ${lowincome}, fe
+			predict	FSdummy_hat
+			ivreghdfe	${depvar}	(FSdummy=FSdummy_hat)	${reg_weight} ${lowincome}, absorb(x11101ll) cluster(x11101ll)	first savefirst savefprefix(${Zname})	//	IV-SNAPhat
+		
+			*	Bivariate, individual FE (with time FE)
+			reghdfe	${depvar}	FSdummy  ${timevars} ${reg_weight} ${lowincome}, absorb(x11101ll) cluster(x11101ll)
+			ivreghdfe	${depvar}	${timevars}	(FSdummy = SNAP_index_w)	${reg_weight} ${lowincome}, absorb(x11101ll)	cluster(x11101ll)	first savefirst savefprefix(${Zname})	//	IV-SPI
+			cap	drop	FSdummy_hat
+			xtlogit	FSdummy	SNAP_index_w ${timevars}	${lowincome}, fe
+			predict	FSdummy_hat
+			ivreghdfe	${depvar}	${timevars}	(FSdummy=FSdummy_hat)	${reg_weight} ${lowincome}, absorb(x11101ll)	cluster(x11101ll)	first savefirst savefprefix(${Zname})	//	IV-SNAPhat
+			
+			
+		*	Adding controls  (always with time FE)
+		*	Demogrphy, education and health (no employment and incomde)
+		global	RHS	 ${demovars} ${healthvars}	${eduvars} ${timevars}
+		
+	
+		
+			*	Mundlak var of regressors, including time dummy					
 		foreach	samp	in	/*all*/ 9713	{
 		
 			*	All sample
@@ -85,7 +143,7 @@
 			
 			
 			*	W/o individual controls (default)
-			ds	${RHS} ${timevars}
+			ds	${RHS} 
 			foreach	var	in	`r(varlist)'	{
 				bys	x11101ll:	egen	`var'_bar`samp'	=	mean(`var')	if	reg_sample_`samp'==1	
 			}
@@ -95,28 +153,49 @@
 		
 		
 		}
-						
-	*	OLS
-	*	Benchmark specificaddtion: weight-adjusted, clustered at individual-level
-	global	depvar	PFS_ppml
+				
+			*	No FE/no Mundlak
+			reg	${depvar}	FSdummy ${RHS} ${reg_weight}  ${lowincome}, cluster(x11101ll)
+
+			*	Mundlak
+			reg	${depvar}	FSdummy ${RHS} ${Mundlak_vars_9713}	${reg_weight}  ${lowincome}, cluster(x11101ll)
+			
+			*	FE
+			reghdfe	${depvar}	FSdummy  ${RHS}  ${reg_weight}  ${lowincome}, absorb(x11101ll) cluster(x11101ll)
+		
+
+		*	Repeat selected models using IV
+		*	model specification: Controls, weighte adjusted
+			
+			*	No FE/Mundlak
+			ivreghdfe	${depvar}	${RHS}	(FSdummy = SNAP_index_w)	${reg_weight}  ${lowincome}, 	cluster(x11101ll)	first savefirst savefprefix(${Zname})	//	IV-SPI
+			
+			cap	drop	FSdummy_hat
+			logit	FSdummy	SNAP_index_w	${RHS}	${reg_weight}  ${lowincome}, vce(cluster x11101ll) 
+			predict	FSdummy_hat
+			ivreghdfe	${depvar}	${RHS}	(FSdummy=FSdummy_hat)	${reg_weight}  ${lowincome}, cluster(x11101ll)	first savefirst savefprefix(${Zname})	//	IV-SNAPhat
+			
+			*	Mundlak
+			ivreghdfe	${depvar}	${RHS}	${Mundlak_vars_9713}	(FSdummy = SNAP_index_w)	${reg_weight}  ${lowincome}, 	cluster(x11101ll)	first savefirst savefprefix(${Zname})	//	IV-SPI
 	
-		*	Bivariate
-		reg	${depvar}	FSdummy ${reg_weight}, cluster(x11101ll)
-		
-		*	Bivariate, with time FE
-		reg	${depvar}	FSdummy  i.year	${reg_weight}, cluster(x11101ll)
-		
-		*	Bivariate, individual FE
-		reghdfe	${depvar}	FSdummy  ${reg_weight}, absorb(x11101ll) cluster(x11101ll)
-	
-		
-		
-		*	Adding controls
-		*	Demogrpahic only
-		
-		
-	
-	
+			cap	drop	FSdummy_hat
+			logit	FSdummy	SNAP_index_w	${RHS}	${Mundlak_vars_9713} ${reg_weight}  ${lowincome}, vce(cluster x11101ll) 
+			predict	FSdummy_hat
+			ivreghdfe	${depvar}	${RHS}	${Mundlak_vars_9713}	(FSdummy=FSdummy_hat)	${reg_weight}  ${lowincome}, cluster(x11101ll)	first savefirst savefprefix(${Zname})	//	IV-SNAPhat
+			
+			ivreghdfe	${depvar}	${RHS}	${Mundlak_vars_9713}	(FSdummy=FSdummy_hat)	${reg_weight} if income_ever_below_130_9713==1, cluster(x11101ll)	first savefirst savefprefix(${Zname}) //	IV-SNAPhat
+			
+			
+			
+			*	FE
+			ivreghdfe	${depvar}	${RHS}	(FSdummy = SNAP_index_w)	${reg_weight}  ${lowincome}, 	absorb(x11101ll) cluster(x11101ll)	first savefirst savefprefix(${Zname})	//	IV-SPI
+			
+			cap	drop	FSdummy_hat
+			xtlogit	FSdummy	SNAP_index_w	${RHS}  ${lowincome}, fe	// Does not allow weight, so have to use unweighted.
+			predict	FSdummy_hat
+			ivreghdfe	${depvar}	${RHS}	(FSdummy = FSdummy_hat)	${reg_weight}  ${lowincome}, 	absorb(x11101ll) cluster(x11101ll)	first savefirst savefprefix(${Zname})	//	IV-SNAPhat
+			
+			
 	*	MLE
 	cap	drop	FSdummy_hat
 	logit	FSdummy	SNAP_index_w	${RHS} 	  ${timevars} ${Mundlak_vars_9713} ${reg_weight}	if	reg_sample_9713==1	${lowincome}, vce(cluster x11101ll) 
