@@ -660,7 +660,7 @@
 				global	depvar		PFS_ppml	// PFS_FI_ppml	//		//					
 				global	endovar		FSdummy	//	FSamt_capita
 				global	IV			SNAP_index_w	//	citi6016	//	inst6017_nom	//	citi6016	//		//	errorrate_total		//			share_welfare_GDP_sl // SSI_GDP_sl //  SSI_GDP_sl SSI_GDP_slx
-				global	IVname		Elig_index_w	//	CIM	//	
+				global	IVname		SPI_w	//	CIM	//	
 				
 				*	Sample and weight choice
 				loc	income_below130	1	//	Keep only individuals who were ever below 130% income line 
@@ -856,7 +856,7 @@
 					
 				}	
 				
-		
+				
 				*	OLS
 					
 					foreach	samp	in	/*all*/	9713	{
@@ -891,12 +891,7 @@
 					title(PFS on ${IVname})		replace	
 		
 			
-						
-/*
-						reg	FSdummy	SNAP_index_w ${FSD_on_FS_X}	${timevars}	${Mundlak_vars_`samp'} 	${reg_weight} if	reg_sample_9713==1	${lowincome}, ///
-							/*absorb(x11101ll)*/	cluster (x11101ll)	
-						predict temp
-*/
+					
 				*	2SLS
 				
 				foreach	samp	in	9713	/*all*/		{
@@ -1255,11 +1250,7 @@
 					estadd	scalar	mean_PFS	=	 r(mean) 
 					est	store	${Zname}_`lag'_2nd_lowinc
 					
-					*	Clean global macro, to make sure it does not mistakenly apply in other settings.
-					global	Z		
-					global	Zname	
-					global	endoX	
-					
+				
 				}
 				
 				global	Zname	SNAPhat

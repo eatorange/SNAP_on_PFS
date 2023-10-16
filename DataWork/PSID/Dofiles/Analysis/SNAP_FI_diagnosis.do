@@ -77,7 +77,7 @@
 	*	Benchmark specification: weight-adjusted, clustered at individual-level
 	**	From the codes below, we find individual FE captures huge variations.
 	global	depvar	PFS_ppml
-	local	income_below130=1
+	local	income_below130=0
 	
 	if	`income_below130'==1	{
 		
@@ -98,11 +98,15 @@
 			
 			*	No time FE
 			reg		${depvar}	FSdummy ${reg_weight} ${lowincome}, cluster(x11101ll)	//	OLS
-			ivreghdfe	${depvar}	(FSdummy = SNAP_index_w)	${reg_weight} ${lowincome}, 	cluster(x11101ll)	first savefirst savefprefix(${Zname})	//	IV-SPI
+			
+			ivreghdfe	${depvar}	(FSdummy = SNAP_index_w)	${reg_weight} ${lowincome}, 	cluster(x11101ll)	 first savefirst savefprefix(${Zname})	//	IV-SPI
+			
 			cap	drop	FSdummy_hat
 			logit	FSdummy	SNAP_index_w	${reg_weight} ${lowincome}, vce(cluster x11101ll) 
 			predict	FSdummy_hat
 			ivreghdfe	${depvar}	(FSdummy=FSdummy_hat)	${reg_weight} ${lowincome}, cluster(x11101ll)	first savefirst savefprefix(${Zname})	//	IV-SNAPhat
+			est	store	IV_SNAPhat_biv_2nd
+			
 			
 			*	Bivariate, with time FE
 			reg	${depvar}	FSdummy ${timevars}	${reg_weight} ${lowincome}, cluster(x11101ll) // OLS
@@ -177,25 +181,33 @@
 			
 			*	Mundlak
 			ivreghdfe	${depvar}	${RHS}	${Mundlak_vars_9713}	(FSdummy = SNAP_index_w)	${reg_weight}  ${lowincome}, 	cluster(x11101ll)	first savefirst savefprefix(${Zname})	//	IV-SPI
-	
+			
+			cap	drop	FSdummy_hat_lin
+			reg	FSdummy	SNAP_index_w	${RHS}	${Mundlak_vars_9713} ${reg_weight}  ${lowincome}, vce(cluster x11101ll) 
+			predict	FSdummy_hat_lin
+			
 			cap	drop	FSdummy_hat
 			logit	FSdummy	SNAP_index_w	${RHS}	${Mundlak_vars_9713} ${reg_weight}  ${lowincome}, vce(cluster x11101ll) 
 			predict	FSdummy_hat
 			ivreghdfe	${depvar}	${RHS}	${Mundlak_vars_9713}	(FSdummy=FSdummy_hat)	${reg_weight}  ${lowincome}, cluster(x11101ll)	first savefirst savefprefix(${Zname})	//	IV-SNAPhat
 			
-			ivreghdfe	${depvar}	${RHS}	${Mundlak_vars_9713}	(FSdummy=FSdummy_hat)	${reg_weight} if income_ever_below_130_9713==1, cluster(x11101ll)	first savefirst savefprefix(${Zname}) //	IV-SNAPhat
+			ivreghdfe	${depvar}	${RHS}	${Mundlak_vars_9713}	(FSdummy=FSdummy_hat)	${reg_weight} if income_ever_below_130_9713==1, cluster(x11101ll)	first savefirst savefprefix(${Zname}) partial(*_bar9713) //	IV-SNAPhat
 			
 			
 			
 			*	FE
 			ivreghdfe	${depvar}	${RHS}	(FSdummy = SNAP_index_w)	${reg_weight}  ${lowincome}, 	absorb(x11101ll) cluster(x11101ll)	first savefirst savefprefix(${Zname})	//	IV-SPI
 			
+			
 			cap	drop	FSdummy_hat
 			xtlogit	FSdummy	SNAP_index_w	${RHS}  ${lowincome}, fe	// Does not allow weight, so have to use unweighted.
 			predict	FSdummy_hat
 			ivreghdfe	${depvar}	${RHS}	(FSdummy = FSdummy_hat)	${reg_weight}  ${lowincome}, 	absorb(x11101ll) cluster(x11101ll)	first savefirst savefprefix(${Zname})	//	IV-SNAPhat
 			
-			
+	
+
+	
+	
 	*	MLE
 	cap	drop	FSdummy_hat
 	logit	FSdummy	SNAP_index_w	${RHS} 	  ${timevars} ${Mundlak_vars_9713} ${reg_weight}	if	reg_sample_9713==1	${lowincome}, vce(cluster x11101ll) 
@@ -232,18 +244,15 @@
 */
 
 	
+	*	(2023-10-14) We do 4 specification
+		
+		*	1. Bivariate
+		
 	
 	
 	
 	
 	
-	
-	
-	
-	global	depvar	PFS_ppml // PFS_FI_ppml
-	global	Z	FSdummy_hat	//SNAP_index_w		//	
-
-	ivreghdfe	${depvar}	/*  ${FSD_on_FS_X} 	 ${timevars}	${Mundlak_vars_9713}  */ 	(FSdummy = ${Z})	${reg_weight} if	reg_sample_9713==1	${lowincome},	cluster(x11101ll) first savefirst savefprefix(${Zname}) //	partial(*_bar9713)
 	
 	
 	
