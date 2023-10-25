@@ -35,6 +35,7 @@
 	*	Benchmark specification: weight-adjusted, clustered at individual-level
 	global	reg_weight		 [pw=wgt_long_ind]
 	global	sum_weight		[aw=wgt_long_ind]
+	*global	xtlogit_weight	[iw=wgt_long_ind]
 	
 	
 	*	Preample
@@ -297,6 +298,62 @@
 				estadd	scalar	mean_SNAP	=	 r(mean) 
 				est	store	${Zname}_mund_1st	
 				est	drop	${Zname}${endovar}
+		
+		
+		
+			*	(5) Control, time FE, individual FE
+		global	RHS	${FSD_on_FS_X}	${timevars}	
+		
+			*	OLS
+			reghdfe		${depvar}	FSdummy	${RHS}		 ${reg_weight} ${lowincome}, cluster(x11101ll) absorb(x11101ll)	//	OLS
+			estadd	local	Controls	"Y"
+			estadd	local	YearFE		"Y"
+			estadd	local	Mundlak		"Y"
+			estadd	scalar	r2c	=	e(r2)
+			summ	PFS_ppml	${sum_weight}				
+			estadd	scalar	mean_PFS	=	 r(mean)					
+			est	store	OLS_indFE		
+							
+			*	IV 
+			
+				*	Non-linear
+				cap	drop	${endovar}_hat
+				xtlogit	${endovar}	${IV}	${RHS}	 ${lowincome}, fe
+				predict	${endovar}_hat
+				lab	var	${endovar}_hat	"Predicted SNAP"		
+				margins, dydx(SNAP_index_w) post
+				estadd	local	Controls	"Y"
+				estadd	local	YearFE		"Y"
+				estadd	local	Mundlak		"Y"
+				scalar	Fstat_CD_${Zname}	=	 e(cdf)
+				scalar	Fstat_KP_${Zname}	=	e(widstat)
+				summ	FSdummy	${sum_weight}	if	e(sample)==1
+				estadd	scalar	mean_SNAP	=	 r(mean)
+				est	store	logit_SPI_indFE
+				
+			ivreghdfe	${depvar}	${RHS}	(${endovar} = SNAP_index_w)	${reg_weight} ${lowincome}, absorb(x11101ll)	cluster(x11101ll) //		first savefirst savefprefix(${Zname})
+				estadd	local	Controls	"Y"
+				estadd	local	YearFE		"Y"
+				estadd	local	Mundlak		"Y"
+				scalar	Fstat_CD_${Zname}	=	 e(cdf)
+				scalar	Fstat_KP_${Zname}	=	e(widstat)
+				summ	PFS_ppml	${sum_weight}	if	e(sample)==1
+				estadd	scalar	mean_PFS	=	 r(mean)
+				est	store	${Zname}_mund_2nd
+			
+				est	restore	${Zname}${endovar}
+				estadd	local	Controls	"Y"
+				estadd	local	YearFE		"Y"
+				estadd	local	Mundlak		"Y"
+				estadd	scalar	Fstat_CD	=	Fstat_CD_${Zname}, replace
+				estadd	scalar	Fstat_KP	=	Fstat_KP_${Zname}, replace
+				summ	FSdummy	${sum_weight}	if	e(sample)==1
+				estadd	scalar	mean_SNAP	=	 r(mean) 
+				est	store	${Zname}_mund_1st	
+				est	drop	${Zname}${endovar}
+		
+		
+		
 		
 		
 		*	1st stage
