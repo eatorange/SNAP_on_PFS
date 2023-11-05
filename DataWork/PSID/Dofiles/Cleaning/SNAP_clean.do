@@ -182,6 +182,7 @@
 			keep	x11101ll	`var'*
 			save	"${SNAP_dtInt}/Ind_vars/`var'", replace
 			
+			
 	}
 
 	*	Aggregate family-level variables

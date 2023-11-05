@@ -51,7 +51,7 @@
 	global	Zname	${IVname}_Dhat
 	
 	*	Specification for sample
-	local	income_below130=0
+	local	income_below130=1
 	
 	if	`income_below130'==1	{
 		
@@ -331,7 +331,8 @@
 				estadd	scalar	mean_SNAP	=	 r(mean)
 				est	store	logit_SPI_indFE
 				
-			ivreghdfe	${depvar}	${RHS}	(${endovar} = SNAP_index_w)	${reg_weight} ${lowincome}, absorb(x11101ll)	cluster(x11101ll) //		first savefirst savefprefix(${Zname})
+			*ivreghdfe	${depvar}	${RHS}	(${endovar} = SNAP_index_w)	${reg_weight} ${lowincome}, absorb(x11101ll)	cluster(x11101ll) //		first savefirst savefprefix(${Zname})
+			xtivreg2	${depvar}	${RHS}	(${endovar} = SNAP_index_w)	${reg_weight} ${lowincome}, fe cluster(x11101ll) first	//		 savefirst savefprefix(${Zname})
 				estadd	local	Controls	"Y"
 				estadd	local	YearFE		"Y"
 				estadd	local	Mundlak		"Y"
