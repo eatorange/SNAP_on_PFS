@@ -796,14 +796,14 @@
 					global	Z	${IV}
 					
 					cap	drop reg_sample_9713
-					ivreghdfe	${depvar}	 ${FSD_on_FS_X}	${timevars}	 (${endovar} = ${Z})	${reg_weight} if	inrange(year,1997,2013)	&	!mi(${Z})	${lowincome},	///
-						absorb(/*x11101ll*/	ib1997.year) robust	cluster(x11101ll) //	first  savefirst savefprefix(${IVname})	 
+					ivreghdfe	${depvar}	 ${FSD_on_FS_X}	/* ${timevars} */	 (${endovar} = ${Z})	${reg_weight} if	inrange(year,1997,2013)	&	!mi(${Z})	${lowincome},	///
+						absorb(x11101ll	ib1997.year) robust	cluster(x11101ll) //	first  savefirst savefprefix(${IVname})	 
 					gen	reg_sample_9713=1 if e(sample)
 					lab	var	reg_sample_9713 "Sample in IV regression (1997-2013)"	
 					
 					
 					*	Mean value of PFS in each sapmle
-					summ	${depvar}	[aw=wgt_long_ind] if	reg_sample_all==1
+					*summ	${depvar}	[aw=wgt_long_ind] if	reg_sample_all==1
 					summ	${depvar}	[aw=wgt_long_ind] if	reg_sample_9713==1
 					
 				*	Impute individual-level average covariates over time, using regression sample only (to comply with Wooldridge (2019))
