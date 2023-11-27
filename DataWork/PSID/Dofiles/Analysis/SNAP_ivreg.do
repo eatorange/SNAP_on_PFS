@@ -234,7 +234,6 @@
 				esttab	sumstat_all_wgt	sumstat_inc130_wgt	using	"${SNAP_outRaw}/Tab_1_Sumstats_wgt.tex",  ///
 					cells("count(fmt(%12.0fc)) mean(fmt(%12.2fc)) sd(fmt(%12.2f))") label	title("Summary Statistics - weighted") noobs 	  replace	
 				
-				
 			
 			
 		*	Regression of PFS on Hh characteristics.
@@ -1967,8 +1966,8 @@
 			*	Re-scale HFSM, so it can be compared with the PFS
 			
 			cap	drop	FSSS_rescale
-			gen	HFSM_rescale = (9.3-HFSM_scale)/9.3
-			label	var	HFSM_rescale "FSSS (re-scaled)"
+			gen	FSSS_rescale = (9.3-HFSM_scale)/9.3
+			label	var	FSSS_rescale "FSSS (re-scaled)"
 			
 			*	Density Estimate of Food Security Indicator (Figure A1)
 				
@@ -2163,16 +2162,16 @@
 				local	famvars	famnum	ratio_child		fam_income_month_pc_real	foodexp_tot_inclFS_pc_real		
 				local	FSvars	FS_rec_wth	FS_rec_amt_real
 				local	IVs		SNAP_index_w	citi6016	inst6017_nom
-				local	FSDvars	PFS_ppml	SL_5	TFI_HCR	CFI_HCR	TFI_FIG	CFI_FIG	TFI_SFIG	CFI_SFIG	
+				local	FSDvars	PFS_ppml	//SL_5	TFI_HCR	CFI_HCR	TFI_FIG	CFI_FIG	TFI_SFIG	CFI_SFIG	
 				
-				estpost summ	`indvars'	[aw=wgt_long_fam_adj]	if	!mi(PFS_ppml)	//	all sample
-				estpost summ	`indvars'	[aw=wgt_long_fam_adj]	if	!mi(PFS_ppml)	&	balanced_9713==1	&	income_ever_below_200_9713==1	/*  num_waves_in_FU_uniq>=2	 &*/	  // Temporary condition. Need to think proper condition.
+				//estpost summ	`indvars'	[aw=wgt_long_fam_adj]	if	!mi(PFS_ppml)	//	all sample
+				//estpost summ	`indvars'	[aw=wgt_long_fam_adj]	if	!mi(PFS_ppml)	&	balanced_9713==1	&	income_ever_below_200_9713==1	/*  num_waves_in_FU_uniq>=2	 &*/	  // Temporary condition. Need to think proper condition.
 				
 				local	summvars	/*`indvars'*/	`rpvars'	`famvars'	`FSvars'	`IVs'	`FSDvars'
 	
 				estpost tabstat	`summvars'	 if	!mi(PFS_ppml)	[aw=wgt_long_fam_adj],	statistics(count	mean	sd	min	max) columns(statistics)		// save
 				est	store	sumstat_all
-				estpost tabstat	`summvars' 	if	!mi(PFS_ppml)	&	balanced_9713==1	&	income_ever_below_200_9713==1	[aw=wgt_long_fam_adj],	statistics(count	mean	sd	min	max) columns(statistics)	// save
+				estpost tabstat	`summvars' 	if	!mi(PFS_ppml)	&	/* balanced_9713==1	& */	income_ever_below_200_9713==1	[aw=wgt_long_fam_adj],	statistics(count	mean	sd	min	max) columns(statistics)	// save
 				est	store	sumstat_9713
 				
 					*	FS amount per capita in real dollars (only those used)

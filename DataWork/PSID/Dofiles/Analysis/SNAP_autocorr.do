@@ -98,3 +98,8 @@ xtserial ${depvar} ${endovar}_hat	${RHS}	${lowincome}, output
 		*	Clustered standard error
 		ivreghdfe	${depvar}	${RHS}	(${endovar} = ${endovar}_hat)	${reg_weight} if reg_sample==1, absorb(x11101ll) cluster(x11101ll)	first savefirst savefprefix(${Zname})
 		
+		
+		
+		
+		*	Quantile regression
+		

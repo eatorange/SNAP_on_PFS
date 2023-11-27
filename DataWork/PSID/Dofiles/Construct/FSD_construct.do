@@ -128,10 +128,10 @@
 				gen		`var'=0	if	!inrange(PFS_ppml,0,0.5)
 				replace	`var'=1	if	inrange(PFS_ppml,0,0.5)
 				
-				loc	var	PFS_FI_03
+				loc	var	PFS_FI_04
 				cap	drop	`var'
-				gen		`var'=0	if	!inrange(PFS_ppml,0,0.3)
-				replace	`var'=1	if	inrange(PFS_ppml,0,0.3)
+				gen		`var'=0	if	!inrange(PFS_ppml,0,0.4)
+				replace	`var'=1	if	inrange(PFS_ppml,0,0.4)
 				
 				loc	var	PFS_FI_045
 				cap	drop	`var'
@@ -143,13 +143,13 @@
 			*	As we can see, 0.4 is the cut-off that most similarly matches FI prevalence rate (FSSS)
 			preserve		
 				
-				collapse	(mean) PFS_ppml	PFS_FI_05	PFS_FI_03	PFS_FI_045	HFSM_FI	[aw=wgt_long_ind], by(year)	//	weighted average by year
-				
+				collapse	(mean) PFS_ppml	PFS_FI_05	PFS_FI_04	PFS_FI_045	HFSM_FI	[aw=wgt_long_ind], by(year)	//	weighted average by year
+			
 				
 				*	FI prevalence rate by different cut-offs.
 				twoway	(line PFS_FI_05	year,	lc(green) lp(solid) lwidth(medium) graphregion(fcolor(white)) legend(label(1 "(PFS < 0.5)")))	///
-						(line PFS_FI_045	year, 	lc(blue) lp(dash) lwidth(medium) graphregion(fcolor(white)) legend(label(2 "(PFS < 0.4)"))) 	///
-						(line PFS_FI_03	year, 	lc(red) lp(shortdash_dot) lwidth(medium) graphregion(fcolor(white)) legend(label(3 "(PFS < 0.3)")))	///
+						(line PFS_FI_045	year, 	lc(blue) lp(dash) lwidth(medium) graphregion(fcolor(white)) legend(label(2 "(PFS < 0.45)"))) 	///
+						(line PFS_FI_04	year, 	lc(red) lp(shortdash_dot) lwidth(medium) graphregion(fcolor(white)) legend(label(3 "(PFS < 0.4)")))	///
 						(line HFSM_FI	year, 		lc(purple) lp(dot) lwidth(medium) graphregion(fcolor(white)) legend(label(4 "FI (FSSS)")row(1) size(small) keygap(0.1) symxsize(5))),	///
 						title("Food Insecurity Rates by Cut-offs") ytitle("Fraction") xtitle("Year") name(FI_prevalence_cutoffs, replace)
 				graph	export	"${SNAP_outRaw}/PFS_FI_rate_cutoffs.png", as(png) replace
