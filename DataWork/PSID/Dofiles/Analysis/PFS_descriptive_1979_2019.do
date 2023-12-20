@@ -12,10 +12,90 @@
 	
 	sort	x11101ll	year
 			
+
+		*	FI indicators using FSSS
+			
+			*	Treat marginally FS as FS
+			loc	var	FSSS_FI
+			cap	drop	`var'
+			gen		`var'=0	if	inrange(HFSM_cat,1,2)
+			replace	`var'=1	if	inrange(HFSM_cat,3,4)
+			lab	var	`var'	"Food insecure (FSSS)"
+			
+			*	Treat marginally FS as FI
+			loc	var	FSSS_FI_v2
+			cap	drop	`var'
+			gen		`var'=0	if	inrange(HFSM_cat,1,1)
+			replace	`var'=1	if	inrange(HFSM_cat,2,4)
+			lab	var	`var'	"Food insecure (FSSS) - ver2"
+
+
+	
 	*	Construct FI indicator based on PFS
 	*	In LBH, we used flexible cut-off; set cut-off such that FI(PFS) prevalence rate is equal to the offical FI reported in the annual USDA report.
 	*	Since this period do not have such reference, we set 0.5 as a benchmark threshold.
-
+	
+	*	(2023-12-13) To give a reasonable threshold, I compare FI prevalence b/w PFS and FSSS using different thresholds.
+	
+	
+			*	FI(PFS) with different cutoffs
+				loc	var	PFS_FI_07
+				cap	drop	`var'
+				gen		`var'=0	if	!inrange(PFS_ppml_noCOLI,0,0.7)
+				replace	`var'=1	if	inrange(PFS_ppml_noCOLI,0,0.7)
+				
+				loc	var	PFS_FI_06
+				cap	drop	`var'
+				gen		`var'=0	if	!inrange(PFS_ppml_noCOLI,0,0.6)
+				replace	`var'=1	if	inrange(PFS_ppml_noCOLI,0,0.6)
+				
+				loc	var	PFS_FI_05
+				cap	drop	`var'
+				gen		`var'=0	if	!inrange(PFS_ppml_noCOLI,0,0.5)
+				replace	`var'=1	if	inrange(PFS_ppml_noCOLI,0,0.5)
+				
+				loc	var	PFS_FI_04
+				cap	drop	`var'
+				gen		`var'=0	if	!inrange(PFS_ppml_noCOLI,0,0.4)
+				replace	`var'=1	if	inrange(PFS_ppml_noCOLI,0,0.4)
+				
+				loc	var	PFS_FI_03
+				cap	drop	`var'
+				gen		`var'=0	if	!inrange(PFS_ppml_noCOLI,0,0.3)
+				replace	`var'=1	if	inrange(PFS_ppml_noCOLI,0,0.3)
+				
+				
+				summ	PFS_FI_07	PFS_FI_06	PFS_FI_05	PFS_FI_04	PFS_FI_03	FSSS_FI	[aw=wgt_long_ind] if year==1999
+				summ	PFS_FI_07	PFS_FI_06	PFS_FI_05	PFS_FI_04	PFS_FI_03	FSSS_FI	[aw=wgt_long_ind] if year==2001
+				summ	PFS_FI_07	PFS_FI_06	PFS_FI_05	PFS_FI_04	PFS_FI_03	FSSS_FI	[aw=wgt_long_ind] if year==2003
+				summ	PFS_FI_07	PFS_FI_06	PFS_FI_05	PFS_FI_04	PFS_FI_03	FSSS_FI	[aw=wgt_long_ind] if year==2015
+				summ	PFS_FI_07	PFS_FI_06	PFS_FI_05	PFS_FI_04	PFS_FI_03	FSSS_FI	[aw=wgt_long_ind] if year==2017
+				summ	PFS_FI_07	PFS_FI_06	PFS_FI_05	PFS_FI_04	PFS_FI_03	FSSS_FI	[aw=wgt_long_ind] if year==2019
+				
+			
+			*	Time trend of food insecurity (by PFS) over years, over different cutoffs	
+			*	We see that the best cut-off point is 0.4 for earlier period (1999-2003) and 0.6 for later period (2015-2019)
+			*	So we use the average (0.5) as the single cut-off point.
+			preserve		
+				
+				collapse	(mean) PFS_ppml	PFS_FI_07	PFS_FI_06	PFS_FI_05	PFS_FI_04	PFS_FI_03	FSSS_FI HFSM_FI	[aw=wgt_long_ind], by(year)	//	weighted average by year
+			
+				
+				*	FI prevalence rate by different cut-offs.
+				twoway	(line PFS_FI_07	year if inrange(year,1999,2019),	lc(green) lp(solid) lwidth(medium)  graphregion(fcolor(white)) legend(label(1 "(PFS < 0.7)")))	///
+						(line PFS_FI_06	year if inrange(year,1999,2019), lc(blue) lp(dash) lwidth(medium)graphregion(fcolor(white)) legend(label(2 "(PFS < 0.6)"))) 	///
+						(line PFS_FI_05	year if inrange(year,1999,2019), lc(red) lp(dot) lwidth(medium)	 graphregion(fcolor(white)) legend(label(3 "(PFS < 0.5)")))	///
+						(line PFS_FI_04	year if inrange(year,1999,2019), lc(red) lp(dash_dot) lwidth(medium)	 graphregion(fcolor(white)) legend(label(4 "(PFS < 0.4)")))	///
+						(line PFS_FI_03	year if inrange(year,1999,2019), lc(red) lp(shortdash) lwidth(medium)	 graphregion(fcolor(white)) legend(label(5 "(PFS < 0.3)")))	///
+						(connected FSSS_FI	year if inlist(year,1999,2001,2003), lc(red) lp(shortdash) lwidth(medium)	msymbol(circle)	graphregion(fcolor(white)) legend(label(6 "FI (FSSS)")))	///
+						(connected FSSS_FI	year if inlist(year,2015,2017,2019), lc(purple) lp(longdash) lwidth(medium)	msymbol(diamond) graphregion(fcolor(white)) legend(label(7 "FI (FSSS)") row(2) size(small) keygap(0.1) symxsize(5))),	///
+						title("Food Insecurity Rates by Cut-offs") ytitle("Fraction") xtitle("Year") name(FI_prevalence_cutoffs, replace)
+				graph	export	"${SNAP_outRaw}/PFS_FI_rate_cutoffs_9919.png", as(png) replace
+				graph	close	
+			restore
+			
+			
+			
 		loc	var	PFS_FI_ppml_noCOLI
 		cap	drop	`var'
 		gen		`var'=.
@@ -35,6 +115,9 @@
 		
 		*lab	var	PFS_FS_ppml			"HH is food secure (PFS)"
 		lab	var	PFS_FS_ppml_noCOLI	"HH is food secure (PFS w/o COLI)"
+		
+		
+		
 				
 		*	Generate lagged PFS variable
 		foreach	var	in		PFS_FI_ppml_noCOLI	PFS_FS_ppml_noCOLI	{
@@ -60,22 +143,7 @@
 
 	*	Create additional indicators
 	
-		*	FI indicators using FSSS
-			
-			*	Treat marginally FS as FS
-			loc	var	FSSS_FI
-			cap	drop	`var'
-			gen		`var'=0	if	inrange(HFSM_cat,1,2)
-			replace	`var'=1	if	inrange(HFSM_cat,3,4)
-			lab	var	`var'	"Food insecure (FSSS)"
-			
-			*	Treat marginally FS as FI
-			loc	var	FSSS_FI_v2
-			cap	drop	`var'
-			gen		`var'=0	if	inrange(HFSM_cat,1,1)
-			replace	`var'=1	if	inrange(HFSM_cat,2,4)
-			lab	var	`var'	"Food insecure (FSSS) - ver2"
-
+		
 		*	Create "unique" variable that has only one value for individual (need to generate individual-level summary stats)
 			
 			*	Gender
@@ -599,7 +667,8 @@
 			
 			
 			*	PFS and NME
-			{	/*
+			/*
+			{	
 				*	By gender and race
 				graph	box	PFS_ppml_noCOLI	NME	[aw=wgt_long_ind], over(rp_female) over(rp_nonWhte) nooutsides name(outcome_gen_race, replace) title(Food Security by Gender and Race)
 				graph	export	"${SNAP_outRaw}/PFS_NME_by_gen_race.png", replace	
@@ -683,7 +752,8 @@
 			replace	newly_RP=1	if	inrange(year,1968,1997)	&	l.RP!=1 & RP==1
 			replace	newly_RP=1	if	inrange(year,1999,2019)	&	l2.RP!=1 & RP==1
 			lab	var	newly_RP	"Newly became RP"
-			*/	}
+			}
+			*/	
 
 			
 			
@@ -700,7 +770,8 @@
 				graph	export	"${SNAP_outRaw}/PFS_annual.png", replace
 				graph	close
 				
-				{	/*
+				/*
+				{	
 				*	By gender
 				lab	define	rp_female	0	"Male"	1	"Female", replace
 				lab	val	rp_female	rp_female
@@ -729,7 +800,8 @@
 				graph	export	"${SNAP_outRaw}/PFS_annual_marital.png", replace
 				graph	close
 				
-				*/	}
+				}
+				*/	
 			
 			
 			*	FSD analysis
@@ -755,8 +827,8 @@
 				
 				*	(2023-08-26) We do not use it
 				*	Spell length (# of consecutive years experiencing FI)
-				
-				{	/*
+				/*
+				{	
 					
 					*	Overall
 					lgraph SL_5 year [aw=wgt_long_ind] if PFS_FI_ppml==1, separate(0.01)  ///
@@ -803,10 +875,70 @@
 					title(Spell length by education) ytitle(average length) note(spell length longer than 3 waves are capped at 3)
 					graph	export	"${SNAP_outRaw}/SL5_annual_education.png", replace
 					graph	close
+				}
+				
+					*/	
 			
-					*/	}
+		*	Compute FI trend b/w PFS and FSSS
+		preserve
+				
+			collapse	(mean) HFSM_FI	PFS_ppml	PFS_FI_ppml_noCOLI	[aw=wgt_long_ind], by(year)	//	weighted average by year
+		
+			twoway	(line PFS_FI_ppml_noCOLI	year if inrange(year,1979,2019),	lc(blue) lp(solid) lwidth(medium)  graphregion(fcolor(white))) 	 ///
+					(connected HFSM_FI	year if inlist(year,1999,2001,2003), lc(red) lp(shortdash) lwidth(medium)	msymbol(circle)	graphregion(fcolor(white)))	 ///
+					(connected HFSM_FI	year if inlist(year,2015,2017,2019), lc(red) lp(shortdash) lwidth(medium)	msymbol(circle) graphregion(fcolor(white))), ///
+					legend(order(1 "PFS" 2 "FSSS") size(small) keygap(0.1) symxsize(5)) title("Food Insecurity Rates - PFS and FSSS") ytitle("Fraction") xtitle("Year") name(FI_pravelence_measures, replace)
+
+			graph	export	"${SNAP_outRaw}/PFS_FI_rate_PFS_FSSS.png", as(png) replace
+			graph	close	
+		restore
+		
+		
+		*	Decompose into 4 categories.
 			
+		loc	var	PFS_FI_FSSS_FI
+		cap	drop	`var'
+		gen	`var'=.
+		replace	`var'=0	if	!mi(PFS_FI_ppml_noCOLI)	&	!mi(HFSM_FI)
+		replace	`var'=1	if	PFS_FI_ppml_noCOLI==1	&	HFSM_FI==1
+		lab	var	`var'	"FI(PFS) and FI(FSSS)"
+		
+		loc	var	PFS_FS_FSSS_FS
+		cap	drop	`var'
+		gen	`var'=.
+		replace	`var'=0	if	!mi(PFS_FI_ppml_noCOLI)	&	!mi(HFSM_FI)
+		replace	`var'=1	if	PFS_FI_ppml_noCOLI==0	&	HFSM_FI==0
+		lab	var	`var'	"FS(PFS) and FS(FSSS)"
+		
+		loc	var	PFS_FI_FSSS_FS
+		cap	drop	`var'
+		gen	`var'=.
+		replace	`var'=0	if	!mi(PFS_FI_ppml_noCOLI)	&	!mi(HFSM_FI)
+		replace	`var'=1	if	PFS_FI_ppml_noCOLI==1	&	HFSM_FI==0
+		lab	var	`var'	"FI(PFS) and FS(FSSS)"
+		
+		loc	var	PFS_FS_FSSS_FI
+		cap	drop	`var'
+		gen	`var'=.
+		replace	`var'=0	if	!mi(PFS_FI_ppml_noCOLI)	&	!mi(HFSM_FI)
+		replace	`var'=1	if	PFS_FI_ppml_noCOLI==0	&	HFSM_FI==1
+		lab	var	`var'	"FS(PFS) and FI(FSSS)"
+		
+		summ	PFS_FI_FSSS_FI	PFS_FS_FSSS_FS	PFS_FI_FSSS_FS	PFS_FS_FSSS_FI
+		summ	PFS_FI_FSSS_FI	PFS_FS_FSSS_FS	PFS_FI_FSSS_FS	PFS_FS_FSSS_FI	[aweight=wgt_long_ind]
+		
 			
+		*	Individual-vars
+		estpost tabstat	PFS_FS_FSSS_FS	PFS_FI_FSSS_FI	PFS_FI_FSSS_FS	PFS_FS_FSSS_FI	[aw=wgt_long_ind],	statistics(count	mean		/*sd	min	 median	p95 max*/	) columns(statistics)  by(year)		// save
+		est	store	PFS_FSSS_FI_by_year
+
+		
+		esttab	PFS_FSSS_FI_by_year	using	"${SNAP_outRaw}/PFS_FSSS_FI_by_year.csv",  ///
+				cells("count(fmt(%12.0f)) mean(fmt(%12.2f)) sd(fmt(%12.2f)) min(fmt(%12.2f)) max(fmt(%12.2f))") label	title("Summary Statistics") noobs 	  replace
+		
+		
+		
+		
 		
 	/****************************************************************
 		SECTION 3: Regression
@@ -1085,42 +1217,59 @@
 		
 		
 	*	 (2023-08-10) Transition matrix
-
-		*	Gender
+	*	 (2023-12-19) Changed RP-level to ind-level
 		
 		*	Declare macros for each categorical condition
-		local	female_cond	rp_female==1
-		local	male_cond	rp_female==0
 		
-		local	nonWhite_cond	rp_White==0
-		local	White_cond		rp_White==1
+		local	all_cond	inrange(year,1981,2019)	//	INclude all obs
 		
-		local	NE_cond			rp_region_NE==1 
-		local	MidAt_cond		rp_region_MidAt==1
-		local	South_cond		rp_region_South==1
-		local	MidWest_cond	rp_region_MidWest==1
-		local	West_cond		rp_region_West==1
+		local	yr_1981_1990_cond	inrange(year,1981,1990)
+		local	yr_1991_2000_cond	inrange(year,1991,2000)
+		local	yr_2001_2010_cond	inrange(year,2001,2010)
+		local	yr_2011_2019_cond	inrange(year,2011,2019)
 		
-		local	NoHS_cond		rp_NoHS==1 
-		local	HS_cond			rp_HS==1
-		local	somecol_cond	rp_somecol==1 
-		local	col_cond		rp_col==1
+		local	female_cond		ind_female==1	//	rp_female==1
+		local	male_cond		ind_female==0	//	rp_female==0
 		
-		local	disab_cond		rp_disabled==1
-		local	nodisab_cond	rp_disabled==0
+		local	nonWhite_cond	ind_nonWhite==1	//	rp_White==0
+		local	White_cond		ind_White==1	//	rp_White==1
 		
-		local	SNAP_cond		FS_rec_wth==1
-		local	noSNAP_cond		FS_rec_wth==0
+// 		local	NE_cond			rp_region_NE==1 
+// 		local	MidAt_cond		rp_region_MidAt==1
+// 		local	South_cond		rp_region_South==1
+// 		local	MidWest_cond	rp_region_MidWest==1
+// 		local	West_cond		rp_region_West==1
+		
+		local	NoHS_cond		ind_NoHS	//	rp_NoHS==1 
+		local	HS_cond			ind_HS	//	rp_HS==1
+		local	somecol_cond	ind_somecol	//	rp_somecol==1 
+		local	col_cond		ind_col	//	rp_col==1
+		   
+// 		local	disab_cond		rp_disabled==1
+// 		local	nodisab_cond	rp_disabled==0
+//		
+// 		local	SNAP_cond		FS_rec_wth==1
+// 		local	noSNAP_cond		FS_rec_wth==0
 		
 		lab	var	FS_rec_wth	"Received SNAP"
 		
-		loc	categories	female	male	nonWhite	White	NE	MidAt	South	MidWest	West	NoHS	HS	somecol	col	disab	nodisab	SNAP	noSNAP
+		
+		loc	categories	all	yr_1981_1990	yr_1991_2000	yr_2001_2010	yr_2011_2019	///
+						female	male	nonWhite	White	/*NE	MidAt	South	MidWest	West*/	///
+						NoHS	HS	somecol	col	/*disab	nodisab	SNAP	noSNAP*/
 		
 		*	Loop over categories
 		*	NOTE: the joint tabulate command below generates the same relative frequency to the one using "svy:". I use this one for computation speed.
 		cap	mat	drop	trans_2by2_combined
+		cap	mat	drop	trans_2by2_entry_byyr
+		cap	mat	drop	trans_2by2_persistence_byyr
+		cap	mat	drop	trans_2by2_chronic_byyr
+		
 		mat	define	blankrow	=	J(1,7,.)
 		mat	rownames	blankrow	=	""
+		
+		mat	define	blankrow_4col	=	J(1,4,.)
+		mat	rownames	blankrow_4col	=	""
 		
 		foreach	cat	of	local	categories	{
 			
@@ -1136,14 +1285,15 @@
 			tab		PFS_FS_ppml_noCOLI	[aw=wgt_long_ind]			if	l2_PFS_FS_ppml_noCOLI==0	& inrange(year,1981,2019)	&	``cat'_cond', matcell(temp)	//	Previously FI
 			scalar	persistence_`cat'	=  temp[1,1] / (temp[1,1] + temp[2,1])	//	Persistence rate (FI, FI)
 			tab		PFS_FS_ppml_noCOLI	[aw=wgt_long_ind]			if	l2_PFS_FS_ppml_noCOLI==1	& inrange(year,1981,2019)	&	``cat'_cond', matcell(temp)	//	Previously FS
-			scalar	entry_`cat'			=  temp[1,1] / (temp[1,1] + temp[2,1])	//	Persistence rate (FI, FI)
+			scalar	entry_`cat'			=  temp[1,1] / (temp[1,1] + temp[2,1])	//	Entry rate (FS, FI)
+			
 				
 			*	Combined (Joint + marginal)
 			mat	trans_2by2_`cat'	=	samplesize_`cat',	trans_2by2_joint_`cat',	persistence_`cat',	entry_`cat'	
 			mat	rownames	trans_2by2_`cat'	=	"`cat'"
-			*	Acuumulate rows
 			
-			if	inlist("`cat'","female","nonWhite","NE","NoHS","disab","SNAP")	{
+			*	Acuumulate rows
+			if	inlist("`cat'","yr_1981_1990","female","nonWhite","NE","NoHS","disab","SNAP")	{
 				
 				mat		trans_2by2_combined	=	nullmat(trans_2by2_combined) \ 	blankrow	\	trans_2by2_`cat'	//	Add a blank row at the beginning of subcategory.
 				
@@ -1154,24 +1304,149 @@
 				
 			}
 			
+							
+			di	"This line is executed, and cat is `cat'"
+			
+			*	For gender/race/education, repeat for each time-period (1981-1990, 1991-2000, 2001-2010, 2011-2020)
+			if	inlist("`cat'","female","male","nonWhite","White","NoHS","HS","somecol","col")	{
+				
+				di	"Dat line is executed, and cat is `cat'"
+				forval	startyear=1981(10)2011	{
+					
+					local	endyear=`startyear'+9
+					di		"startyear is `startyear'"
+					di		"endyear is `endyear'"
+					
+					*	Joint
+					tab		l2_PFS_FS_ppml_noCOLI	PFS_FS_ppml_noCOLI	[aw=wgt_long_ind]		if	``cat'_cond'	& inrange(year,`startyear',`endyear'), cell matcell(trans_2by2_joint_`cat')
+					scalar	samplesize_`cat'_`startyear'	=	trans_2by2_joint_`cat'[1,1] + trans_2by2_joint_`cat'[1,2] + trans_2by2_joint_`cat'[2,1] + trans_2by2_joint_`cat'[2,2]	//	calculate sample size by adding up all
+					mat trans_2by2_joint_`cat'_`startyear' = trans_2by2_joint_`cat'[1,1], trans_2by2_joint_`cat'[1,2], trans_2by2_joint_`cat'[2,1], trans_2by2_joint_`cat'[2,2]	//	Make it as a row matrix
+					mat trans_2by2_joint_`cat'_`startyear' = trans_2by2_joint_`cat'/samplesize_`cat'_`startyear'	//	Divide it by sample size to compute relative frequency
+					mat	list	trans_2by2_joint_`cat'_`startyear'
+					scalar	chronic_`cat'_`startyear'	=	trans_2by2_joint_`cat'_`startyear'[1,1]	//	FI in two consecutive waves
+					scalar	list	chronic_`cat'_`startyear'
+					
+					*	Marginal
+					tab		PFS_FS_ppml_noCOLI	[aw=wgt_long_ind]			if	l2_PFS_FS_ppml_noCOLI==0	& inrange(year,`startyear',`endyear')	&	``cat'_cond', matcell(temp)	//	Previously FI
+					scalar	persistence_`cat'_`startyear'	=  temp[1,1] / (temp[1,1] + temp[2,1])	//	Persistence rate (FI, FI)
+					tab		PFS_FS_ppml_noCOLI	[aw=wgt_long_ind]			if	l2_PFS_FS_ppml_noCOLI==1	& inrange(year,`startyear',`endyear')	&	``cat'_cond', matcell(temp)	//	Previously FS
+					scalar	entry_`cat'_`startyear'		=  temp[1,1] / (temp[1,1] + temp[2,1])	//	Entry rate (FS, FI)
+						
+						
+				}	//	startyear
+				
+				*	Add up persistence and entry rate year
+				foreach	type	in	chronic persistence	entry	{
+					
+					cap	mat	drop	`type'_`cat'_byyear
+					mat	`type'_`cat'_byyear	=	`type'_`cat'_1981, `type'_`cat'_1991, `type'_`cat'_2001, `type'_`cat'_2011
+					mat	rownames	`type'_`cat'_byyear	=	"`cat'"
+					
+				}	//	type
+				
+				
+				*	Acuumulate rows
+				if	inlist("`cat'","female","nonWhite","NoHS")	{
+					
+					foreach	type	in	chronic persistence	entry	{
+					
+						mat		trans_2by2_`type'_byyr	=	nullmat(trans_2by2_`type'_byyr) \ 	blankrow_4col	\	`type'_`cat'_byyear	//	Add a blank row at the beginning of subcategory.
+						
+					}	//	type
+					
+				}
+				else	{
+					
+					foreach	type	in	chronic persistence	entry	{
+					
+						mat		trans_2by2_`type'_byyr	=	nullmat(trans_2by2_`type'_byyr) \ 	`type'_`cat'_byyear	//	
+						
+					}	//	type
+				}
+			
+			
+				
+			}	//	if inlist
+			
+			
+		
+			
+			
 		}
 		
-		mat	colnames	trans_2by2_combined	=	"N"	"Insecure in both rounds" "Insecure in 1st round only" "Insecure in 2nd round only" "Secure in both rounds" "Persistence" "Entry"
+		mat	colnames	trans_2by2_combined			=	"N"	"Insecure in both rounds" "Insecure in 1st round only" "Insecure in 2nd round only" "Secure in both rounds" "Persistence" "Entry"
 		mat	list	trans_2by2_combined
+		mat	colnames	trans_2by2_persistence_byyr	=	"1981-1990" "1991-2000" "2001-2010" "2011-2020"
+		mat	colnames	trans_2by2_entry_byyr	=	"1981-1990" "1991-2000" "2001-2010" "2011-2020"
+		mat	colnames	trans_2by2_chronic_byyr	=	"1981-1990" "1991-2000" "2001-2010" "2011-2020"
+		
+		mat	list	trans_2by2_persistence_byyr
+		mat	list	trans_2by2_entry_byyr
+		mat	list	trans_2by2_chronic_byyr
 		
 		*	Export
-		putexcel	set "${SNAP_outRaw}/Trans_matrix_7919", sheet(Fig_3) replace /*modify*/
+		putexcel	set "${SNAP_outRaw}/Trans_matrix_7919_ind", sheet(Fig_3) replace /*modify*/
 		putexcel	A5	=	matrix(trans_2by2_combined), names overwritefmt nformat(number_d2)	//	3a
+		putexcel	A40	=	matrix(trans_2by2_persistence_byyr), names overwritefmt nformat(number_d2)	//	3a
+		putexcel	A55	=	matrix(trans_2by2_entry_byyr), names overwritefmt nformat(number_d2)	//	3a
+		putexcel	A70	=	matrix(trans_2by2_chronic_byyr), names overwritefmt nformat(number_d2)	//	3a
 		
 		/*	Equivalent, but takes longer time to run. I just leave it as a reference
 		svy, subpop(if rp_female==0):	tab	l2_PFS_FS_ppml_noCOLI	PFS_FS_ppml
 		mat	trans_2by2_joint_male = e(b)[1,1], e(b)[1,2], e(b)[1,3], e(b)[1,4]	
 		*/
 		
-			
-			
+		
+		*	Conpare dynamics - PFS and FSSS
+		sort	x11101ll	year
+		cap	drop	HFSM_FS
+		cap	drop	l2_HFSM_FI
+		cap	drop	l2_HFSM_FS
+		gen	HFSM_FS	=	HFSM_FI
+		recode	HFSM_FS	(1=0)	(0=1)
+		gen	l2_HFSM_FI	=	l2.HFSM_FI
+		gen	l2_HFSM_FS	=	l2.HFSM_FS
+	
+		loc	PFS_FS_ppml_noCOLI_name	PFS
+		loc	HFSM_FS_name	FSSS
 		
 		
+		    
+		foreach	var	in	PFS_FS_ppml_noCOLI	HFSM_FS	{
+			    
+			foreach	year	in	2001	2003	2017	2019	{
+				    
+				*	Joint
+				tab		l2_`var'	`var'	[aw=wgt_long_ind]		if	year==`year', cell matcell(temp)
+				scalar	samplesize	=	temp[1,1] + temp[1,2] + temp[2,1] +temp[2,2]	//	calculate sample size by adding up all
+				mat trans_2by2_joint_``var'_name'_`year' = temp[1,1], temp[1,2], temp[2,1], temp[2,2]	//	Make it as a row matrix
+				mat trans_2by2_joint_``var'_name'_`year' =  trans_2by2_joint_``var'_name'_`year'/samplesize	//	Divide it by sample size to compute relative frequency
+				mat	list	trans_2by2_joint_``var'_name'_`year'
+				
+				scalar	FIFI_``var'_name'_`year'	=	trans_2by2_joint_``var'_name'_`year'[1,1]	//	FI, FI
+				scalar	FSFS_``var'_name'_`year'	=	trans_2by2_joint_``var'_name'_`year'[1,4]	//	FS, FS
+				
+			}	//	year
+			
+			mat	FIFI_``var'_name'	=	FIFI_``var'_name'_2001,	FIFI_``var'_name'_2003,	FIFI_``var'_name'_2017,	FIFI_``var'_name'_2019
+			mat	FSFS_``var'_name'	=	FSFS_``var'_name'_2001,	FSFS_``var'_name'_2003,	FSFS_``var'_name'_2017,	FSFS_``var'_name'_2019
+				
+		}	//	var
+			
+		
+		mat	list	FIFI_PFS
+		mat	list	FIFI_FSSS
+		
+		mat	FIFI_PFS_FSSS	=	FIFI_PFS	\	FIFI_FSSS
+		
+		mat	list	FSFS_PFS
+		mat	list	FSFS_FSSS
+			
+		mat	FSFS_PFS_FSSS	=	FSFS_PFS	\	FSFS_FSSS
+		
+		putexcel	set "${SNAP_outRaw}/Trans_matrix_7919_ind", sheet(PFS_FSSS_dyn) modify
+		putexcel	A5	=	matrix(FIFI_PFS_FSSS), names overwritefmt nformat(number_d2)	//	3a
+		putexcel	A10	=	matrix(FSFS_PFS_FSSS), names overwritefmt nformat(number_d2)	//	3a
 			
 		*use	"${SNAP_dtInt}/SNAP_descdta_1979_2019", clear
 		*keep	x11101ll	year	wgt_long_ind	sampstr sampcls year	l2_PFS_FI_ppml_noCOLI PFS_FI_ppml_noCOLI
