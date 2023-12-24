@@ -5,6 +5,32 @@
 		SECTION 1: Data prep		 									
 	****************************************************************/		 
 	
+		
+		*	CPI and TFP cost
+		use		"${SNAP_dtInt}/TFP cost/TFP_costs_all", clear
+		keep	if	age_ind==25
+		collapse	(mean)	TFP_monthly_cost, by(year)
+		tempfile	TFP
+		save	`TFP'
+		
+		use		"${SNAP_dtInt}/CPI_1947_2021",	clear
+		collapse	(mean)	CPI, by(year)
+		merge	1:1	year	using	`TFP'
+		
+		gen	TFP_monthly_cost_real	=	TFP_monthly_cost	*		(100/CPI)
+		keep	if	!mi(TFP_monthly_cost)
+		
+		graph	twoway	(line	CPI	year, lc(black) lp(solid) lwidth(medium) yaxis(1) graphregion(fcolor(white))) 	///
+						(line	TFP_monthly_cost year, lc(reg) lp(dash) lwidth(medium) yaxis(2) graphregion(fcolor(white))) 	///
+						(line	TFP_monthly_cost_real year, lc(blue) lp(dot) lwidth(medium) yaxis(2) graphregion(fcolor(white))), 	///
+						legend(order(1 "CPI" 2 "TFP cost (nominal)"	3 "TFP cost (real)") size(small) keygap(0.1) symxsize(5)) ///
+						title("CPI and TFP monthly cost") ytitle("CPI", axis(1))  ytitle("Amount ($)", axis(2))	xtitle("Year") name(CPI_TFP, replace)	///
+						note(TFP cost for 25-year old. Averaged over gender and month)
+		graph	export	"${SNAP_outRaw}/CPI_TFP_trend.png", as(png) replace
+		
+	
+	
+	
 	*	Open 1979-2019 PFS data, which does NOT have spell constructed
 	
 	use	"${SNAP_dtInt}/SNAP_long_PFS", clear
@@ -82,7 +108,7 @@
 			
 				
 				*	FI prevalence rate by different cut-offs.
-				twoway	(line PFS_FI_07	year if inrange(year,1999,2019),	lc(green) lp(solid) lwidth(medium)  graphregion(fcolor(white)) legend(label(1 "(PFS < 0.7)")))	///
+				twoway	(line PFS_FI_07	year if inrange(year,1999,2019), lc(green) lp(solid) lwidth(medium)  graphregion(fcolor(white)) legend(label(1 "(PFS < 0.7)")))	///
 						(line PFS_FI_06	year if inrange(year,1999,2019), lc(blue) lp(dash) lwidth(medium)graphregion(fcolor(white)) legend(label(2 "(PFS < 0.6)"))) 	///
 						(line PFS_FI_05	year if inrange(year,1999,2019), lc(red) lp(dot) lwidth(medium)	 graphregion(fcolor(white)) legend(label(3 "(PFS < 0.5)")))	///
 						(line PFS_FI_04	year if inrange(year,1999,2019), lc(red) lp(dash_dot) lwidth(medium)	 graphregion(fcolor(white)) legend(label(4 "(PFS < 0.4)")))	///
@@ -879,10 +905,41 @@
 				
 					*/	
 			
+				
+		*	Rank correlation b/w PFS and FSSS
+			
+			*	Rescale FSSS
+			loc	var	FSSS_rescale
+			cap	drop	`var'
+			gen	double	`var'	=	(9.3-HFSM_scale)/9.3
+			replace	`var'=0	if	HFSM_raw==18	
+			
+			*	Rank correlation
+			spearman	PFS_ppml_noCOLI	FSSS_rescale, stats(rho obs p) star(0.05)
+			ktau		PFS_ppml_noCOLI	FSSS_rescale, stats(taua taub obs p) star(0.05)
+		
+		
+		
+		
+		*	(2023-12-24) Food exp and TFP cost per capita (nominal and real)
+		preserve
+			collapse	(mean) HFSM_FI	PFS_ppml	PFS_FI_ppml_noCOLI	foodexp_W_TFP_pc	foodexp_W_TFP_pc_real	CPI	///
+								foodexp_tot_inclFS_pc	foodexp_tot_inclFS_pc_real	[aw=wgt_long_ind], by(year)	//	weighted average by year
+			
+			graph	twoway	(line	foodexp_tot_inclFS_pc		year	if inrange(year,1979,2019),	lc(black) lp(solid) lwidth(medium)  graphregion(fcolor(white))) ///
+							(line	foodexp_tot_inclFS_pc_real	year 	if inrange(year,1979,2019),	lc(blue) lp(shortdash) lwidth(medium)  graphregion(fcolor(white))) ///
+							(line	foodexp_W_TFP_pc		year	if inrange(year,1979,2019),	lc(green) lp(dot) lwidth(medium)  graphregion(fcolor(white))) ///
+							(line	foodexp_W_TFP_pc_real	year	if inrange(year,1979,2019),	lc(red) lp(dash) lwidth(medium)  graphregion(fcolor(white))),	///
+							legend(order(1 "Food exp (nominal)" 2 "Food exp (real)"	3 "TFP (nominal)" 4 "TFP pc (real)") size(small) keygap(0.1) symxsize(5)) ///
+							title("Food Expenditure and TFP cost per capita ($)") ytitle("Amount") xtitle("Year") name(FI_pravelence_measures, replace)
+							graph	export	"${SNAP_outRaw}/Foodexp_TFP_pc_trend.png", as(png) replace
+		restore
+			
+		
 		*	Compute FI trend b/w PFS and FSSS
 		preserve
 				
-			collapse	(mean) HFSM_FI	PFS_ppml	PFS_FI_ppml_noCOLI	[aw=wgt_long_ind], by(year)	//	weighted average by year
+			collapse	(mean) HFSM_FI	PFS_ppml	PFS_FI_ppml_noCOLI	foodexp_W_TFP_pc_real	[aw=wgt_long_ind], by(year)	//	weighted average by year
 		
 			twoway	(line PFS_FI_ppml_noCOLI	year if inrange(year,1979,2019),	lc(blue) lp(solid) lwidth(medium)  graphregion(fcolor(white))) 	 ///
 					(connected HFSM_FI	year if inlist(year,1999,2001,2003), lc(red) lp(shortdash) lwidth(medium)	msymbol(circle)	graphregion(fcolor(white)))	 ///
@@ -892,6 +949,9 @@
 			graph	export	"${SNAP_outRaw}/PFS_FI_rate_PFS_FSSS.png", as(png) replace
 			graph	close	
 		restore
+		
+		
+		
 		
 		
 		*	Decompose into 4 categories.
@@ -936,8 +996,7 @@
 		esttab	PFS_FSSS_FI_by_year	using	"${SNAP_outRaw}/PFS_FSSS_FI_by_year.csv",  ///
 				cells("count(fmt(%12.0f)) mean(fmt(%12.2f)) sd(fmt(%12.2f)) min(fmt(%12.2f)) max(fmt(%12.2f))") label	title("Summary Statistics") noobs 	  replace
 		
-		
-		
+
 		
 		
 	/****************************************************************
@@ -1407,9 +1466,9 @@
 		gen	l2_HFSM_FI	=	l2.HFSM_FI
 		gen	l2_HFSM_FS	=	l2.HFSM_FS
 	
+
 		loc	PFS_FS_ppml_noCOLI_name	PFS
 		loc	HFSM_FS_name	FSSS
-		
 		
 		    
 		foreach	var	in	PFS_FS_ppml_noCOLI	HFSM_FS	{
@@ -1424,29 +1483,42 @@
 				mat	list	trans_2by2_joint_``var'_name'_`year'
 				
 				scalar	FIFI_``var'_name'_`year'	=	trans_2by2_joint_``var'_name'_`year'[1,1]	//	FI, FI
+				scalar	FIFS_``var'_name'_`year'	=	trans_2by2_joint_``var'_name'_`year'[1,2]	//	FI, FS
+				scalar	FSFI_``var'_name'_`year'	=	trans_2by2_joint_``var'_name'_`year'[1,3]	//	FI, FS
 				scalar	FSFS_``var'_name'_`year'	=	trans_2by2_joint_``var'_name'_`year'[1,4]	//	FS, FS
 				
 			}	//	year
 			
-			mat	FIFI_``var'_name'	=	FIFI_``var'_name'_2001,	FIFI_``var'_name'_2003,	FIFI_``var'_name'_2017,	FIFI_``var'_name'_2019
-			mat	FSFS_``var'_name'	=	FSFS_``var'_name'_2001,	FSFS_``var'_name'_2003,	FSFS_``var'_name'_2017,	FSFS_``var'_name'_2019
+			foreach	type	in	FIFI	FIFS	FSFI	FSFS	{
+				
+				mat	`type'_``var'_name'	=	`type'_``var'_name'_2001,	`type'_``var'_name'_2003,	`type'_``var'_name'_2017,	`type'_``var'_name'_2019
+				mat	`type'_``var'_name'	=	`type'_``var'_name'_2001,	`type'_``var'_name'_2003,	`type'_``var'_name'_2017,	`type'_``var'_name'_2019
+				
+				mat	rownames	`type'_``var'_name'	=	"``var'_name'"
+				
+				mat	colnames	`type'_``var'_name'	=	"1999-2001"	"2001-2003"	"2015-2017"	"2017-2019"
+			}
 				
 		}	//	var
 			
-		
-		mat	list	FIFI_PFS
-		mat	list	FIFI_FSSS
-		
-		mat	FIFI_PFS_FSSS	=	FIFI_PFS	\	FIFI_FSSS
-		
-		mat	list	FSFS_PFS
-		mat	list	FSFS_FSSS
+		foreach	type	in	FIFI	FIFS	FSFI	FSFS	{
 			
-		mat	FSFS_PFS_FSSS	=	FSFS_PFS	\	FSFS_FSSS
+			mat	list	`type'_PFS
+			mat	list	`type'_FSSS
+			
+			mat	`type'_PFS_FSSS	=	`type'_PFS	\	`type'_FSSS
+		}
+
 		
 		putexcel	set "${SNAP_outRaw}/Trans_matrix_7919_ind", sheet(PFS_FSSS_dyn) modify
+		putexcel	A4	=	"Food insecure in both rounds"
 		putexcel	A5	=	matrix(FIFI_PFS_FSSS), names overwritefmt nformat(number_d2)	//	3a
+		putexcel	A9	=	"Food secure in both rounds"
 		putexcel	A10	=	matrix(FSFS_PFS_FSSS), names overwritefmt nformat(number_d2)	//	3a
+		putexcel	A14	=	"Food insecure 1st round only"
+		putexcel	A15	=	matrix(FIFS_PFS_FSSS), names overwritefmt nformat(number_d2)	//	3a
+		putexcel	A19	=	"Food insecure 2nd round only"
+		putexcel	A20	=	matrix(FSFI_PFS_FSSS), names overwritefmt nformat(number_d2)	//	3a
 			
 		*use	"${SNAP_dtInt}/SNAP_descdta_1979_2019", clear
 		*keep	x11101ll	year	wgt_long_ind	sampstr sampcls year	l2_PFS_FI_ppml_noCOLI PFS_FI_ppml_noCOLI
