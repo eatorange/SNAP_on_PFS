@@ -28,16 +28,36 @@
 						note(TFP cost for 25-year old. Averaged over gender and month)
 		graph	export	"${SNAP_outRaw}/CPI_TFP_trend.png", as(png) replace
 		
-	
-	
+		
+		*	Add official "individual" food insecurity prevalence rate from the USDA report.
+		*	Source
+			*	2020 report (2006-2019), 2006 report (1998-2005), 1999 report (1995-1997)
+			import excel "${clouldfolder}/DataWork/USDA/DataSets/Raw/US_FI_prevalence_rate.xlsx", sheet("person") firstrow clear
+			rename	(*)	(year	total_K	FS_K	FS_pct	FI_K	FI_pct	LFS_K	LFS_pct	VLFS_K	VLFS_pct)
+			foreach	pct_var	in	FS_pct	FI_pct	LFS_pct	VLFS_pct	{
+				
+				replace	`pct_var'	=	`pct_var'	/	100
+				
+			}
+						
+			compress				
+			save	"${SNAP_dtInt}/USDA_FI_prevalnce_rate_person.dta", replace
+			
+			
 	
 	*	Open 1979-2019 PFS data, which does NOT have spell constructed
 	
 	use	"${SNAP_dtInt}/SNAP_long_PFS", clear
 	lab	var	PFS_ppml_noCOLI		"PFS"
 	
-	sort	x11101ll	year
-			
+	sort	year	x11101ll
+	
+		*	Import USDA FI prevalnce rate (person)
+		merge	m:1	year	using	"${SNAP_dtInt}/USDA_FI_prevalnce_rate_person.dta",  keep(1 3) nogen keepusing(FI_pct LFS_pct	VLFS_pct)
+		lab	var	FI_pct		"FI (national)"
+		lab	var	LFS_pct		"Low food secure (national)"
+		lab	var	VLFS_pct	"Very low food secure (national)"
+		
 
 		*	FI indicators using FSSS
 			
@@ -54,7 +74,6 @@
 			gen		`var'=0	if	inrange(HFSM_cat,1,1)
 			replace	`var'=1	if	inrange(HFSM_cat,2,4)
 			lab	var	`var'	"Food insecure (FSSS) - ver2"
-
 
 	
 	*	Construct FI indicator based on PFS
@@ -104,18 +123,19 @@
 			*	So we use the average (0.5) as the single cut-off point.
 			preserve		
 				
-				collapse	(mean) PFS_ppml	PFS_FI_07	PFS_FI_06	PFS_FI_05	PFS_FI_04	PFS_FI_03	FSSS_FI HFSM_FI	[aw=wgt_long_ind], by(year)	//	weighted average by year
+				collapse	(mean) PFS_ppml	PFS_FI_07	PFS_FI_06	PFS_FI_05	PFS_FI_04	PFS_FI_03	FI_pct	FSSS_FI HFSM_FI	[aw=wgt_long_ind], by(year)	//	weighted average by year
 			
 				
 				*	FI prevalence rate by different cut-offs.
 				twoway	(line PFS_FI_07	year if inrange(year,1999,2019), lc(green) lp(solid) lwidth(medium)  graphregion(fcolor(white)) legend(label(1 "(PFS < 0.7)")))	///
 						(line PFS_FI_06	year if inrange(year,1999,2019), lc(blue) lp(dash) lwidth(medium)graphregion(fcolor(white)) legend(label(2 "(PFS < 0.6)"))) 	///
 						(line PFS_FI_05	year if inrange(year,1999,2019), lc(red) lp(dot) lwidth(medium)	 graphregion(fcolor(white)) legend(label(3 "(PFS < 0.5)")))	///
-						(line PFS_FI_04	year if inrange(year,1999,2019), lc(red) lp(dash_dot) lwidth(medium)	 graphregion(fcolor(white)) legend(label(4 "(PFS < 0.4)")))	///
-						(line PFS_FI_03	year if inrange(year,1999,2019), lc(red) lp(shortdash) lwidth(medium)	 graphregion(fcolor(white)) legend(label(5 "(PFS < 0.3)")))	///
-						(connected FSSS_FI	year if inlist(year,1999,2001,2003), lc(red) lp(shortdash) lwidth(medium)	msymbol(circle)	graphregion(fcolor(white)) legend(label(6 "FI (FSSS)")))	///
-						(connected FSSS_FI	year if inlist(year,2015,2017,2019), lc(purple) lp(longdash) lwidth(medium)	msymbol(diamond) graphregion(fcolor(white)) legend(label(7 "FI (FSSS)") row(2) size(small) keygap(0.1) symxsize(5))),	///
-						title("Food Insecurity Rates by Cut-offs") ytitle("Fraction") xtitle("Year") name(FI_prevalence_cutoffs, replace)
+						(line PFS_FI_04	year if inrange(year,1999,2019), lc(green) lp(dash_dot) lwidth(medium)	 graphregion(fcolor(white)) legend(label(4 "(PFS < 0.4)")))	///
+						(line PFS_FI_03	year if inrange(year,1999,2019), lc(gray) lp(shortdash) lwidth(medium)	 graphregion(fcolor(white)) legend(label(5 "(PFS < 0.3)")))	///
+						(line FI_pct	year if inrange(year,1999,2019), lc(black) lp(longdash) lwidth(medium)	 graphregion(fcolor(white)) legend(label(6 "USDA official")))	///
+						(connected FSSS_FI	year if inlist(year,1999,2001,2003), lc(red) lp(shortdash) lwidth(medium)	msymbol(circle)	graphregion(fcolor(white)) legend(label(7 "FSSS")))	///
+						(connected FSSS_FI	year if inlist(year,2015,2017,2019), lc(red) lp(shortdash) lwidth(medium)	msymbol(circle) graphregion(fcolor(white)) legend(label(8 "FSSS") row(2) size(small) keygap(0.1) symxsize(5))),	///
+						title("Food Insecurity Prevalence Rates") ytitle("Fraction") xtitle("Year") name(FI_prevalence_cutoffs, replace)
 				graph	export	"${SNAP_outRaw}/PFS_FI_rate_cutoffs_9919.png", as(png) replace
 				graph	close	
 			restore
@@ -146,6 +166,7 @@
 		
 				
 		*	Generate lagged PFS variable
+		sort	x11101ll	year
 		foreach	var	in		PFS_FI_ppml_noCOLI	PFS_FS_ppml_noCOLI	{
 			
 			cap	drop	l2_`var'
@@ -939,12 +960,14 @@
 		*	Compute FI trend b/w PFS and FSSS
 		preserve
 				
-			collapse	(mean) HFSM_FI	PFS_ppml	PFS_FI_ppml_noCOLI	foodexp_W_TFP_pc_real	[aw=wgt_long_ind], by(year)	//	weighted average by year
+			collapse	(mean) HFSM_FI	PFS_ppml	PFS_FI_ppml_noCOLI	foodexp_W_TFP_pc_real	FI_pct	[aw=wgt_long_ind], by(year)	//	weighted average by year
 		
 			twoway	(line PFS_FI_ppml_noCOLI	year if inrange(year,1979,2019),	lc(blue) lp(solid) lwidth(medium)  graphregion(fcolor(white))) 	 ///
 					(connected HFSM_FI	year if inlist(year,1999,2001,2003), lc(red) lp(shortdash) lwidth(medium)	msymbol(circle)	graphregion(fcolor(white)))	 ///
-					(connected HFSM_FI	year if inlist(year,2015,2017,2019), lc(red) lp(shortdash) lwidth(medium)	msymbol(circle) graphregion(fcolor(white))), ///
-					legend(order(1 "PFS" 2 "FSSS") size(small) keygap(0.1) symxsize(5)) title("Food Insecurity Rates - PFS and FSSS") ytitle("Fraction") xtitle("Year") name(FI_pravelence_measures, replace)
+					(connected HFSM_FI	year if inlist(year,2015,2017,2019), lc(red) lp(shortdash) lwidth(medium)	msymbol(circle) graphregion(fcolor(white)))	///
+					(line FI_pct		year if inrange(year,1979,2019),	lc(black) lp(dash) lwidth(medium)  graphregion(fcolor(white))), 	 ///
+					legend(order(1 "PFS" 2 "FSSS" 4 "USDA official") row(1) size(small) keygap(0.1) symxsize(5)) title("Food Insecurity Prevalence") ytitle("Fraction") xtitle("Year") name(FI_pravelence_measures, replace)	///
+					note(USDA official is person-level)
 
 			graph	export	"${SNAP_outRaw}/PFS_FI_rate_PFS_FSSS.png", as(png) replace
 			graph	close	
@@ -1520,6 +1543,58 @@
 		putexcel	A19	=	"Food insecure 2nd round only"
 		putexcel	A20	=	matrix(FSFI_PFS_FSSS), names overwritefmt nformat(number_d2)	//	3a
 			
+		
+		
+		*	(2023-12-27)	Spell length - PFS and FSSS
+		
+			*	Spell length using FSSS
+			sort	x11101ll	year
+			
+			cap	drop	FSSS_FI_spell
+			cap	drop	FSSS_FI_seq
+			cap	drop	FSSS_FI_end
+			
+			*	Construct spell length using FSSS
+			tsspell, cond(FSSS_FI==1) spell(FSSS_FI_spell) seq(FSSS_FI_seq) end(FSSS_FI_end)
+
+			tab	FSSS_FI_seq	[aw=wgt_long_ind]	//	maximum 3 spell length 
+			tab	FSSS_FI_seq	[aw=wgt_long_ind]	if	FSSS_FI_end==1	//	distribution of spell length
+			
+			tab	FSSS_FI_seq	[aw=wgt_long_ind]	if	FSSS_FI_end==1,	matcell(FSSS_spell_freq_w)
+			mat	list	FSSS_spell_freq_w
+			local	N=r(N)
+			mat	FSSS_spell_pct_tot	=	FSSS_spell_freq_w	/	r(N)
+			
+			mat	list	FSSS_spell_pct_tot
+			
+			mat	spell_pct_all		=	nullmat(spell_pct_all),	spell_pct_tot
+			mat	list	spell_pct_all
+			
+			
+			*	Construct spell length using PFS - 1999-2003 and 2015-2019 only
+			cap	drop	PFS_FI_spell_9919
+			cap	drop	PFS_FI_seq_9919
+			cap	drop	PFS_FI_end_9919
+			
+			tsspell, cond(PFS_FI_ppml_noCOLI==1 & inlist(year,1999,2001,2003,2015,2017,2019)) spell(PFS_FI_spell_9919) seq(PFS_FI_seq_9919) end(PFS_FI_end_9919)
+			
+			*	Compare spell between PFS and FSSS
+			tab	
+/*
+			
+			gen		`var'=.
+			replace	`var'=0	if	!mi(FSSS_FI)
+			replace	`var'=1	if	FSSS_FI==1
+			replace	`var'=2	if	l2.FSSS_FI==1	&	FSSS_FI==1
+			replace	`var'=3	if	l4.FSSS_FI==1	&	l2.FSSS_FI==1	&	FSSS_FI==1
+*/
+			
+			*	Compare spell length (1999-2003, 2015-2019)
+			
+			
+		
+		
+		
 		*use	"${SNAP_dtInt}/SNAP_descdta_1979_2019", clear
 		*keep	x11101ll	year	wgt_long_ind	sampstr sampcls year	l2_PFS_FI_ppml_noCOLI PFS_FI_ppml_noCOLI
 		*	2 X 2 (FS, FI)	-	FS status over two subsequent periods
