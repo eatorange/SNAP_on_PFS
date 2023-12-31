@@ -1708,49 +1708,79 @@
 			*	Spell length using FSSS
 			sort	x11101ll	year
 			
+			*	Construct spell length using FSSS
 			cap	drop	FSSS_FI_spell
 			cap	drop	FSSS_FI_seq
 			cap	drop	FSSS_FI_end
 			
-			*	Construct spell length using FSSS
 			tsspell, cond(FSSS_FI==1) spell(FSSS_FI_spell) seq(FSSS_FI_seq) end(FSSS_FI_end)
 
-			tab	FSSS_FI_seq	[aw=wgt_long_ind]	//	maximum 3 spell length 
-			tab	FSSS_FI_seq	[aw=wgt_long_ind]	if	FSSS_FI_end==1	//	distribution of spell length
-			
-			tab	FSSS_FI_seq	[aw=wgt_long_ind]	if	FSSS_FI_end==1,	matcell(FSSS_spell_freq_w)
-			mat	list	FSSS_spell_freq_w
-			local	N=r(N)
-			mat	FSSS_spell_pct_tot	=	FSSS_spell_freq_w	/	r(N)
-			
-			mat	list	FSSS_spell_pct_tot
-			
-			mat	spell_pct_all		=	nullmat(spell_pct_all),	spell_pct_tot
-			mat	list	spell_pct_all
-			
 			
 			*	Construct spell length using PFS - 1999-2003 and 2015-2019 only
-			cap	drop	PFS_FI_spell_9919
-			cap	drop	PFS_FI_seq_9919
-			cap	drop	PFS_FI_end_9919
+				
+				*	1999-2003
+				cap	drop	PFS_FI_9903_spell
+				cap	drop	PFS_FI_9903_seq
+				cap	drop	PFS_FI_9903_end
+				
+				tsspell, cond(PFS_FI_ppml_noCOLI==1 & inlist(year,1999,2001,2003)) spell(PFS_FI_9903_spell) seq(PFS_FI_9903_seq) end(PFS_FI_9903_end)
+				
+				*	2015-2019
+				cap	drop	PFS_FI_1519_spell
+				cap	drop	PFS_FI_1519_seq
+				cap	drop	PFS_FI_1519_end
+				
+				tsspell, cond(PFS_FI_ppml_noCOLI==1 & inlist(year,2015,2017,2019)) spell(PFS_FI_1519_spell) seq(PFS_FI_1519_seq) end(PFS_FI_1519_end)
+				
+				*	1999-2019 (combine the above two)
+				
+				foreach	var	in	spell	seq	end	{
+					
+					cap	drop	PFS_FI_9919_`var'
+					gen			PFS_FI_9919_`var'=.
+					replace		PFS_FI_9919_`var'=PFS_FI_9903_`var'	if	inlist(year,1999,2001,2003)
+					replace		PFS_FI_9919_`var'=PFS_FI_1519_`var'	if	inlist(year,2015,2017,2019)
+					
+				}
+				
+				
+				*	I do NOT use the code below, as it constructs consecutive spell b/w 1999-2003 and 2015-2019 if an individual is NOT observed b/w 2005 to 2013 (ex: x11101ll:6365049)
+				*tsspell, cond(PFS_FI_ppml_noCOLI==1 & inlist(year,1999,2001,2003,2015,2017,2019)) spell(PFS_FI_9919_spell) seq(PFS_FI_9919_seq) end(PFS_FI_9919_end)
+					
 			
-			tsspell, cond(PFS_FI_ppml_noCOLI==1 & inlist(year,1999,2001,2003,2015,2017,2019)) spell(PFS_FI_spell_9919) seq(PFS_FI_seq_9919) end(PFS_FI_end_9919)
+			*	Spell length distribution
 			
-			*	Compare spell between PFS and FSSS
-			tab	
-/*
+			loc	period1	inlist(year,1999,2001,2003)
+			loc	period2	inlist(year,2015,2017,2019)
+			loc	period3	inlist(year,1999,2001,2003,2015,2017,2019)
 			
-			gen		`var'=.
-			replace	`var'=0	if	!mi(FSSS_FI)
-			replace	`var'=1	if	FSSS_FI==1
-			replace	`var'=2	if	l2.FSSS_FI==1	&	FSSS_FI==1
-			replace	`var'=3	if	l4.FSSS_FI==1	&	l2.FSSS_FI==1	&	FSSS_FI==1
-*/
+				foreach	var	in	FSSS_FI	PFS_FI_9919	{
+					
+					forval	t=1/3	{
+						tab	`var'_seq	[aw=wgt_long_ind]	if	`var'_end==1	&	`period`t'',	matcell(`var'_freq_`t')
+						
+						mat	list	`var'_freq_`t'
+						local	N=r(N)
+						mat	`var'_pct_`t'	=	`var'_freq_`t'	/	r(N)
+						
+						mat	rownames	`var'_pct_`t'	=	"1"	"2"	"3"				
+						
+					}
+					
+					mat	`var'_pct_tot	=	`var'_pct_3 \ `var'_pct_1	\	`var'_pct_2
+					mat	list	`var'_pct_tot
+					
+				}
 			
-			*	Compare spell length (1999-2003, 2015-2019)
-			
-			
-		
+				
+				mat	spell_9919_tot	=	FSSS_FI_pct_tot, PFS_FI_9919_pct_tot
+				mat	colnames	spell_9919_tot	=	"FSSS"	 "PFS"
+				mat	list	spell_9919_tot
+				
+				putexcel	set "${SNAP_outRaw}/Spell_9919_PFS_FSSS", sheet(PFS_FSSS_spell) replace
+				putexcel	A3	=	"Spell length, 1999-2003 and 2015-2019"
+				putexcel	A5	=	matrix(spell_9919_tot), names overwritefmt nformat(number_d2)	//	3a
+
 		
 		
 		*use	"${SNAP_dtInt}/SNAP_descdta_1979_2019", clear
