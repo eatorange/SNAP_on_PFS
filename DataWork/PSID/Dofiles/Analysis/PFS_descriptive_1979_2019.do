@@ -76,12 +76,170 @@
 			lab	var	`var'	"Food insecure (FSSS) - ver2"
 
 	
+	
+	*	Categorize food security status based on annual food security prevalence rate (1996-2019)
+	*	CAUTION: TAKES SOME TIME
+	*	This code is take from the LBH, with a few minor modification 
+		
+		
+			*	Categorize food security status based on the PFS.
+			 quietly	{
+				foreach	type	in	ppml_noCOLI	/*ls	rf*/	{
+						
+						cap	drop		PFS_FS_`type'
+						cap	drop		PFS_FI_`type'
+						
+						gen	PFS_FS_`type'	=	0	if	!mi(PFS_`type')	//	Food secure
+						gen	PFS_FI_`type'	=	0	if	!mi(PFS_`type')	//	Food insecure (low food secure and very low food secure)
+						*gen	PFS_LFS_`type'	=	0	if	!mi(PFS_`type')	//	Low food secure
+						*gen	PFS_VLFS_`type'	=	0	if	!mi(PFS_`type')	//	Very low food secure
+						*gen	PFS_cat_`type'	=	0	if	!mi(PFS_`type')	//	Categorical variable: FS, LFS or VLFS
+												
+						*	Generate a variable for the threshold PFS
+						cap	drop	PFS_threshold_`type'
+						gen	PFS_threshold_`type'=.
+						
+						foreach	year	in	1995 1996 1997 1999 2001 2003 2005 2007 2009 2011 2013 2015 2017 2019	{
+							
+							*if	"`type'"=="glm_RPPadj" & inrange(`year',2,5) continue	
+							
+							di	"current loop is `plan',  in year `year'"
+							cap	drop	pctile_`type'_`year'
+							xtile pctile_`type'_`year' = PFS_`type' if !mi(PFS_`type')	&	year==`year', nq(1000)
+	
+							* We use loop to find the threshold value for categorizing households as food (in)secure
+							local	counter 	=	1	//	reset counter
+							local	ratio_FI	=	0	//	reset FI population ratio
+							*local	ratio_VLFS	=	0	//	reset VLFS population ratio
+							
+							foreach	indicator	in	FI	/*VLFS*/	{
+								
+								local	counter 	=	1	//	reset counter
+								local	ratio_`indicator'	=	0	//	reset population ratio
+							
+								* To decrease running time, we first loop by 10 
+								summ	`indicator'_pct if year==`year'
+								local	prop_`indicator'_`year'=r(mean)
+								
+								while (`counter' < 1000 & `ratio_`indicator''<`prop_`indicator'_`year'') {	//	Loop until population ratio > USDA ratio
+									
+									qui di	"current indicator is `indicator', counter is `counter'"
+									qui	replace	PFS_`indicator'_`type'=1	if	year==`year'	&	inrange(pctile_`type'_`year',1,`counter')	//	categorize certain number of households at bottom as FI
+									
+									*qui	svy, subpop(year_enum`year'): mean 	PFS_`indicator'_`type'	//	Generate population ratio
+									*local ratio_`indicator' = _b[PFS_`indicator'_`type']
+									
+									summ	PFS_`indicator'_`type'	[aw=wgt_long_ind]	if	year==`year'
+									local ratio_`indicator'	=	r(mean)
+									
+									local counter = `counter' + 10	//	Increase counter by 10
+								}
+
+								*	Since we first looped by unit of 10, we now have to find to exact value by looping 1 instead of 10.
+								qui di "internediate counter is `counter'"
+								local	counter=`counter'-10	//	Adjust the counter, since we added extra 10 at the end of the first loop
+
+								while (`counter' > 1 & `ratio_`indicator''>`prop_`indicator'_`year'') {	//	Loop until population ratio < USDA ratio
+									
+									qui di "counter is `counter'"
+									qui	replace	PFS_`indicator'_`type'=0	if	year==`year'	&	inrange(pctile_`type'_`year',`counter',1000)
+									*qui	svy, subpop(year_enum`year'): mean 	PFS_`indicator'_`type'
+									*local ratio_`indicator' = _b[PFS_`indicator'_`type']
+									summ	PFS_`indicator'_`type'	[aw=wgt_long_ind]	if	year==`year'
+									local ratio_`indicator'	=	r(mean)
+									
+									local counter = `counter' - 1
+								}
+								qui di "Final counter is `counter'"
+
+								*	Now we finalize the threshold value - whether `counter' or `counter'+1
+									
+									*	Counter
+									local	diff_case1	=	abs(`prop_`indicator'_`year''-`ratio_`indicator'')
+
+									*	Counter + 1
+									qui	replace	PFS_`indicator'_`type'=1	if	year==`year'	&	inrange(pctile_`type'_`year',1,`counter'+1)
+									*qui	svy, subpop(year_enum`year'): mean 	PFS_`indicator'_`type'
+									*local	ratio_`indicator' = _b[PFS_`indicator'_`type']
+									summ	PFS_`indicator'_`type'	[aw=wgt_long_ind]	if	year==`year'
+									local ratio_`indicator'	=	r(mean)
+									
+									local	diff_case2	=	abs(`prop_`indicator'_`year''-`ratio_`indicator'')
+									qui	di "diff_case2 is `diff_case2'"
+
+									*	Compare two threshold values and choose the one closer to the USDA value
+									if	(`diff_case1'<`diff_case2')	{
+										global	threshold_`indicator'_`plan'_`type'_`year'	=	`counter'
+									}
+									else	{	
+										global	threshold_`indicator'_`plan'_`type'_`year'	=	`counter'+1
+									}
+								
+								*	Categorize households based on the finalized threshold value.
+								qui	{
+									replace	PFS_`indicator'_`type'=1	if	year==`year'	&	inrange(pctile_`type'_`year',1,${threshold_`indicator'_`plan'_`type'_`year'})
+									replace	PFS_`indicator'_`type'=0	if	year==`year'	&	inrange(pctile_`type'_`year',${threshold_`indicator'_`plan'_`type'_`year'}+1,1000)		
+								}	
+								di "thresval of `indicator' in year `year' is ${threshold_`indicator'_`plan'_`type'_`year'}"
+							}	//	indicator
+							
+							*	Food secure households
+							replace	PFS_FS_`type'=0	if	year==`year'	&	inrange(pctile_`type'_`year',1,${threshold_FI_`plan'_`type'_`year'})
+							replace	PFS_FS_`type'=1	if	year==`year'	&	inrange(pctile_`type'_`year',${threshold_FI_`plan'_`type'_`year'}+1,1000)
+							
+							*	Low food secure households
+							*replace	PFS_LFS_`type'=1	if	year==`year'	&	PFS_FI_`type'==1	&	PFS_VLFS_`type'==0	//	food insecure but NOT very low food secure households			
+							
+							*	Categorize households into one of the three values: FS, LFS and VLFS						
+							*replace	PFS_cat_`type'=1	if	year==`year'	&	PFS_VLFS_`type'==1
+							*replace	PFS_cat_`type'=2	if	year==`year'	&	PFS_LFS_`type'==1
+							*replace	PFS_cat_`type'=3	if	year==`year'	&	PFS_FS_`type'==1
+							*assert	PFS_cat_`type'!=0	if	year==`year'
+							
+							*	Save threshold PFS as global macros and a variable, the average of the maximum PFS among the food insecure households and the minimum of the food secure households					
+							qui	summ	PFS_`type'	if	year==`year'	&	PFS_FS_`type'==1	//	Minimum PFS of FS households
+							local	min_FS_PFS	=	r(min)
+							qui	summ	PFS_`type'	if	year==`year'	&	PFS_FI_`type'==1	//	Maximum PFS of FI households
+							local	max_FI_PFS	=	r(max)
+							
+							*	Save the threshold PFS
+							replace	PFS_threshold_`type'	=	(`min_FS_PFS'	+	`max_FI_PFS')/2		if	year==`year'
+							*global	PFS_threshold_`type'_`year'	=	(`min_FS_PFS'	+	`max_FI_PFS')/2
+							
+							
+						}	//	year
+						
+						label	var	PFS_FI_`type'	"Food Insecurity (PFS) (`type')"
+						label	var	PFS_FS_`type'	"Food security (PFS) (`type')"
+						*label	var	PFS_LFS_`type'	"Low food security (PFS) (`type')"
+						*label	var	PFS_VLFS_`type'	"Very low food security (PFS) (`type')"
+						*label	var	PFS_cat_`type'	"PFS category: FS, LFS or VLFS"
+						
+						
+
+				}	//	type
+				
+				*lab	define	PFS_category	1	"Very low food security (VLFS)"	2	"Low food security (LFS)"	3	"Food security(FS)"
+				*lab	value	PFS_cat_*	PFS_category
+				
+				lab	var	PFS_threshold_ppml_noCOLI			"Threshold value (PFS)"
+				
+			 }	//	qui
+			
+		save	"${SNAP_dtInt}/SNAP_long_PFS_cat", replace	
+	
+		
+		
+	
+	
+	
+	
 	*	Construct FI indicator based on PFS
 	*	In LBH, we used flexible cut-off; set cut-off such that FI(PFS) prevalence rate is equal to the offical FI reported in the annual USDA report.
 	*	Since this period do not have such reference, we set 0.5 as a benchmark threshold.
 	
 	*	(2023-12-13) To give a reasonable threshold, I compare FI prevalence b/w PFS and FSSS using different thresholds.
-	
+	use	"${SNAP_dtInt}/SNAP_long_PFS_cat", clear
 	
 			*	FI(PFS) with different cutoffs
 				loc	var	PFS_FI_07
