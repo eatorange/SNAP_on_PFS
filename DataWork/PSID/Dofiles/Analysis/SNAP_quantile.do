@@ -36,10 +36,11 @@
 			lab	var	PFS_pct	"PFS percentile"
 			
 			*	Summary stats of the lowest quantiles
-			summ	PFS_ppml	${sum_weight} if reg_sample==1 & PFS_pct==1
-			summ	PFS_ppml	${sum_weight} if reg_sample==1 & PFS_pct==2
-			summ	PFS_ppml	${sum_weight} if reg_sample==1 & PFS_pct==3
-			summ	PFS_ppml	${sum_weight} if reg_sample==1 & PFS_pct==4, d
+			summ	PFS_ppml	${sum_weight} if reg_sample==1 & PFS_pct==5
+			summ	PFS_ppml	${sum_weight} if reg_sample==1 & PFS_pct==10
+			summ	PFS_ppml	${sum_weight} if reg_sample==1 & PFS_pct==15
+			summ	PFS_ppml	${sum_weight} if reg_sample==1 & PFS_pct==20
+			
 		
 			*	(Ben's comment) To check which group of people drives SNAP participation (thus my estimator), check the SNAP compliance rate by different groups.
 			*	I will compare three variables; (i) Realized SNAP participation (FSdummy) (ii) Non-linearly predicted SNAP status (FSdummy_hat) (iii) First-stage (SNAPhat)
@@ -47,8 +48,8 @@
 				
 				logit	${endovar}	${IV}	${RHS}	 ${reg_weight}	if reg_sample==1, vce(cluster x11101ll) 
 				margins, dydx(${IV}) over(PFS_pct)
-				marginsplot, nolabel ytitle(Efects on Prob(SNAP participation)) title(Average Marginal Effects of SPI over PFS percentile)	///
-				note(From logit regression of SNAP status on SPI)	name(SPI_on_SNAP_over_PFSqtile, replace)
+				marginsplot, nolabel ytitle(Efects on Prob(SNAP participation)) title(Avg Marginal Effects of SPI on SNAP over PFS percentile)	///
+				note(Low-income population. From logit regression of SNAP status on SPI)	name(SPI_on_SNAP_over_PFSqtile, replace)
 				graph display SPI_on_SNAP_over_PFSqtile, ysize(4) xsize(9.0)
 				graph	export	"${SNAP_outRaw}/SPI_on_SNAP_over_PFSqtile.png", as(png) replace
 				
@@ -84,7 +85,8 @@
 			 
 			
 			*	Quantile regression
-			qrprocess 	${depvar}		SNAPhat	${RHS}	${reg_weight} if reg_sample==1,	 vce(, cluster(x11101ll)) q(0.05(0.05)0.9)	// 5 percentile to 95 percentile (caution: takes time)
+			*qrprocess 	${depvar}		SNAPhat	${RHS}	${reg_weight} if reg_sample==1,	 vce(, cluster(x11101ll)) q(0.05(0.05)0.9)	// 5 percentile to 95 percentile (caution: takes time)
+			qrprocess 	${depvar}		SNAPhat	${RHS}	${reg_weight} if reg_sample==1,	 vce(, cluster(x11101ll)) q(0.05(0.05)0.2)	// 5 percentile to 20 percentile (caution: takes time)
 			est store qreg_PFS
 
 			esttab	  using "${SNAP_outRaw}/PFS_qreg.csv", ///
@@ -250,13 +252,22 @@
 			lab	var	${endovar}_hat	"Predicted SNAP"		
 			
 			
-			ivreghdfe	PFS_ppml	${RHS}	(${endovar} = ${endovar}_hat)	${reg_weight} if reg_sample==1 & PFS_FI_ever==1, ///
+			ivreghdfe	PFS_ppml	${RHS}	(${endovar} = ${endovar}_hat)	${reg_weight} if reg_sample==1, ///
 					/*absorb(x11101ll)*/	cluster (x11101ll)		first savefirst savefprefix(${Zname})
 					
 			
-			ivreghdfe	FIG_indiv	${RHS}	(${endovar} = ${endovar}_hat)	${reg_weight} if reg_sample==1 & PFS_FI_ever==1, ///
+			summ	FIG_indiv	SFIG_indiv	${sum_weight} if reg_sample==1	&	PFS_ppml<0.45
+			
+			ivtobit	FIG_indiv	${RHS}	(${endovar} = ${endovar}_hat)	${reg_weight} if reg_sample==1, ///
+					/*absorb(x11101ll)*/	vce(cluster x11101ll)	ll(0)
+			ivtobit	SFIG_indiv	${RHS}	(${endovar} = ${endovar}_hat)	${reg_weight} if reg_sample==1, ///
+					/*absorb(x11101ll)*/	vce(cluster x11101ll)	ll(0)		
+			
+			reg	FIG_indiv	SNAPhat	if reg_sample==1	
+						
+			ivreghdfe	FIG_indiv	${RHS}	(${endovar} = ${endovar}_hat)	${reg_weight} if reg_sample==1, ///
 					/*absorb(x11101ll)*/	cluster (x11101ll)		first savefirst savefprefix(${Zname})
-					
+							
 					
 			ivreghdfe	SFIG_indiv	${RHS}	(${endovar} = ${endovar}_hat)	${reg_weight} if reg_sample==1 & PFS_FI_ever==1, ///
 					/*absorb(x11101ll)*/	cluster (x11101ll)		first savefirst savefprefix(${Zname})
