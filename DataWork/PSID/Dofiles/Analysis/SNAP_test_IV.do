@@ -3,12 +3,14 @@
 	*	SPI and unemployment
 	
 	use "${SNAP_dtInt}/Unemployment Rate_state_annual", clear
-	merge 1:1 year rp_state using "${SNAP_dtInt}/SNAP_policy_data_official", keepusing(SNAP_index_w) assert(1 3) nogen keep(3)
+	merge 1:1 year rp_state using "${SNAP_dtInt}/SNAP_policy_data_official", /*keepusing(SNAP_index_w)*/ assert(1 3) nogen keep(3)
 
 	keep	if	inrange(year,1997,2014)
 
 	xtset	rp_state	year 
 
+	
+	*	Construct change variables
 	gen	d_unemp = unemp_rate - l.unemp_rate
 	gen d_SPI = SNAP_index_w - l.SNAP_index_w
  
@@ -33,6 +35,7 @@
 		
 		cap	drop	state_num
 		encode	state, gen(state_num)
+		sort	state	year
 		twoway line SNAP_index_w year if inrange(state_num,1,25), by(state_num, row(5) title("Dynamics of SPI over year - part I"))  xsize(12) ysize(8)
 		graph	export	"${SNAP_outRaw}/change_SPI_by_state_part1.png", as(png) replace
 		twoway line SNAP_index_w year if inrange(state_num,26,51), by(state_num, row(5) title("Dynamics of SPI over year - part II"))  xsize(12) ysize(8)
@@ -41,8 +44,16 @@
 		graph	twoway	(line SNAP_index_w year if rp_state==22, lpattern(solid)) ///
 				(line SNAP_index_w year if rp_state==24, lpattern(dash)) ///
 				(line SNAP_index_w year if rp_state==17, lpattern(dot))
-	
 
+				
+		twoway	(line SNAP_index_w	year	if	rp_state==4, 	 lc(green) lp(solid) lwidth(medium) graphregion(fcolor(white)) legend(label(1 "CA")))	///
+				(line SNAP_index_w	year	if	rp_state==31, 	 lc(blue) lp(dash) lwidth(medium) graphregion(fcolor(white)) legend(label(2 "NY")))	///
+				(line SNAP_index_w	year	if	rp_state==50, 	lc(purple) lp(dot) lwidth(medium) graphregion(fcolor(white)) legend(label(3 "AK")))	///
+				(line SNAP_index_w	year	if	rp_state==49, lc(red) lp(dash_dot) lwidth(medium) graphregion(fcolor(white)) legend(label(4 "WY"))),	///
+				title("SPI over Years") ytitle("SPI") xtitle("Year")	name(SPI_by_state, replace)
+		graph	export	"${SNAP_outRaw}/SPI_trend_by_selected_states.png", as(png) replace
+		graph	close				
+				
 		*	Employment outcome
 		
 			*	OLS
