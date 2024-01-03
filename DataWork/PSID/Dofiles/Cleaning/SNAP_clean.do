@@ -75,14 +75,14 @@
 		local	cr_panel		0	//	Create panel structure from ID variable
 			local	panel_view	0	//	Create an excel file showing the change of certain clan over time (for internal data-check only)
 		local	merge_data		0	//	Merge ind- and family- variables and import it into ID variable
-			local	raw_reshape	0		//	Merge raw variables and reshape into long data (takes time)
-			local	add_clean	0		//	Do additional cleaning and import external data (CPI, TFP)
-			local	import_dta	0		//	Import aggregated variables into ID data. 
+			local	raw_reshape	1		//	Merge raw variables and reshape into long data (takes time)
+			local	add_clean	1		//	Do additional cleaning and import external data (CPI, TFP)
+			local	import_dta	1		//	Import aggregated variables and external data into ID data. 
 		
 		*	SECTION 4: Clean data and save it
 		local	clean_vars		1	//	Clean variables and save it
 		
-		
+		*	(These parts were moved into "SNAP_const.do")
 		local	PFS_const		0	//	Construct PFS
 		local	FSD_construct	0	//	Construct FSD
 		local	IV_reg			0	//	Run IV-2SLS regression
@@ -153,6 +153,35 @@
 			
 			keep	x11101ll	`var'*
 			save	"${SNAP_dtInt}/Ind_vars/`var'", replace
+			
+			keep	x11101ll	`var'*
+			save	"${SNAP_dtInt}/Ind_vars/`var'", replace
+			
+			*	Grade completed (individual level)
+				*	Note: has value zero if a person is 16-year old or younger.
+				*	Considers GED, unlike family-level RP variable. For example, if a person completed less than 12 grade (say, 10) but has GED, it would be 10 for family-level variable, but 12 in this variable.
+			loc	var	ind_edu
+			psid use || `var' [68]ER30010 [70]ER30052 [71]ER30076 [72]ER30100 [73]ER30126 [74]ER30147 [75]ER30169 [76]ER30197 [77]ER30226 [78]ER30255 [79]ER30296 [80]ER30326 [81]ER30356 [82]ER30384 [83]ER30413 [84]ER30443 [85]ER30478 [86]ER30513 [87]ER30549 [88]ER30584 [89]ER30620 [90]ER30657 [91]ER30703 [92]ER30748 [93]ER30820 [94]ER33115 [95]ER33215 [96]ER33315 [97]ER33415 [99]ER33516 [01]ER33616 [03]ER33716 [05]ER33817 [07]ER33917 [09]ER34020 [11]ER34119 [13]ER34230 [15]ER34349 [17]ER34548 [19]ER34752  using  "${SNAP_dtRaw}/Unpacked"  , keepnotes design(any) clear
+			
+			keep	x11101ll	`var'*
+			save	"${SNAP_dtInt}/Ind_vars/`var'", replace
+			
+			
+			*	Health, good or bad
+				*	Note: Not fully available over the entire study period.
+			loc	var	ind_health
+			psid use || `var' [86]ER30527 [88]ER30598 [89]ER30634 [90]ER30671 [91]ER30719 [92]ER30764 [93]ER30827 [94]ER33117 [95]ER33217 [96]ER33317 [97]ER33417 [99]ER33517 [01]ER33617 [03]ER33717 [05]ER33818 [07]ER33918 [09]ER34021 [11]ER34120 [13]ER34231 [15]ER34381 [17]ER34580 [19]ER34788  using  "${SNAP_dtRaw}/Unpacked"  , keepnotes design(any) clear 
+			
+			keep	x11101ll	`var'*
+			save	"${SNAP_dtInt}/Ind_vars/`var'", replace
+			
+			*	Employment status
+			loc	var	ind_employed
+			psid use || `var' [79]ER30293 [80]ER30323 [81]ER30353 [82]ER30382 [83]ER30411 [84]ER30441 [85]ER30474 [86]ER30509 [87]ER30545 [88]ER30580 [89]ER30616 [90]ER30653 [91]ER30699 [92]ER30744 [93]ER30816 [94]ER33111 [95]ER33211 [96]ER33311 [97]ER33411 [99]ER33512 [01]ER33612 [03]ER33712 [05]ER33813 [07]ER33913 [09]ER34016 [11]ER34116 [13]ER34216 [15]ER34317 [17]ER34516 [19]ER34716  using  "${SNAP_dtRaw}/Unpacked"  , keepnotes design(any) clear
+			
+			keep	x11101ll	`var'*
+			save	"${SNAP_dtInt}/Ind_vars/`var'", replace
+			
 			
 	}
 
@@ -251,6 +280,14 @@
 			keep	x11101ll	`var'*
 			save	"${SNAP_dtInt}/Fam_vars/`var'", replace
 			
+			*	Race (spouse) - available since 1985
+			local	var	sp_race
+			psid use || `var' [85]V12293 [86]V13500 [87]V14547 [88]V16021 [89]V17418 [90]V18749 [91]V20049 [92]V21355 [93]V23212 [94]ER3883 [95]ER6753 [96]ER8999 [97]ER11760 [99]ER15836 [01]ER19897 [03]ER23334 [05]ER27297 [07]ER40472 [09]ER46449 [11]ER51810 [13]ER57549 [15]ER64671 [17]ER70744 [19]ER76752 	///
+			using "${SNAP_dtRaw}/Unpacked"  , keepnotes design(any) clear		
+			
+			keep	x11101ll	`var'*
+			save	"${SNAP_dtInt}/Fam_vars/`var'", replace
+					
 			
 		*	Location
 			
@@ -926,11 +963,18 @@
 			drop	if	_merge==2
 			drop	_merge
 			rename	statecode	rp_state
-			
+					
+			*	Re-scale citizen ideology variable (from 0-100 to 0-1 : for better interpretation)
+			cap	drop	citi6016_0to1
+			gen	citi6016_0to1	=	citi6016/100
+			lab	var	citi6016_0to1	"State citizen ideology (0-1)"
 			
 			*	Save
 			sort	rp_state	year
 			compress
+			lab	var	citi6016		"State citizen ideology"
+			lab	var	inst6017_nom	"State government ideology"	
+
 			save	"${SNAP_dtInt}/citizen_government_ideology",	replace
 			
 			*	Descriptive stats/figures
@@ -1584,7 +1628,11 @@
 				save	"${SNAP_dtInt}/State_politics",	replace
 				use 	"${SNAP_dtInt}/State_politics",	clear
 				
-		*	SNAP policy dataset
+				
+		*	SNAP policy dataset (raw) (199601-201612)
+		*	(2023-06-12) We found an issue with this data, so we no longer use this data. Instead, we will use the official aggregated data below.
+		/*
+		{
 		*import excel	"${dataWorkFolder}/USDA/SNAP_Policy_Database.xlsx", firstrow 	clear
 		import excel	"${clouldfolder}/DataWork/USDA/DataSets/Raw/SNAP_Policy_Database.xlsx", firstrow 	clear
 				
@@ -1618,6 +1666,8 @@
 			label	var	year	"Year"
 			label	var	month	"Month"
 			*/
+			
+			lab	define	yes1no0	1	"Yes"	0	"No"
 			
 			*	Policy variables
 			label	var	bbce	"Broad-based categorical eligibility (BBCE)"
@@ -1826,7 +1876,7 @@
 				replace	`var_uw'	=	`var_uw'	-	1	if	noncitadultfull==0	//	Legal non-citizen eligibility
 				replace	`var_w'		=	`var_w'	-	4.8	if	noncitadultfull==0	//	Legal non-citizen eligibility
 				
-				replace	`var_uw'	=	`var_uw'	-	certearn0103	//	Short recertification period (1-3 months)
+				replace	`var_uw'	=	`var_uw'	-	(certearn0103)		//	Short recertification period (1-3 months)
 				replace	`var_w'		=	`var_w'		-	(certearn0103*3.180)	//	Short recertification period (1-3 months)
 				
 				replace	`var_uw'	=	`var_uw'	-	1	if	fingerprint==1	//	Statewide fingerprint requirement
@@ -1837,7 +1887,386 @@
 				
 			*	Save
 			save	"${SNAP_dtInt}/SNAP_policy_data",	replace
+		}
+		*/
+		
+		
+		*	SNAP policy index data file (1997-2014)
+		*	(2023-05-22) This file includes the indices matching to the working paper, but different from manually computed index.
+		*	(2023-06-12) We found an issue with the manually imported data, so we use the official data
+		{
+			import excel	"${clouldfolder}/DataWork/USDA/DataSets/Raw/snappolicyindexdata.xls", firstrow cellrange(A2:X971) clear
+				
+				*	Clean data
+			loc	var	rp_state
+			cap	drop	`var'
+			gen	`var'	=	StateFIPSCode
+			recode	`var'	(2=50)	(4=2)	(5=3)	(6=4)	(8=5)	(9=6)	(10=7)	(11=8)	(12=9)	(13=10)	(15=51)	(16=11)	(17=12)	(18=13)	///
+								(19=14)	(20=15)	(21=16)	(22=17)	(23=18)	(24=19)	(25=20)	(26=21)	(27=22)	(28=23)	(29=24)	(30=25)	(31=26)	(32=27)	///
+								(33=28)	(34=29)	(35=30)	(36=31)	(37=32)	(38=33)	(39=34)	(40=35)	(41=36)	(42=37)	(44=38)	(45=39)	(46=40)	(47=41)	///
+								(48=42)	(49=43)	(50=44)	(51=45)	(53=46)	(54=47)	(55=48)	(56=49)
+			label	value	`var'	statecode
+			label	var	`var'	"State"
+			order	`var'
+			drop	Statename StatePostalCode StateFIPSCode
 			
+			rename	Year	year
+			rename	(UnweightedSNAPpolicyindex WeightedSNAPpolicyindex)	(SNAP_index_uw	SNAP_index_w)
+			rename	(UnweightedEligibilityindex UnweightedTransactionCostinde UnweightedStigmaindex UnweightedOutreachindex)	(Elig_index_uw Transact_index_uw Stigma_index_uw Outreach_index_uw)
+			rename	(WeightedEligibilityindex WeightedTransactionCostindex WeightedStigmaindex WeightedOutreachindex)			(Elig_index_w Transact_index_w Stigma_index_w Outreach_index_w)
+			
+			rename	(Exemptonevehiclebutnotall-FederallyfundedradioorTVad)	(exempt_one	exempt_all	BBCE	elig_rest	short_recert	simp_report	online_app	EBT_share	fingerprint	outreach)
+			
+			*	Save
+			save	"${SNAP_dtInt}/SNAP_policy_data_official",	replace
+		}
+		
+		
+		*	Census data (household information, poverty rate, etc.)
+		{
+			
+			*	U.S. population estimates (in person)
+			
+				*	1979-1999
+				import delimited "${clouldfolder}\DataWork\Census\Annul Estimates of the Resident Population\popclockest.txt", delimiter(space) clear 
+				keep	in	7/27
+				keep	v4	v10
+				rename	(v4	v10)	(year	US_est_pop)
+				replace	US_est_pop	=	subinstr(US_est_pop,",","",.)
+				destring	*, replace
+				format	%12.0fc	US_est_pop
+				
+				lab	var	year	"Year"
+				lab	var	US_est_pop	"US Population Estimates"
+				
+				tempfile	US_est_pop_1979_1999
+				save		`US_est_pop_1979_1999'
+				
+				*	2000-2009
+				import	excel	"${clouldfolder}\DataWork\Census\Annul Estimates of the Resident Population\us-est00int-01.xls", sheet("US-EST00INT-01") clear
+				keep	C-L
+				
+				keep	in	5
+				destring	*, replace
+				rename	(C-L)	(US_est_pop#), addnumber 
+				rename	(US_est_pop#)	(US_est_pop#), renumber(2000)
+				
+				gen		B=1	//	temporary variable for reshape
+				reshape	long	US_est_pop, i(B) j(year)
+				drop	B
+				
+				tempfile	US_est_pop_2000_2009
+				save		`US_est_pop_2000_2009'
+				
+				*	2010-2019
+				import excel "${clouldfolder}\DataWork\Census\Annul Estimates of the Resident Population\nst-est2019-01.xlsx", sheet("NST01") clear
+				keep	D-M
+				rename	(D-M)	(US_est_pop#), addnumber 
+				rename	(US_est_pop#)	(US_est_pop#), renumber(2010)
+				keep	in	5
+				destring	*, replace
+				
+				gen		B=1	//	temporary variable for reshape
+				reshape	long	US_est_pop, i(B) j(year)
+				drop	B
+				
+				tempfile	US_est_pop_2010_2019
+				save		`US_est_pop_2010_2019'
+				
+				*	Append data
+				use		`US_est_pop_1979_1999',	clear
+				append	using	`US_est_pop_2000_2009'
+				append	using	`US_est_pop_2010_2019'
+				sort	year
+				
+				save	"${SNAP_dtInt}/US_population_estimates.dta", replace
+			
+			*	Household by type (gender of householder, family/non-family)
+			*	Family: 2 or more people related by marriage/birth/adoption/etc live together
+			*	Non-family: Single-person HH, or people unrelated live together.
+			import	excel	"${clouldfolder}/DataWork/Census/Historical Household Tables/hh1.xls", sheet(Table HH-1) firstrow	cellrange(A15:K61)	clear
+							
+			rename	(A B C D F G I J K)	///
+					(year total_HH	total_family_HH married_HH family_oth_maleHH family_oth_femaleHH total_nonfamily_HH nonfamily_maleHH nonfamily_femaleHH)
+			drop	E H
+		
+			*	Use the revised record
+			*drop	if	year=="2021"
+			drop	if	year=="2011"
+			drop	if	year=="1993"
+			drop	if	year=="1988"
+			drop	if	year=="1984"
+			drop	if	year=="1980"
+			*replace	year="2021" if	year=="2021r"
+			replace	year="2014"	if	year=="2014s"
+			replace	year="2011" if	year=="2011r"
+			replace	year="2001"	if	year=="2001e"
+			replace	year="1993"	if	year=="1993r"
+			replace	year="1988"	if	year=="1988a"
+			replace	year="1984"	if	year=="1984b"
+			replace	year="1980"	if	year=="1980c"
+			destring	year, replace
+			
+			*	Label variables
+			lab	var	year				"Year"
+			lab	var	total_HH			"Total # of HH"
+			lab	var	total_family_HH		"Total # of family HH"
+			lab	var	married_HH			"Total # of married couples"
+			lab	var	family_oth_maleHH	"Total # of other family HH - male householder"
+			lab	var	family_oth_femaleHH	"Total # of other family HH - female householder"
+			lab	var	total_nonfamily_HH	"Total # of nonfamily HH"
+			lab	var	nonfamily_maleHH	"Total # of nonfamily HH - male householder"
+			lab	var	nonfamily_femaleHH	"Total # of nonfamily HH - female householder"
+			
+			*	Generate the share of female-headed HH
+			*	Note: In Census, "Married couple" does not say whether householder is male or female, so I cannot figure it out from the data
+			*	In this practice, I regard all married couple as male householder, to be consistent with the PSID policy that treats male partner as the reference person.
+			loc	var	pct_rp_female_Census
+			cap	drop	`var'
+			gen	`var'	=	(family_oth_femaleHH + nonfamily_femaleHH) / total_HH
+			lab	var	`var'	"\% of female-headed householder (RP) - Census"
+			
+			*	Save
+			save	"${SNAP_dtInt}/HH_type_census.dta", replace
+		
+		
+		*	HH by race
+		import	excel	"${clouldfolder}/DataWork/Census/Historical Household Tables/hh2.xls", sheet(Table HH-2) firstrow	cellrange(A14:H56)	clear
+		
+			*	According to the detailed 2022 data, race has the following categories: (1) White alone (2) Black alone (3) Asian alone (4) Any other single-race or combination of races
+			*	However, in this historical data, (4) is not available, and I cannot figure out how to impute it from historical data
+			*	Thus, I only keep the following variables (1) Total HH (2) White-alone (3) Black-alone.
+				*	Non-White is defined as "(1) - (2)"
+			keep A B C E
+			rename	(A B C E) (year total_HH White_HH Black_HH)
+			
+			*	Use revised record
+			drop	if	year=="2011"
+			
+			replace	year="2014"	if	year=="2014s"
+			replace	year="2011"	if	year=="2011r"
+			replace	year="1980"	if	year=="1980r"
+			destring	year, replace
+			
+			*	Variable label
+			lab	var	year	"Year"
+			lab	var	total_HH	"Total \# of HH"
+			lab	var	White_HH	"Total \# of White householder"
+			lab	var	Black_HH	"Total \# of Black householder"
+			
+			*	Generate percentage indicator
+			loc	var	pct_rp_White_Census
+			cap	drop	`var'
+			gen	`var'	=	(White_HH / total_HH)
+			lab	var	`var'	"\% of White householder (RP) - Census"
+			
+			loc	var	pct_rp_nonWhite_Census
+			cap	drop	`var'
+			gen	`var'	=	(total_HH - White_HH) / total_HH
+			lab	var	`var'	"\% of non-White householder (RP) - Census"
+			
+			*	Save
+			save	"${SNAP_dtInt}/HH_race_census.dta", replace
+			
+		
+		*	Householder age
+		import	excel	"${clouldfolder}/DataWork/Census/Historical Household Tables/hh3.xls", sheet(Table HH-3) firstrow	cellrange(A14:K57)	clear
+		
+			rename	(A-K)	(year	total_HH	HH_age_below_25	HH_age_25_29	HH_age_30_34	HH_age_35_44	///
+								HH_age_45_54	HH_age_55_64	HH_age_65_74	HH_age_above_75	HH_age_median_Census)
+								
+			*	Keep revised record only
+			drop	if	year=="2011"
+			drop	if	year=="1993"
+			
+			replace	year="2014"	if	year=="2014s"
+			replace	year="2011"	if	year=="2011r"
+			replace	year="1993"	if	year=="1993r"
+			destring	year,	replace
+			
+			*	Variable label
+			lab	var	year	"Year"
+			lab	var	total_HH	"Total \# of HH"
+			lab	var	HH_age_below_25	"# of HH - householder age below 25"
+			lab	var	HH_age_25_29	"# of HH - householder age 25-29"
+			lab	var	HH_age_30_34	"# of HH - householder age 30-34"
+			lab	var	HH_age_35_44	"# of HH - householder age 35-44"
+			lab	var	HH_age_45_54	"# of HH - householder age 45-54"
+			lab	var	HH_age_55_64	"# of HH - householder age 55-64"
+			lab	var	HH_age_65_74	"# of HH - householder age 65-74"
+			lab	var	HH_age_above_75	"# of HH - householder age 65-74"
+			lab	var	HH_age_median_Census	"Median householder age"
+		
+		*	Generate additional variables
+			
+			*	Median age as intenger
+			gen	HH_age_median_Census_int	=	int(HH_age_median_Census)
+			
+			*	Householder age 30 or below
+			loc	var	HH_age_below_30_Census
+			cap	drop	`var'
+			egen	`var'	=	rowtotal(HH_age_below_25	HH_age_25_29)
+			lab	var	`var'	"# of HH - householder age below 30 - Census"
+			
+			loc	var	pct_HH_age_below_30_Census
+			cap	drop	`var'
+			gen	`var'	=	(HH_age_below_30_Census) / total_HH
+			lab	var	`var'	"\% of HH - householder age below 30 - Census"
+			
+			*	Save
+			save	"${SNAP_dtInt}/HH_age_census.dta", replace
+			
+	
+		*	HH size
+		import	excel	"${clouldfolder}/DataWork/Census/Historical Household Tables/hh4.xls", sheet(Table HH-4) firstrow	cellrange(A13:J56)	clear
+		
+			rename	(A B)	(year total_HH)
+			rename	(C-H)	HH_size_#, addnumber
+			rename	I		HH_size_7_above
+			rename	J		HH_size_avg_Census
+			
+			*	Keep modified record only
+			drop	if	year=="2011"
+			drop	if	year=="1993"
+			
+			replace	year="2014"	if	year=="2014s"
+			replace	year="2011"	if	year=="2011r"
+			replace	year="1993"	if	year=="1993r"
+			destring	year, replace
+			
+			*	Variable label
+			lab	var	year	"Year"
+			lab	var	total_HH	"Total \# of HH"
+			forval	i=1/6	{
+				lab	var	HH_size_`i'	"HH size: `i'"
+			}
+			lab	var	HH_size_7_above	"HH size: 7+"
+			lab	var	HH_size_avg_Census	"Average HH size: Census"
+			
+			*	Save
+			save	"${SNAP_dtInt}/HH_size_census.dta", replace
+			
+		*	Educational attainment (individual-level)
+		import	excel	"${clouldfolder}/DataWork/Census/CPS Historical Time Series Tables/taba-1.xlsx", sheet(hst_attain01) firstrow	cellrange(A10:H51)	clear
+		
+			rename	(A-H)	(year	tot_pop	elem_0to4	elem_5to8	HS_1to3	HS_4	col_1to3	col_4)
+			lab	var	year		"Year"
+			lab	var	tot_pop		"Population - 25+ years old (K)"
+			lab	var	elem_0to4	"Elementary school - 0 to 4 years (K)"
+			lab	var	elem_5to8	"Elementary school - 5 to 8 years (K)"
+			lab	var	HS_1to3		"High school - 1 to 3 years (K)"
+			lab	var	HS_4		"High school - 4 years (K)"
+			lab	var	col_1to3	"College - 1 to 3 years (K)"
+			lab	var	col_4		"College - 4 years (K)"
+			
+			*	Generate indicators
+			loc	var	pct_noHS_Census
+			cap	drop	`var'
+			gen	`var'	=	(elem_0to4 + elem_5to8 +	HS_1to3) / tot_pop
+			lab	var	`var'	"\% of population less than HS"
+			
+			loc	var	pct_HS_Census
+			cap	drop	`var'
+			gen	`var'	=	(HS_4) / tot_pop
+			lab	var	`var'	"\% of population HS"
+			
+			loc	var	pct_somecol_Census
+			cap	drop	`var'
+			gen	`var'	=	(col_1to3) / tot_pop
+			lab	var	`var'	"\% of population with 1-3 college years"
+			
+			loc	var	pct_col_Census
+			cap	drop	`var'
+			gen	`var'	=	(col_4) / tot_pop
+			lab	var	`var'	"\% of population with 4-year college"
+			
+			*	Save
+			save	"${SNAP_dtInt}/ind_education_CPS.dta", replace
+		
+		
+		*	Poverty status
+		import	excel	"${clouldfolder}/DataWork/Census/hstpov2.xlsx", sheet(pov02) firstrow	cellrange(A10:D53)	clear
+		
+			*	Keep modified record only
+			keep	A	D	
+			rename	(A	D)	(year	pov_rate_national)
+			
+			drop	if	year=="2013 (4)"
+			drop	if	year=="2017"
+			
+			replace	year=substr(year,1,4)
+			lab	var	year	"Year"
+			lab	var	pov_rate_national	"Poverty rate (national)"
+			destring	year, replace
+			
+			*	Save
+			save	"${SNAP_dtInt}/pov_rate_1979_2019.dta", replace
+		
+		*	Merge Census HH data
+		use	"${SNAP_dtInt}/US_population_estimates.dta", clear
+		merge	1:1	year	using	"${SNAP_dtInt}/HH_type_census.dta", nogen	assert(3)
+		merge	1:1	year	using	"${SNAP_dtInt}/HH_race_census.dta", nogen assert(3)
+		merge	1:1	year	using	"${SNAP_dtInt}/HH_age_census.dta", nogen assert(3)
+		merge	1:1	year	using	"${SNAP_dtInt}/HH_size_census.dta", nogen assert(3)
+		merge	1:1	year	using	"${SNAP_dtInt}/ind_education_CPS.dta", nogen assert(3)
+		merge	1:1	year	using	"${SNAP_dtInt}/pov_rate_1979_2019.dta", nogen assert(3)
+		save	"${SNAP_dtInt}/HH_census_1979_2019.dta", replace
+		}	
+		
+		
+		*	Cost of Living Index (1990-2021)
+		{
+		import	excel	"${clouldfolder}/DataWork/C2ER/COLI Historical Data - 1990 Q1 - 2022 Annual.xlsx", firstrow sheet(HistoricalIndexData)	clear
+
+			*	Notes on data
+			*	Up to 2006, the data has full quarterly value (Q1 to Q4)
+			*	Since 2007, the data has Q1-Q3 and annual data (no Q4) , except 2020 which is out of our study period.
+			
+			
+			*	Keep relevant variables only
+			keep	YEAR QUARTER STATE_CODE STATE_NAME COMPOSITE_INDEX GROCERY_ITEMS
+			
+			*	Replace unknown value as missing
+			*	There's on observation (1991 Q1 NY Ithaca) where composite index was recorded as "parta". Will replace it as missing.
+			replace	GROCERY_ITEMS=""	if	GROCERY_ITEMS=="parta"
+			
+			*	Destring cost index
+			destring	GROCERY_ITEMS, replace
+			
+			*	Replace quarter with numeric value
+			loc	var	svy_quarter
+			cap	drop	`var'
+			gen		`var'=1	if	QUARTER=="Q1"	//	Variable name to be equal to the one in main data
+			replace	`var'=2	if	QUARTER=="Q2"	//	Variable name to be equal to the one in main data
+			replace	`var'=3	if	QUARTER=="Q3"	//	Variable name to be equal to the one in main data
+			replace	`var'=4	if	QUARTER=="Q4"	//	Variable name to be equal to the one in main data
+			replace	`var'=99	if	QUARTER=="Annual"	//	Variable name to be equal to the one in main data
+			
+			*	Due to different data availability, we keep only "ANNUAL" value since 2007
+			drop	if	svy_quarter!=99	&	inrange(YEAR,2007,2020)
+			
+			*	Adjust 2013 data whose annual average is 96 instead of 100
+			replace GROCERY_ITEMS = GROCERY_ITEMS * 100/94.6908 if YEAR==2013
+			
+			*	Compute state-year-level average value
+			collapse	COMPOSITE_INDEX GROCERY_ITEMS, by(YEAR STATE_NAME)
+			
+			*	Rename variables
+			rename	(YEAR STATE_NAME	COMPOSITE_INDEX	GROCERY_ITEMS)	(year	state	COLI_composite	COLI_grocery)
+			lab	var	COLI_composite	"COLI - Composite"
+			lab	var	COLI_grocery	"COLI - Grocery"
+			
+			*	merge with statecode, to be merged into the main data
+			drop	if	inlist(state,"British Columbia","Puerto Rico","Saskatoon","Virgin Islands")
+			replace	state="Washington D.C."	if	state=="District of Columbia"
+			merge	m:1	state	using	"${SNAP_dtRaw}/Statecode.dta",	nogen	assert(3)
+			
+			rename	statecode	rp_state	// rename to be merged with the main data
+			
+			*	Save
+			compress
+			save	"${SNAP_dtInt}/COLI.dta", replace
+		}
 		
 		*	CPI data (to convert current to real dollars)
 			*	(2023-1-15) Baseline month as Jan 2019 (CPI=100)
@@ -2165,23 +2594,27 @@
 		}
 		
 		*	Temporary code observing the number of individuals with different family composition status
-		/*
-		preserve
-			drop *_1968	*_1969	*_1970	*_1971	*_1972	*_1973	*_1974	*_1975	*_1976
+		
+		local	status_chage_over_time=0	//	disable by default, but need it for in-text numbers
+		if		`status_chage_over_time'==1	{
+			preserve
+				drop *_1968	*_1969	*_1970	*_1971	*_1972	*_1973	*_1974	*_1975	*_1976
 
-			egen	count_seq_7719			=	anycount(xsqnr_1977-xsqnr_2019), values(1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20) //	# of waves an individual in HH (seq b/w 1 to 20)
-			egen	count_RP_7719			=	anycount(xsqnr_1977-xsqnr_2019), values(1)	//	# of waves an indivdiual being RP
-			egen	count_nochange_7719		=	anycount(change_famcomp1978-change_famcomp2019), values(0)	//	# of waves without any family comp change
-			egen	count_sameRP_7719		=	anycount(change_famcomp1978-change_famcomp2019), values(0,1,2) // # of waves with the same RP
-			
-			drop	if	count_seq_7719==0	//	Drop individuals that never appeared during the study period
-			
-			count	if	xsqnr_1977==1	//	# of ppl that are RP in 1977
-			tab	count_RP_7719	if	xsqnr_1977==1	//	# of waves an individual is RP over the study wave. only 11% of them are RP over the entire study period.
-			tab count_seq_7719	//	2,726 ppl appeared in all 32 waves (1977 to 2019)
-			count if count_seq_7719==count_sameRP_7719
-		restore
-		*/
+				egen	count_seq_7719			=	anycount(xsqnr_1977-xsqnr_2019), values(1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20) //	# of waves an individual in HH (seq b/w 1 to 20)
+				egen	count_RP_7719			=	anycount(xsqnr_1977-xsqnr_2019), values(1)	//	# of waves an indivdiual being RP
+				egen	count_nochange_7719		=	anycount(change_famcomp1978-change_famcomp2019), values(0)	//	# of waves without any family comp change
+				egen	count_sameRP_7719		=	anycount(change_famcomp1978-change_famcomp2019), values(0,1,2) // # of waves with the same RP
+				
+				drop	if	count_seq_7719==0	//	Drop individuals that never appeared during the study period
+				
+				count	if	xsqnr_1977==1	//	# of ppl that are RP in 1977
+				tab	count_RP_7719	if	xsqnr_1977==1, matcell(temp)	//	# of waves an individual is RP over the study wave. only 11% of them are RP over the entire study period.
+				scalar	share_rp_7719	=	temp[32,1] / r(N)
+				di	"Share of individuals being RP over 1977-2019 is" share_rp_7719
+				tab count_seq_7719	//	2,726 ppl appeared in all 32 waves (1977 to 2019)
+				count if count_seq_7719==count_sameRP_7719
+			restore
+		}
 		
 				
 		*	Drop years outside study sample	
@@ -2384,7 +2817,7 @@
 			cap	drop	count_relrp7719
 			egen	count_relrp7719	=	anycount(relrp_recode1977-relrp_recode2019), values(0 1 2)
 			gen		`var'=0
-			replace	`var'=1	if	count_relrp7719==30	//	Those who satisfy relation condition; RP or SP (residing) or inapp (not residing) across all 32 waves
+			replace	`var'=1	if	count_relrp7719==30	//	Those who satisfy relation condition; RP or SP (residing) or inapp (not residing) across all waves
 			lab	var	`var'	"=1 if RP/SP over study period"
 			drop	count_relrp7719	
 			
@@ -2584,7 +3017,7 @@
 		
 			*	Re-shape it into long format and save it
 			use	"${SNAP_dtInt}/Ind_vars/ID_sample_wide.dta", clear
-			reshape long	x11102_	xsqnr_	wgt_long_ind	wgt_long_fam	wgt_long_fam_adj	living_Sample tot_living_Sample	///
+			reshape long	x11102_	xsqnr_	wgt_long_ind	wgt_long_fam	wgt_long_fam_adj	wgt_long_ind_adj	living_Sample tot_living_Sample	///
 							age_ind relrp_recode resid_status status_combined origfu_id noresp_why 	change_famcomp splitoff	/*${varlist_ind}	${varlist_fam}*/, i(x11101ll) j(year)
 			order	x11101ll pn sampstat Sample year x11102_ xsqnr_ 
 			*drop	if	inlist(year,1973,1988,1989)	//	These years seem to be re-created during "reshape." Thus drop it again.
@@ -2607,8 +3040,6 @@
 			label	var	splitoff		"Splitoff status"
 			
 			save	"${SNAP_dtInt}/Ind_vars/ID_sample_long.dta",	replace
-			use "${SNAP_dtInt}/Ind_vars/ID_sample_long.dta", clear
-			
 	}
 	
 	*	Merge variables
@@ -2626,7 +3057,7 @@
 			**	(2022-3-13) This code is added, as somehow existing code did not run properly ("age_ind" variable, which is required to merge with TFP cost data, didn't exist). We can see later what the problem is.
 			cd "${SNAP_dtInt}/Ind_vars"
 			
-			global	varlist_ind	age_ind	/*wgt_long_ind	relrp*/	origfu_id	noresp_why
+			global	varlist_ind	age_ind	/*wgt_long_ind	relrp*/	origfu_id	noresp_why	ind_edu	ind_health	ind_employed
 			
 			foreach	var	of	global	varlist_ind	{
 				
@@ -2687,7 +3118,7 @@
 			
 			*	Re-shape it into long format	
 			use	"${SNAP_dtInt}/SNAP_RawMerged_wide",	clear
-			reshape long x11102_	xsqnr_	wgt_long_ind	/*wgt_long_fam*/	wgt_long_fam_adj	living_Sample tot_living_Sample	///
+			reshape long x11102_	xsqnr_	wgt_long_ind	/*wgt_long_fam*/	wgt_long_ind_adj	wgt_long_fam_adj	living_Sample tot_living_Sample	///
 										${varlist_ind}	${varlist_fam}, i(x11101ll) j(year)
 			order	x11101ll /*pn sampstat Sample*/ year x11102_ xsqnr_ 
 			*drop	if	inlist(year,1973,1988,1989)	//	These years seem to be re-created during "reshape." Thus drop it again.
@@ -2717,7 +3148,7 @@
 			label	var	rp_gender	"Gender of RP"
 
 			save	"${SNAP_dtInt}/SNAP_RawMerged_long",	replace
-			
+	
 			*	Appending extra variables 
 			**	Disabled by default. Run this code only when you have extra variable to append from the raw PSID data.
 			/*
@@ -2822,6 +3253,7 @@
 				lab	val	`var'	`var'
 				
 				label	var	`var'	"Survey Month"
+				
 				
 				*	Generate survey year+month variable (yyyymm)
 				loc	var	svy_yrmonth
@@ -2963,10 +3395,18 @@
 			merge m:1 rp_state year using "${SNAP_dtInt}/State_politics", nogen keep(1 3) keepusing(major_control_dem major_control_rep major_control_mix)
 			
 			*	Import SNAP policy data
-			merge m:1 rp_state prev_yrmonth using "${SNAP_dtInt}/SNAP_policy_data", nogen keep(1 3)
+			*merge m:1 rp_state prev_yrmonth using "${SNAP_dtInt}/SNAP_policy_data", nogen keep(1 3)
+			merge m:1 rp_state year using "${SNAP_dtInt}/SNAP_policy_data_official", nogen keep(1 3) // keepusing(SNAP_index_off_uw	SNAP_index_off_w)
+			
+			*	Import census data
+			merge	m:1	year	using	"${SNAP_dtInt}/HH_census_1979_2019.dta", nogen keep(1 3) ///
+				keepusing(pct_rp_female_Census  pct_rp_nonWhite_Census HH_age_median_Census_int pct_HH_age_below_30_Census HH_size_avg_Census pct_col_Census pov_rate_national	US_est_pop)
 			
 			*	Import state-wide monthly unemployment data
 			merge m:1 rp_state prev_yrmonth using "${SNAP_dtInt}/Unemployment Rate_state_month", nogen keep(1 3) keepusing(unemp_rate)
+			
+			*	Import COLI data
+			merge m:1	rp_state	year	using	"${SNAP_dtInt}/COLI", nogen keep(1 3)
 			
 			*	Import Poverty guideline data
 			merge	m:1	year	famnum	using	"${SNAP_dtInt}/Poverty_guideline",	nogen	keep(1 3)
@@ -2988,7 +3428,10 @@
 			
 			*	Import income poverty line
 			merge	m:1	year famnum	using	"${SNAP_dtInt}/incomePL", nogen keep(1 3)
-						
+			
+			*	Import SNAP summary data
+			merge	m:1	year using	"${SNAP_dtInt}/SNAP_summary", nogen keep(1 3)
+			
 			*	Import	state and government ideology data
 			merge	m:1	year	rp_state	using	"${SNAP_dtInt}/citizen_government_ideology", /*gen(merge2)*/ nogen keep(1 3) keepusing(citi6016 inst6017_nom)
 			
@@ -3117,7 +3560,34 @@
 			cap	drop	`var'
 			gen	`var'	=	(rp_age*rp_age)/1000
 			lab	var	rp_age_sq	"Age(RP)$^2$/1000"
-
+			
+			
+				*	RP age group (to compare with the Census data)
+			
+				*	Below 30.
+				loc	var	rp_age_below30
+				cap	drop	var
+				gen		`var'=.
+				replace	`var'=0	if	!mi(rp_age)	&	!inrange(rp_age,1,29)
+				replace	`var'=1	if	!mi(rp_age)	&	inrange(rp_age,1,29)
+				lab	var	`var'	"RP age below 30"
+				
+				*	Over 65
+				loc	var	rp_age_over65
+				cap	drop	var
+				gen		`var'=.
+				replace	`var'=0	if	!mi(rp_age)	&	!inrange(rp_age,66,120)
+				replace	`var'=1	if	!mi(rp_age)	&	inrange(rp_age,66,120)
+				lab	var	`var'	"RP age over 65"
+				
+				
+		*	Individual age squared
+		loc	var		age_ind_sq
+		cap	drop	`var'
+		gen	`var'	=	(age_ind)^2
+		lab	var	`var'	"Age squared (Ind)"
+		
+			
 		
 		*	Gender
 		*	Uses same code over the waves. Very few observations have wild code neither male nor female. Treat them as missing
@@ -3154,19 +3624,62 @@
 		*	Codes are different over waves, but White always has value=1 so we can use simple categorization (White vs non-White) without further harmonization
 		*	For years with multiple responses, we use the first reponse only (over the entire PSID data less than 5% gave multiple answers.)
 		*	For DK/Refusal, we categorize them as non-White
-		loc	var	rp_White
-		cap	drop	`var'
-		gen		`var'=0	if	inrange(rp_race,2,9)	//	Black, Asian, Native American, etc.
-		replace	`var'=1	if	rp_race==1 // White
-		label	value	`var'	yes1no0
-		label	var		`var'	"White (RP)"
-		
-		local	var	rp_nonWhte
-		cap	drop	`var'
-		gen		`var'=rp_White
-		recode	`var'	(1=0) (0=1) 
-		label	value	`var'	yes1no0
-		label	var		`var'	"non-White (RP)"
+			
+			
+			*	RP
+			loc	var	rp_White
+			cap	drop	`var'
+			gen		`var'=0	if	inrange(rp_race,2,9)	//	Black, Asian, Native American, etc.
+			replace	`var'=1	if	rp_race==1 // White
+			label	value	`var'	yes1no0
+			label	var		`var'	"White (RP)"
+			
+			local	var	rp_nonWhte
+			cap	drop	`var'
+			gen		`var'=rp_White
+			recode	`var'	(1=0) (0=1) 
+			label	value	`var'	yes1no0
+			label	var		`var'	"non-White (RP)"
+			
+			*	Spouse
+			loc	var	sp_White
+			cap	drop	`var'
+			gen		`var'=0	if	inrange(sp_race,2,9)	//	Black, Asian, Native American, etc.
+			replace	`var'=1	if	sp_race==1 // White
+			label	value	`var'	yes1no0
+			label	var		`var'	"White (SP)"
+			
+			local	var	sp_nonWhite
+			cap	drop	`var'
+			gen		`var'=sp_White
+			recode	`var'	(1=0) (0=1) 
+			label	value	`var'	yes1no0
+			label	var		`var'	"non-White (SP)"
+			
+			*	Individual
+			*	NOTE: Individual-level race is NOT avaiable in PSID. So we can only indirectly construct it, using RP or SP
+			loc	var	ind_race
+			cap	drop	`var'
+			gen	`var'=.
+			replace	`var'=rp_race	if	seqnum==1	&	relrp_recode==1
+			replace	`var'=sp_race	if	seqnum==2	&	relrp_recode==2
+			lab	var	`var'	"Race (ind) - only if RP or SP"
+			
+				loc	var	ind_White
+				cap	drop	`var'
+				gen		`var'=0	if	inrange(ind_race,2,9)	//	Black, Asian, Native American, etc.
+				replace	`var'=1	if	ind_race==1 // White
+				label	value	`var'	yes1no0
+				label	var		`var'	"White (ind) - only if RP or SP"
+				
+				local	var	ind_nonWhite
+				cap	drop	`var'
+				gen		`var'=ind_White
+				recode	`var'	(1=0) (0=1) 
+				label	value	`var'	yes1no0
+				label	var		`var'	"non-White (ind) - only if RP or SP"
+					
+				
 		
 		*	State of Residence
 		lab	val	rp_state statecode
@@ -3204,71 +3717,161 @@
 			replace	`var'=1	if	!mi(rp_state)	&	!inlist(rp_state,0,50,51,59)
 			label	value	`var'	yes1no0
 			label var	`var'	"FU in 48 states"
+			
+			*	Greater region (Northeast, Mid-Atlantic, South, Midwest, West)
+			cap	drop	rp_region
+			gen		rp_region=.
+			replace	rp_region=0	if	inlist(rp_state,0,50,51,59)	// Others: Inapp, AL, HA, DK/NA/DK
+			replace	rp_region=1	if	inlist(rp_state,18,28,44,31,20,6,38) //	Northeast: ME, NH, VT, NY, MA, CT, RI
+			replace	rp_region=2	if	inlist(rp_state,37,29,8,7,19,45) //	Mid-Atlantic: PA, NJ, DC, DE, MD, VA
+			replace	rp_region=3	if	inlist(rp_state,32,39,10,16,41,47,9,1,3,23,17,42) //	South: NC, SC, GA, TN, WV, FL, AL, AR, MS, LS, TX
+			replace	rp_region=4	if	inlist(rp_state,34,13,21,12,22,48,14,24) //	MidWest:	OH, IN, MI, IL, MN, WI, IA, MO
+			replace	rp_region=5	if	inlist(rp_state,15,26,33,40,35,2,5,11,25,27,30,43,49,36,46,4) //	West: KS, NE, ND, SD, OK, AZ, CO, ID, MT, NV, NM, UT, WY, OR, WA, CA
+			
+			lab	define	rp_region	0	"Others (Inapp, AL, HA, DK/NA)"	1	"Northeast"	2	"Mid-Atlantic"	3	"South"	4	"Midwest"	5	"West", replace	
+			lab	value	rp_region	rp_region
+			
+				*	Dummies for each region
+				tab	rp_region,	gen(rp_region)
+				rename	(rp_region?)	(rp_region_Oth	rp_region_NE	rp_region_MidAt	rp_region_South	rp_region_MidWest	rp_region_West)
+				clonevar	rp_region_NE_noNY	=	rp_region_NE
+				replace		rp_region_NE_noNY	=	0	if	rp_state==31	//	Exclude NY
+				
+				lab	var	rp_region_Oth	"Other regions (AL, HA, DK/NA, Inapp)"
+				lab	var	rp_region_NE	"Northeast"
+				lab	var	rp_region_NE_noNY	"Northeast (excluding NY)"
+				lab	var	rp_region_MidAt	"Mid-Atlantic"
+				lab	var	rp_region_South	"South"
+				lab	var	rp_region_MidWest	"Mid-West"
+				lab	var	rp_region_West	"West"
+				
+				
 		
 		*	Employment Status
-		*	Two different variables over time, and even single series changes variable over waves. Need to harmonize them.
-		loc	var	rp_employed
-		cap	drop	`var'
-		gen		`var'=.
-		
-		replace	`var'=0	if	inrange(year,1968,1975)	&	inrange(rp_employment_status,2,6)	//	I treat "Other" as "unemployed". In the raw PSID data less than 0.2% HH answer "other" during these waves
-		replace	`var'=1	if	inrange(year,1968,1975)	&	inrange(rp_employment_status,1,1)	//	Include temporarily laid off/maternity leave/etc.
-		
-		replace	`var'=0	if	inrange(year,1976,1996)	&	inrange(rp_employment_status,3,9)	//	I treat "Other" as "unemployed". In the raw PSID data less than 0.2% HH answer "other" during these waves
-		replace	`var'=1	if	inrange(year,1976,1996)	&	inrange(rp_employment_status,1,2)	//	Include temporarily laid off/maternity leave/etc.
-		
-		replace	`var'=0	if	inrange(year,1997,2019)	&	inrange(rp_employment_status,3,99)	|	rp_employment_status==0	//	Include other, "workfare", "DK/refusal"
-		replace	`var'=1	if	inrange(year,1997,2019)	&	inrange(rp_employment_status,1,2)	//	Include temporarily laid off/maternity leave/etc.
-		
-		
-		label	value	`var'	yes1no0
-		label	var		`var'	"Employed"
+			
+			
+			*	Individual-level education (1979-2019)
+			loc	var	ind_employed_dummy
+			cap	drop	`var'
+			gen		`var'=.
+			
+			replace	`var'=0	if	inrange(ind_employed,1,2)	//	"Working now" and "Temporarily laid off"
+			replace	`var'=1	if	inrange(ind_employed,3,9)	//	Looking for work, retired, permanently disabled, housekeeping, student, other.
+			
+			*	Treating inappropriate values
+				*	On one hand, we should treat them as zero, or many observations with missing values will NOT be included in regression. And some inapp cases make sense to be treated as zero (i.e. 16-year old or younger)
+				*	On the other hand, treating some categories as zero could be missleaning (i.e. not yet born) 
+				*	Need to think about it.
+			replace	`var'=0	if	ind_employed==0	
+			
+			label	value	`var'	yes1no0
+			label	var		`var'	"=1 if Person Employed"
+			
+			
+			*	RP's employment (family-level)
+			*	Two different variables over time, and even single series changes variable over waves. Need to harmonize them.
+			loc	var	rp_employed
+			cap	drop	`var'
+			gen		`var'=.
+			
+			replace	`var'=0	if	inrange(year,1968,1975)	&	inrange(rp_employment_status,2,6)	//	I treat "Other" as "unemployed". In the raw PSID data less than 0.2% HH answer "other" during these waves
+			replace	`var'=1	if	inrange(year,1968,1975)	&	inrange(rp_employment_status,1,1)	//	Include temporarily laid off/maternity leave/etc.
+			
+			replace	`var'=0	if	inrange(year,1976,1996)	&	inrange(rp_employment_status,3,9)	//	I treat "Other" as "unemployed". In the raw PSID data less than 0.2% HH answer "other" during these waves
+			replace	`var'=1	if	inrange(year,1976,1996)	&	inrange(rp_employment_status,1,2)	//	Include temporarily laid off/maternity leave/etc.
+			
+			replace	`var'=0	if	inrange(year,1997,2019)	&	inrange(rp_employment_status,3,99)	|	rp_employment_status==0	//	Include other, "workfare", "DK/refusal"
+			replace	`var'=1	if	inrange(year,1997,2019)	&	inrange(rp_employment_status,1,2)	//	Include temporarily laid off/maternity leave/etc.
+			
+			
+			label	value	`var'	yes1no0
+			label	var		`var'	"Employed"
 		
 		*	Grades completed
 		*	We split grade completion into four categories; No HS, HS, some college, College+
-		*	For households who didn't respond, I will create a separate category as "NA/DK/Refusal/Inapp"
-		loc	var	rp_edu_cat
-		cap	drop	`var'
-		gen		`var'=.
-		
-			*	No High school (Less than 12 degree)
-			*	Includes "cannot read or write"
-			replace	`var'=1	if	inrange(year,1968,1990)	&	inrange(rp_gradecomp,0,3)	// Includes 0 coded as "cannot read or write"
-			replace	`var'=1	if	inrange(year,1991,2019)	&	inrange(rp_gradecomp,0,11)	//	Less than 12 grade
 			
-			*	High School
-			replace	`var'=2	if	inrange(year,1968,1990)	&	inrange(rp_gradecomp,4,5)	//	12 grade and higher
-			replace	`var'=2	if	inrange(year,1991,2019)	&	inrange(rp_gradecomp,12,12)	//	12 grade and higher
-			replace	`var'=2	if	inrange(year,1985,2019)	&	inlist(rp_HS_GED,1,2) 	//	HS or GED
+			*	Individual-level
+			loc	var	ind_edu_cat
+			cap	drop	`var'
 			
-			*	Some college (College without degree)
-			replace	`var'=3	if	inrange(year,1968,1990)	&	rp_gradecomp==6	//	College, but no degree
-			replace	`var'=3	if	inrange(year,1991,2019)	&	inrange(rp_gradecomp,13,15)	//	13-15 grades
+			gen		`var'=0		if	inrange(ind_edu,0,0)	//	Inapp
+			replace	`var'=1		if	inrange(ind_edu,1,11)	//	Less than HS (I treat )
+			replace	`var'=2		if	inrange(ind_edu,12,12)	//	HS
+			replace	`var'=3		if	inrange(ind_edu,13,15)	//	Some college
+			replace	`var'=4		if	inrange(ind_edu,16,17)	//	College
+			replace	`var'=.n	if	inrange(ind_edu,98,99)	//	Dk/NA
 			
-			*	College or greater
-			replace	`var'=4	if	inrange(year,1968,1990)	&	inrange(rp_gradecomp,7,8)	//	College
-			replace	`var'=4	if	inrange(year,1991,2019)	&	inrange(rp_gradecomp,16,17)	//	College, but no degree
-			replace	`var'=4	if	inrange(year,1991,2019)	&	rp_coldeg==1	//	Answered "yes" to "has college degree"
+			replace	`var'=0	if	seqnum==0	//	there are only 2 out of 200K zero seqnum obs that have non-zero value. Possibly data entry error.
 			
-			*	NA/DK (excluding "cannot read/write in early years")
-			replace	`var'=99	if	inrange(year,1968,1990)	&	inrange(rp_gradecomp,9,9)
-			replace	`var'=99	if	inrange(year,1991,2019)	&	inrange(rp_gradecomp,99,99)
-			
-			label	define	`var'	1	"Less than HS"	2	"High School/GED"	3	"Some college"	4	"College"	99	"NA/DK",	replace
+			label	define	`var'	0	"Inapp"	1	"Less than HS"	2	"High School/GED"	3	"Some college"	4	"College"	/*99	"NA/DK"*/,	replace
 			label	value	`var'	`var'
-			label 	variable	`var'	"Education category (RP)"
+			label 	variable	`var'	"Education category (ind)"
 			
-			cap	drop	rp_edu?		rp_NoHS	rp_HS	rp_somecol	rp_col
-			tab `var', gen(rp_edu)
-			rename	(rp_edu1	rp_edu2	rp_edu3	rp_edu4	rp_edu5)	(rp_NoHS	rp_HS	rp_somecol	rp_col	rp_NADK)
+				*	Dummies for each category
+				cap	drop	ind_edu?
+				cap	drop	ind_edu_inapp	ind_NoHS	ind_HS	ind_somecol	ind_col
+				tab `var', gen(ind_edu)
+				rename	(ind_edu1	ind_edu2	ind_edu3	ind_edu4	ind_edu5)	(ind_edu_inapp	ind_NoHS	ind_HS	ind_somecol	ind_col)
+				
+				lab	value	ind_edu_inapp	ind_NoHS	ind_HS	ind_somecol	ind_col	yes1no0
+				
+				label	var	ind_edu_inapp	"Inapp education (ind)"
+				label	var	ind_NoHS		"Less than High School (ind)"
+				label	var	ind_HS			"High School (ind)"
+				label	var	ind_somecol		"Some college (ind)"
+				label	var	ind_col			"College Degree (ind)"
+				*label	var	rp_NADK	"Education (NA/DK)"
 			
-			lab	value	rp_NoHS	rp_HS	rp_somecol	rp_col	rp_NADK	yes1no0
 			
-			label	var	rp_NoHS	"Less than High School"
-			label	var	rp_HS	"High School"
-			label	var	rp_somecol	"College (w/o degree)"
-			label	var	rp_col	"College Degree"
-			label	var	rp_NADK	"Education (NA/DK)"
+			*	RP's education (family-level)
+			*	For households who didn't respond, I will create a separate category as "NA/DK/Refusal/Inapp"
+			loc	var	rp_edu_cat
+			cap	drop	`var'
+			gen		`var'=.
+			
+				*	No High school (Less than 12 degree)
+				*	Includes "cannot read or write"
+				replace	`var'=1	if	inrange(year,1968,1990)	&	inrange(rp_gradecomp,0,3)	// Includes 0 coded as "cannot read or write"
+				replace	`var'=1	if	inrange(year,1991,2019)	&	inrange(rp_gradecomp,0,11)	//	Less than 12 grade
+				
+				*	High School
+				replace	`var'=2	if	inrange(year,1968,1990)	&	inrange(rp_gradecomp,4,5)	//	12 grade and higher
+				replace	`var'=2	if	inrange(year,1991,2019)	&	inrange(rp_gradecomp,12,12)	//	12 grade and higher
+				replace	`var'=2	if	inrange(year,1985,2019)	&	inlist(rp_HS_GED,1,2) 	//	HS or GED
+				
+				*	Some college (College without degree)
+				replace	`var'=3	if	inrange(year,1968,1990)	&	rp_gradecomp==6		//	During these years, rp_gradecomp==6 means "College, but no degree"
+				replace	`var'=3	if	inrange(year,1991,2019)	&	inrange(rp_gradecomp,13,17)	&	rp_coldeg!=1	//	13-grade or over, but did not say "yes" to the question "has college degree?"
+				
+				*	College or greater 
+				*	(2023-7-17) Previously it tagged community degree as well.
+				replace	`var'=4	if	inrange(year,1968,1990)	&	inrange(rp_gradecomp,7,8)	//	College
+				replace	`var'=4	if	inrange(year,1991,2019)	&	rp_coldeg==1	// said "yes" to "has college degree"
+				*replace	`var'=4	if	inrange(year,1991,2019)	&	inrange(rp_gradecomp,13,17)		&	rp_coldeg==1	//	Said "yes" to the question "has college degree?" (disabled as of 2023-07-17)
+				
+				
+				
+				*	NA/DK
+					*	Usually when it is unknown whether RP has high school diploma or how many years of college education completed.
+					*	Excluding "cannot read/write in early years"
+				replace	`var'=.n	if	inrange(year,1968,1990)	&	inrange(rp_gradecomp,9,9)
+				replace	`var'=.n	if	inrange(year,1991,2019)	&	inrange(rp_gradecomp,99,99)
+				
+				label	define	`var'	1	"Less than HS"	2	"High School/GED"	3	"Some college"	4	"College"	/*99	"NA/DK"*/,	replace
+				label	value	`var'	`var'
+				label 	variable	`var'	"Education category (RP)"
+				
+				cap	drop	rp_edu?		rp_NoHS	rp_HS	rp_somecol	rp_col
+				tab `var', gen(rp_edu)
+				rename	(rp_edu1	rp_edu2	rp_edu3	rp_edu4	/*rp_edu5*/)	(rp_NoHS	rp_HS	rp_somecol	rp_col	/*rp_NADK*/)
+				
+				lab	value	rp_NoHS	rp_HS	rp_somecol	rp_col	/*rp_NADK*/	yes1no0
+				
+				label	var	rp_NoHS	"Less than High School"
+				label	var	rp_HS	"High School"
+				label	var	rp_somecol	"College (w/o degree)"
+				label	var	rp_col	"College Degree"
+				*label	var	rp_NADK	"Education (NA/DK)"
 			
 		*	Disability
 		*	I categorize RP as disabled if RP has either "amount" OR "type" of work limitation
@@ -3311,12 +3914,18 @@
 			*	FI indicator
 			loc	var	HFSM_FI
 			cap	drop	`var'
-			gen		`var'=0	if	inlist(HFSM_cat,0,1)
-			replace	`var'=0	if	inlist(HFSM_cat,2,3)
+			gen		`var'=0	if	inlist(HFSM_cat,1,2)
+			replace	`var'=1	if	inlist(HFSM_cat,3,4)
 			
 			label	value	`var'	yes1no0
 			
 			label	var	`var'	"HFSM FI"
+			
+			*	FSSS-rescaled
+			cap	drop	FSSS_rescale
+			gen	FSSS_rescale = (9.3-HFSM_scale)/9.3
+			label	var	FSSS_rescale "FSSS (re-scaled)"
+			
 		
 		*	Family income
 		lab	var	fam_income	"Total family income"
@@ -3363,6 +3972,80 @@
 			gen		`var'=0	if	!mi(fam_income)	&	fam_income>incomePL*2
 			replace	`var'=1	if	!mi(fam_income)	&	fam_income<=incomePL*2
 			lab	var	`var'	"Income below 200\% PL"
+			
+			
+		*	Individual whose family income was below 130%/200% "at least" once
+		*	It seems almost all individuals (over 98%) have their family income below 200% at least onc
+			
+			*	200%, entire study period.
+			loc	var	income_ever_below_200
+			cap	drop	`var'
+			bys	x11101ll:	egen	`var'	=	max(income_below_200)
+			lab	var	`var'	"Income below 200% PL at least once"
+			tab	`var'	if	year==2013	&	in_sample==1	//	counting only one obs per person. 99% of individuals fall into this category
+				
+			*	200%, 1997-2017
+			loc	var	income_ever_below_200_9713
+			cap	drop	`var'
+			bys	x11101ll:	egen	`var'	=	max(income_below_200)	if	inrange(year,1997,2013)
+			lab	var	`var'	"Income below 200% PL at least once (1997-2017)"
+			tab	`var'	if	year==2013	&	in_sample==1	//	counting only one obs per person. 65% individuals (7,819) fall into this category
+			
+			*	130%, entire study period
+			loc	var	income_ever_below_130
+			cap	drop	`var'
+			bys	x11101ll:	egen	`var'	=	max(income_below_130)
+			lab	var	`var'	"Income below 130% PL at least once"
+			tab	`var'	if	year==2013	&	in_sample==1	//	counting only one obs per person. 98.5% of the invidiuals (17,930) fall into this category
+			
+			*	130%, 1997-2017
+			loc	var	income_ever_below_130_9713
+			cap	drop	`var'
+			bys	x11101ll:	egen	`var'	=	max(income_below_130)	if	inrange(year,1997,2013)
+			lab	var	`var'	"Income below 130% PL at least once (1997-2013)"
+			tab	`var'	if	year==2013	&	in_sample==1	//	counting only one obs per person. 48% of the individuals (5,845) fall into this category
+		
+		*	Individuals whose family income was "consistently" below 130%/200%
+		
+			*	200%, entire study period
+			loc	var	income_always_below_200
+			cap	drop	`var'
+			bys	x11101ll:	egen	`var'	=	min(income_below_200)	//	If individual's income is always below cutoff, then the minimum value would be 1. Otherwise, it would be 0.
+			lab	var	`var'	"Income always below 200% PL"
+			tab	`var'	if	year==2013	&	in_sample==1	//	counting only one obs per person. 9.5% of individuals (1700) fall into this category.
+			
+			*	200%, 1997-2017
+			loc	var	income_always_below_200_9713
+			cap	drop	`var'
+			bys	x11101ll:	egen	`var'	=	min(income_below_200)	if	inrange(year,1997,2013)	//	If individual's income is always below cutoff, then the minimum value would be 1. Otherwise, it would be 0.
+			lab	var	`var'	"Income always below 200% PL (1997-2017)"
+			tab	`var'	if	year==2013	&	in_sample==1	//	counting only one obs per person. 12% of individuals (1,468) fall into this category.
+			
+			*	130%, entire study period
+			loc	var	income_always_below_130
+			cap	drop	`var'
+			bys	x11101ll:	egen	`var'	=	min(income_below_130)	//	If individual's income is always below cutoff, then the minimum value would be 1. Otherwise, it would be 0.
+			lab	var	`var'	"Income always below 130% PL"
+			tab	`var'	if	year==1979	&	in_sample==1	//	counting only one obs per person. Only 4% (721) individuals fall into this category.
+		
+			*	130%, 1997-2017
+			loc	var	income_always_below_130_9713
+			cap	drop	`var'
+			bys	x11101ll:	egen	`var'	=	min(income_below_130)	if	inrange(year,1997,2013)	//	If individual's income is always below cutoff, then the minimum value would be 1. Otherwise, it would be 0.
+			lab	var	`var'	"Income always below 130% PL (1997-2017)"
+			tab	`var'	if	year==2013	&	in_sample==1	//	counting only one obs per person. 4.7% of individuals (574) fall into this category.
+		
+			
+		*	COLI (Cost of Living Index)	
+		*	Adjust TFP costs with COLI - grocery index
+		gen	TFP_monthly_cost_COLI		=	TFP_monthly_cost	*	(COLI_grocery/100)
+		lab	var	TFP_monthly_cost_COLI		"Monthly TFP cost (COLI adjusted)"
+		gen	foodexp_W_TFP_COLI			=	foodexp_W_TFP 		*	(COLI_grocery/100)
+		lab	var	foodexp_W_TFP_COLI			"Total Monthly TFP cost (COLI adjusted)"
+		gen	foodexp_W_TFP_pc_COLI		=	foodexp_W_TFP_pc	*	(COLI_grocery/100)
+		lab	var	foodexp_W_TFP_pc_COLI		"Total Monthly TFP cost per capita (COLI adjusted)"
+		gen	foodexp_W_TFP_pc_th_COLI	=	foodexp_W_TFP_pc_th	*	(COLI_grocery/100)
+		lab	var	foodexp_W_TFP_pc_th_COLI	"Total Monthly TFP cost per capita (K) (COLI adjusted)"
 		
 		*	Food stamp
 		
@@ -3385,7 +4068,7 @@
 				replace	`var'=1	if	(inrange(year,1994,1997)	|	inrange(year,2009,2019))	&	!mi(stamp_usewth_month)	&	stamp_usewth_month==1
 				
 				label	value	`var' yes1no0
-				label var	`var'		"FS used last month"
+				label var	`var'		"SNAP received"
 				
 			
 
@@ -3459,7 +4142,10 @@
 			
 			label	value	`var'	yes1no0
 			label	var	`var'	"FS used this year"
-				
+		
+		
+		
+		
 		*	Food stamp amount received
 		
 			*	FS Recall period (1999-2007) - will be later used to adjust values
@@ -3521,6 +4207,14 @@
 			
 			label	var	`var'	"FS/SNAP amount received last month"
 			
+			
+			*	Replace food stamp amount received with missing if didn't receive stamp (FS_rec_wth==0), for summary stats
+			*	There are only two obs with non-zero amount, so should be safe to clean.
+			*	This code can be integrated into "cleaning" part later
+			*replace	FS_rec_amt_capita_real=.n	if	FS_rec_wth==0
+			replace	FS_rec_amt=.n	if	FS_rec_wth==0
+						
+	
 			*	FS amt received per capita
 			loc	var	FS_rec_amt_capita
 			cap	drop	`var'
@@ -3886,7 +4580,7 @@
 							*	One difference between here and "at-home" is that I disabled "FS_rec_wth==0" condition, in order to assign average value to those who did use FS last month but didn't used this year
 							*	Theoretically they shouldn't exist, but there is 1 family in 2001.
 							replace	`var'=r(mean) 	if	year==`year'	&	/*FS_rec_wth==0	&*/	(inrange(`rawvar',80001,100000)	|	inlist(`rawvar_recall',8,9))	//	if amount OR recall period has NA/DK
-						
+							
 					
 						}	//	year	
 						
@@ -4018,13 +4712,14 @@
 						replace	`var'=0	if	foodexp_deliv_wth_nFS==0	
 												
 						*	For DK/NA/refusal (both in amount and recall period), I impute the monthly average from other categories and assign the mean value
+						*	(2023-06-22): There is 1 obs (year==2007, ID=1988030) whose "weekly" eaten out expenditure was 80,000. I think it is mistake, but it was somehow not properly winsorized later. Need to fix it.
 						foreach	year	in	1994	1995	1996	1997	1999	2001	2003	2005	2007	2009	2011	2013	2015	2017	2019	{
 																	
 							summ	`var'			if	year==`year'	&	/*FS_rec_wth==0	&*/	foodexp_deliv_wth_nFS==1	&	!mi(`rawvar')	&	!mi(`rawvar_recall')	&	///			//	I use raw variable's category 
 														!inrange(`rawvar',99998,100000)	&	!inlist(`rawvar_recall',8,9)	//	Both recall period AND amount should be valid
 							
 							replace	`var'=r(mean) 	if	year==`year'	&	/*FS_rec_wth==0	&*/	foodexp_deliv_wth_nFS==1	&	(inrange(`rawvar',99998,100000)	|	inlist(`rawvar_recall',8,9))	//	if amount OR recall period has NA/DK
-						
+							
 					
 						}	//	year	
 						
@@ -4130,6 +4825,7 @@
 			
 			br year foodexp_W_TFP	foodexp_tot_exclFS	foodexp_tot_inclFS	if	inrange(foodexp_W_TFP,foodexp_tot_exclFS,foodexp_tot_inclFS)	
 			
+			
 					
 		*	Winsorize top 1% values of per capita values for every year (except TFP)
 		
@@ -4145,7 +4841,7 @@
 				
 				di "var is `var', year is `year'"
 				qui	summarize	`var' 				if	year==`year' & seqnum!=0,d
-				replace 	`var'_wins=r(p99)	if	year==`year' & seqnum!=0	& `var'>=r(p99)
+				replace 	`var'_wins=r(p99)	if	year==`year' & seqnum!=0	&	!mi(`var')	& `var'>=r(p99)
 				
 			}
 			
@@ -4170,11 +4866,10 @@
 		}
 			
 		
-		
 		*	Create constant dollars of monetary variables  (ex. food exp, TFP)
 		*	Baseline CPI is 2019 Jan (100) 
 		qui	ds	fam_income_pc	FS_rec_amt	FS_rec_amt_capita foodexp_home_inclFS foodexp_home_exclFS  foodexp_out foodexp_deliv foodexp_tot_exclFS foodexp_tot_inclFS ///
-				TFP_monthly_cost foodexp_W_TFP foodexp_W_TFP_pc	foodexp_W_TFP_pc_th	///
+				TFP_monthly_cost foodexp_W_TFP foodexp_W_TFP_pc	foodexp_W_TFP_pc_th	TFP_monthly_cost_COLI foodexp_W_TFP_COLI foodexp_W_TFP_pc_COLI foodexp_W_TFP_pc_th_COLI	///
 				foodexp_tot_exclFS_pc foodexp_tot_inclFS_pc	foodexp_tot_exclFS_pc_? foodexp_tot_inclFS_pc_?
 		global	money_vars_current	`r(varlist)'
 		
@@ -4185,24 +4880,42 @@
 			
 		}
 		
-		*	Generate log of family income per capita (real)
+		*	Generate log and IHS of family income per capita (real)
 		*	NOTE: I can later use inverse hyperbolic transformation instead.
 		cap	drop	ln_fam_income_pc_real
 		gen			ln_fam_income_pc_real	=	ln(fam_income_pc_real)
+		cap	drop	IHS_fam_income_pc_real
+		gen			IHS_fam_income_pc_real	=	asinh(fam_income_pc_real)
 			
 		ds	*_real
 		global	money_vars_real	`r(varlist)'
 		global	money_vars	${money_vars_current}	${money_vars_real}
 		
-
+		*	Normalized Money Expenditure (NME) - ratio of food expenditure to TFP cost
+		*	(2023-06-22) For some reason, HH-level food expenditure is NOT properly winsorized above. So we use "per capita" expenditure which is technically identical but somehow generates more reasonable values (thus I assue properly winsorized)
+		loc	var	NME
+		cap	drop	`var'
+		gen	`var'	=	foodexp_tot_inclFS_pc	/ foodexp_W_TFP_pc
+		lab	var	`var'	"Normalized Money Expenditure"
+		
+			*	Dummy if NME<1 (i.e. spend less than TFP cost)
+			loc	var	NME_below_1
+			cap	drop	`var'
+			gen		`var'=.
+			replace	`var'=0	if	!mi(NME)	&	NME>=1
+			replace	`var'=1	if	!mi(NME)	&	NME<1
+			lab	var	`var'	"=1 if NME<1 (spend less than TFP cost)"
+		
 		
 		di "${money_vars_real}"
+		
+		
 		*	Create lagged variables needed
 		*	(2021-11-27) I start with monetary variables (current, real)
 			
 			*	Set it as survey panel data
 					   
-			svyset	sampcls [pweight=wgt_long_fam_adj], strata(sampstr)	singleunit(scaled)
+			svyset	sampcls [pweight=wgt_long_ind], strata(sampstr)	singleunit(scaled)
 				
 				*	Generate time variable which increases by 1 over wave ("year" ") // can be used to construct panel data (we can't directly use "year" because PSID was collected bieenially since 1997, thus data will treat it as gap period)
 				cap	drop	time
@@ -4223,6 +4936,258 @@
 				gen	double	l2_`var'	=	l2.`var'
 				
 			}
+			
+			*	Create lagged dummes for SNAP status
+			sort	x11101ll	year
+			foreach	lag	in	2	4	6	8	{
+				
+				cap	drop	l`lag'_FS_rec_wth
+				gen		l`lag'_FS_rec_wth	=	l`lag'.FS_rec_wth
+				lab	var	l`lag'_FS_rec_wth	"SNAP received `lag' years ago"
+				
+				*cap	drop	f`lag'_FS_rec_wth
+				*gen		f`lag'_FS_rec_wth	=	f`lag'.FS_rec_wth
+				*lab	var	f`lag'_FS_rec_wth	"SNAP received `lag' years later"
+				
+				
+			}
+			
+			*	Create "observational-level" dummies of culumative SNAP redemptions over 5-year (t-4, t-2, t)
+			*	NOTE: This is an observational-level variable, NOT individual-level variable
+				*	Suppose an individual's SNAP status over 9 years (t-4, t-2, t, t+2, t+4) is (0,0,1,0,1)
+				*	Then this variable's value will be (1,1,2) in (t-4, t-2 and t)
+			*	I construct "individual-level" SNAP status over years after the "first" SNAP participation later.
+				
+				*	5-year
+				loc	var	SNAP_cum_status_5
+				cap	drop	`var'	//	SNAP_for_cum
+				egen	`var'	=	group(FS_rec_wth	l2_FS_rec_wth	l4_FS_rec_wth)
+				lab	var	`var'	"Cumulative SNAP status last 5-year"
+				*egen	SNAP_for_cum	=	group(FS_rec_wth	f2_FS_rec_wth	f4_FS_rec_wth)
+				*lab	var	SNAP_for_cum	"Cumulative SNAP status next 5-year"
+				
+				
+				assert	`var'==1	if	l4_FS_rec_wth==0	&	l2_FS_rec_wth==0	&	FS_rec_wth==0
+				assert	`var'==2	if	l4_FS_rec_wth==1	&	l2_FS_rec_wth==0	&	FS_rec_wth==0
+				assert	`var'==3	if	l4_FS_rec_wth==0	&	l2_FS_rec_wth==1	&	FS_rec_wth==0
+				assert	`var'==4	if	l4_FS_rec_wth==1	&	l2_FS_rec_wth==1	&	FS_rec_wth==0
+				assert	`var'==5	if	l4_FS_rec_wth==0	&	l2_FS_rec_wth==0	&	FS_rec_wth==1
+				assert	`var'==6	if	l4_FS_rec_wth==1	&	l2_FS_rec_wth==0	&	FS_rec_wth==1
+				assert	`var'==7	if	l4_FS_rec_wth==0	&	l2_FS_rec_wth==1	&	FS_rec_wth==1
+				assert	`var'==8	if	l4_FS_rec_wth==1	&	l2_FS_rec_wth==1	&	FS_rec_wth==1
+								
+				lab	define	`var'	1	"Never"		2	"t-4 only"			3	"t-2 only"			4	"t-4 and t-2 only"	///
+									5	"t only"	6	"t-4 and t only"	7	"t-2 and t only"	8	"t-4 t-2 and t", replace
+				lab	val	`var'	`var'
+				lab	var	`var'	"SNAP status last 5 years"
+					
+				cap	drop	SNAP_???
+				tab	`var',	gen(`var')
+				rename	`var'?	(SNAP_000	SNAP_100	SNAP_010	SNAP_110	SNAP_001	SNAP_101	SNAP_011	SNAP_111)
+				
+				lab	var	SNAP_000	"SNAP status 5 years: Never"
+				lab	var	SNAP_100	"SNAP status 5 years: t-4 only"
+				lab	var	SNAP_010	"SNAP status 5 years: t-2 only"
+				lab	var	SNAP_110	"SNAP status 5 years: t-4 and t-2 only"
+				lab	var	SNAP_001	"SNAP status 5 years: t only"
+				lab	var	SNAP_101	"SNAP status 5 years: t-4 and t only"
+				lab	var	SNAP_011	"SNAP status 5 years: t-2 and t only"
+				lab	var	SNAP_111	"SNAP status 5 years: t-4 t-2 and t"
+				
+			*	Total # of SNAP redemptions over 5-year
+			*	NOTE: This is an observational-level.
+			loc	var		SNAP_cum_fre_5
+			cap	drop	`var'
+			gen		`var'=.
+			replace	`var'=0		if	inlist(1,SNAP_000)
+			replace	`var'=1		if	inlist(1,SNAP_100,SNAP_010,SNAP_001)
+			replace	`var'=2		if	inlist(1,SNAP_110,SNAP_011,SNAP_101)
+			replace	`var'=3		if	inlist(1,SNAP_111)
+			
+			lab	var	`var'		"\# SNAP participation last 5 years"
+			
+			*	Total # of CONTINUOUS SNAP redemptions over 5-year
+			*	This variable captures extensive/intensive margin, by treating non-categories as missing
+				*	For instance, to capture extensive margin, "redemption in t-2 only" should NOT be cateogorzied as zero, but as missing.
+				*	Similarly, to capture intensive margin, "redemption in t-4 and t" should NOT be cateogorzied as zero, but as missing.
+			*	NOTE: This is an observational-level.
+			loc	var	SNAP_cum_fre_cont_5
+			cap	drop	`var'
+			gen		`var'=.
+			replace	`var'=0	if	SNAP_000==1
+			replace	`var'=1	if	SNAP_100==1
+			replace	`var'=2	if	SNAP_110==1
+			replace	`var'=3	if	SNAP_111==1
+			lab	var	`var'	"\# continuous SNAP participation: 5 years"
+		
+			
+			
+			*	7-year period
+			loc	var	SNAP_cum_status_7
+			cap	drop	`var'	
+			egen	`var'	=	group(FS_rec_wth	l2_FS_rec_wth	l4_FS_rec_wth	l6_FS_rec_wth)
+			
+			
+			*	Double-check how each value is assigned.
+			loc	var	SNAP_cum_status_7
+			local	count=1
+			forval	l0val=0/1	{
+				
+				forval	l2val=0/1	{
+					
+					forval	l4val=0/1	{
+						
+						forval	l6val=0/1	{
+										
+							assert	`var'==`count'	if	l6_FS_rec_wth==`l6val'	&	l4_FS_rec_wth==`l4val'	&	l2_FS_rec_wth==`l2val'	&	FS_rec_wth==`l0val'
+							
+							cap	drop	SNAP_`l6val'`l4val'`l2val'`l0val'
+							gen			SNAP_`l6val'`l4val'`l2val'`l0val'=0	if	!mi(SNAP_cum_status_7)
+							replace		SNAP_`l6val'`l4val'`l2val'`l0val'=1	if	!mi(SNAP_cum_status_7)	&	l6_FS_rec_wth==`l6val'	&	l4_FS_rec_wth==`l4val'	&	l2_FS_rec_wth==`l2val'	&	FS_rec_wth==`l0val'
+							loc	count=`count'+1
+							
+						}
+						
+					}
+					
+				}
+			}
+	
+			
+			lab	define	`var'	1	"Never"		2	"t-6 only"			3	"t-4 only"			4	"t-6 and t-4 only"	///
+								5	"t-2 only"	6	"t-6 and t-2 only"	7	"t-4 and t-2 only"	8	"t-6 t-4 and t-2"	///
+								9	"t"		10	"t-6  t"		11	"t-4 t"			12	"t-6 t-4 t"	///
+								13	"t-2 t"	14	"t-6  t-2 t"	15	"t-4  t-2 t"	16	"t-6 t-4  t-2 t"	, replace
+			lab	val	`var'	`var'
+			lab	var	`var'	"SNAP status last 7 years"
+			*egen	SNAP_for_cum	=	group(FS_rec_wth	f2_FS_rec_wth	f4_FS_rec_wth)
+			*lab	var	SNAP_for_cum	"Cumulative SNAP status next 5-year"	
+		
+			*	Total # of SNAP redemptions over 7-year
+			*	NOTE: This is an observational-level.
+			loc	var		SNAP_cum_fre_7
+			cap	drop	`var'
+			gen		`var'=.
+			replace	`var'=0		if	inlist(SNAP_cum_status_7,1) //inlist(1,SNAP_0000)
+			replace	`var'=1		if	inlist(SNAP_cum_status_7,2,3,5,9)	// inlist(1,SNAP_1000,SNAP_0100,SNAP_0010,SNAP_0001)
+			replace	`var'=2		if	inlist(SNAP_cum_status_7,4,6,7,10,11,13)	// inlist(1,SNAP_1100,SNAP_1010,SNAP_1001,SNAP_0110,SNAP_0101,SNAP_0011)
+			replace	`var'=3		if	inlist(SNAP_cum_status_7,8,12,14,15)	//	inlist(1,SNAP_1110,SNAP_1101,SNAP_1011,SNAP_0111)
+			replace	`var'=4		if	inlist(SNAP_cum_status_7,16)	//	inlist(1,SNAP_1111)
+			
+			lab	var	`var'		"\# SNAP participation last 7 years"
+			
+			*	Total # of CONTINUOUS SNAP redemptions over 7-year
+			*	This variable captures extensive/intensive margin, by treating non-categories as missing
+				*	For instance, to capture extensive margin, "redemption in t-2 only" should NOT be cateogorzied as zero, but as missing.
+				*	Similarly, to capture intensive margin, "redemption in t-4 and t" should NOT be cateogorzied as zero, but as missing.
+			*	NOTE: This is an observational-level.
+			loc	var	SNAP_cum_fre_cont_7
+			cap	drop	`var'
+			gen		`var'=.
+			replace	`var'=0	if	SNAP_cum_status_7==1 	//	SNAP_1000==1
+			replace	`var'=1	if	SNAP_cum_status_7==2 	//	SNAP_1000==1
+			replace	`var'=2	if	SNAP_cum_status_7==4	//	SNAP_1100==1
+			replace	`var'=3	if	SNAP_cum_status_7==8	//	SNAP_1110==1
+			replace	`var'=4	if	SNAP_cum_status_7==16	//	SNAP_1111==1
+			lab	var	`var'	"\# continuous SNAP participation: 7 years"
+			
+			
+			
+			
+			*	9-year period
+			loc	var	SNAP_cum_status_9
+			cap	drop	`var'	
+			egen	`var'	=	group(FS_rec_wth	l2_FS_rec_wth	l4_FS_rec_wth	l6_FS_rec_wth	l8_FS_rec_wth)
+			
+			
+			*	Double-check how each value is assigned.
+			loc	var	SNAP_cum_status_9
+			local	count=1
+			forval	l0val=0/1	{
+				
+				forval	l2val=0/1	{
+					
+					forval	l4val=0/1	{
+						
+						forval	l6val=0/1	{
+										
+							forval	l8val=0/1	{
+							
+							assert	`var'==`count'	if	l8_FS_rec_wth==`l8val'	&	l6_FS_rec_wth==`l6val'	&	l4_FS_rec_wth==`l4val'	&	l2_FS_rec_wth==`l2val'	&	FS_rec_wth==`l0val'
+							
+							cap	drop	SNAP_`l8val'`l6val'`l4val'`l2val'`l0val'
+							gen			SNAP_`l8val'`l6val'`l4val'`l2val'`l0val'=0	if	!mi(SNAP_cum_status_9)
+							replace		SNAP_`l8val'`l6val'`l4val'`l2val'`l0val'=1	if	!mi(SNAP_cum_status_9)	&	l8_FS_rec_wth==`l8val'	&	l6_FS_rec_wth==`l6val'	&	l4_FS_rec_wth==`l4val'	&	l2_FS_rec_wth==`l2val'	&	FS_rec_wth==`l0val'
+							loc	count=`count'+1
+							
+							}
+							
+						}
+						
+					}
+					
+				}
+			}
+	
+			
+			lab	define	`var'	1	"Never"		2	"t-8 only"		3	"t-6 only"		4	"t-8 t-6"	///
+								5	"t-4"		6	"t-8  t-4 "		7	"t-6 t-4"		8	"t-8 t-6 t-4"	///
+								9	"t-2"		10	"t-8  t-2"		11	"t-6 t-2"		12	"t-8 t-6 t-2"	///
+								13	"t-4 t-2"	14	"t-8  t-4 t-2"	15	"t-6  t-4 t-2"	16	"t-8 t-6  t-4 t-2"	///
+								17	"t"		18	"t-8 t"		19	"t-6 t"		20	"t-8 t-6 t"	///
+								21	"t-4 t"		22	"t-8  t-4 t"		23	"t-6 t-4 t"			24	"t-8 t-6 t-4 t"	///
+								25	"t-2 t"		26	"t-8  t-2 t"		27	"t-6 t-2 t"			28	"t-8 t-6 t-2 t"	///
+								29	"t-4 t-2 t"	30	"t-8  t-4 t-2 t"	31	"t-6  t-4 t-2 t"	32	"t-8 t-6  t-4 t-2 t", replace
+								
+			lab	val	`var'	`var'
+			lab	var	`var'	"SNAP status last 9 years"
+	
+			*	Total # of SNAP redemptions over 9-year
+			*	NOTE: This is an observational-level.
+			loc	var		SNAP_cum_fre_9
+			cap	drop	`var'
+			egen	`var'	=	rowtotal(FS_rec_wth	l2_FS_rec_wth	l4_FS_rec_wth	l6_FS_rec_wth	l8_FS_rec_wth)	
+			replace	`var'	=.	if	mi(SNAP_cum_status_9)	//	Tag as missing if SNAP status is missing in any time period over 9-year.
+			
+			lab	var	`var'		"\# SNAP participation last 9 years"
+			
+			*	Total # of CONTINUOUS SNAP redemptions over 7-year
+			*	This variable captures extensive/intensive margin, by treating non-categories as missing
+				*	For instance, to capture extensive margin, "redemption in t-2 only" should NOT be cateogorzied as zero, but as missing.
+				*	Similarly, to capture intensive margin, "redemption in t-4 and t" should NOT be cateogorzied as zero, but as missing.
+			*	NOTE: This is an observational-level.
+			loc	var	SNAP_cum_fre_cont_9
+			cap	drop	`var'
+			gen		`var'=.
+			replace	`var'=0	if	SNAP_cum_status_9==1
+			replace	`var'=1	if	SNAP_cum_status_9==2
+			replace	`var'=2	if	SNAP_cum_status_9==4
+			replace	`var'=3	if	SNAP_cum_status_9==8
+			replace	`var'=4	if	SNAP_cum_status_9==16
+			replace	`var'=5	if	SNAP_cum_status_9==32
+			lab	var	`var'	"\# continuous SNAP participation: 9 years"	
+			
+			
+			*	Generate SNAP status from (i) 1990 to 1996 (ii) 1977 to 1996
+			*	Inspecting aggregated outcome over longer-time horizon is based on the hypothesis that SNAP effects last over longer periods.
+			*	This hypothesis requires me to restrict the analysis sample to those who had no prior SNAP experience over the same period.
+			*	I will tag individuals (i) who had no SNAP exposure from 1990 to 1996 (ii) who had no SNAP exposure from 1977 to 1996
+			*	We might need to restrict FSD sample whose value is 0 in either of the two.
+			loc	var	SNAP_1990_1996
+			cap	drop	`var'
+			cap	drop	`var'_tmp
+			bys	x11101ll:	egen	`var'_tmp	=	total(FS_rec_wth)	if	inrange(year,1990,1996)
+			bys	x11101ll:	egen	`var'		=	max(`var'_tmp)
+			drop	`var'_tmp
+			lab	var	`var'	"\# of SNAP participation (1990-1996)"
+			
+			loc	var	SNAP_1977_1996
+			cap	drop	`var'
+			cap	drop	`var'_tmp
+			bys	x11101ll:	egen	`var'_tmp	=	total(FS_rec_wth)	if	inrange(year,1977,1996)
+			bys	x11101ll:	egen	`var'		=	max(`var'_tmp)
+			drop	`var'_tmp
+			lab	var	`var'	"\# of SNAP participation (1977-1996)"
 		
 		*	Drop 1975 and 1990
 		*	I only need those years for 1967 and 1991, which I just imported above (so no longer needed)
@@ -4232,11 +5197,147 @@
 		*	Drop variables no longer needed
 		*	(This part will be added later)
 		
+		
+		*	(2023-08-24) Construct Cumulative SNAP usage variables, (used for event study plot, intensive/extensive marginal effect, etc.)
+				
+			*	For event study, we need to create a standardized time
+			*	Since there are multiple treatments occuring multiple periods, it is difficult to standardize treatment period.
+				*	For example, if a household is treated in 1997 and 1999, then relative treatment period cannot be standarized (which on should be t=0?)
+			*	There are two ways to deal with
+				*	(1) Limit the sample to whose who "never treated" and "treated only once" where treatment time can be standarzied.
+				*	(2) Standardize based on the "first treatment"
+			*	I will do the second method, using "tsspell" command
+			
+			*	Total # of SNAP participation over time (it will be used for analyses by group)
+			loc	var	SNAP_cumul_all
+			cap	drop	`var'
+			bys	x11101ll:	egen	`var'	=	total(FS_rec_wth)
+			lab	var	`var'	"\# of SNAP participation over the entire period"
+			
+						
+			* Construct the spells of SNAP redemption using "tsspell" command
+			*	NOTE: "replace" option does not work when the variable doesn't exist, so we manually drop them
+			*	(2023-09-10) Start with year==1997, a causal inference period.
+			cap	drop	SNAP_seq
+			cap	drop	SNAP_spell
+			cap	drop	SNAP_end	
+			tsspell, cond(year>=1997 & FS_rec_wth==1) seq(SNAP_seq) spell(SNAP_spell) end(SNAP_end) 
+			
+			*	Construct standardized year T when T=-4 as "first SNAP participation" (i.e. T=0 means "first SNAP in 4 years ago")
+			*	The reason for not standardizing T when T=0 as "the year first received SNAP" is because, we constructed FSD variables based on PFS status in t-4, t-2 and t
+				*	Since I want to plot event study design and effects on SNAP participation based on SNAP redemption status over the same period (t-4, t-2 and t), we need to standardize based on SNAP redemption at t-4
+				*	If we standardize based on first SNAP participation at t=0, there's no SNAP status in t=-2 and t=-4 (since first got SNAP in t=0).
+			*	Note: the code below excludes those who are "never treated", since they do not have any year of SNAP participation
+			
+			loc	var		year_SNAP_std
+			cap	drop	`var'
+			gen	`var'=.
+			/*
+			forval	t=0(2)4	{
+			    
+				replace	`var'=`t'			if	l`t'.SNAP_seq==1	&	l`t'.SNAP_spell==1
+				replace	`var'=`t' * (-1)	if	f`t'.SNAP_seq==1	&	f`t'.SNAP_spell==1
+				
+			}
+			*/
+			
+			replace	`var'=-4	if	l0.SNAP_seq==1	&	l0.SNAP_spell==1	//	T=-4: year first received SNAP since 1997
+			replace	`var'=-2	if	l2.SNAP_seq==1	&	l2.SNAP_spell==1	//	T=-2: 2 years after first received SNAP since 1997
+			replace	`var'=0		if	l4.SNAP_seq==1	&	l4.SNAP_spell==1	//	T=0:  4 years after first received SNAP since 1997
+			
+			replace	`var'=-6	if	f2.SNAP_seq==1	&	f2.SNAP_spell==1	//	T=-6: 2 years prior to first received SNAP since 1997
+			replace	`var'=-8	if	f4.SNAP_seq==1	&	f4.SNAP_spell==1	//	T=-8: 4 years prior to first received SNAP since 1997, standardize at T=-8
+			
+			
+			lab	var	`var'	"Standardized year (=-4 when first received SNAP)"
+			
+			
+			*	Create dummies of standardized years
+			cap	drop	year_SNAP_std?
+			cap	drop	year_SNAP_std_??
+			tab	year_SNAP_std, gen(year_SNAP_std)	
+			rename	year_SNAP_std?	(year_SNAP_std_l8	year_SNAP_std_l6	year_SNAP_std_l4	year_SNAP_std_l2	year_SNAP_std_l0)
+			
+			lab	var	year_SNAP_std_l8	"t-4"	//	4 years before the first SNAP (T=-8)
+			lab	var	year_SNAP_std_l6	"t-2"	//	2 years before the first SNAP (T=-6)
+			lab	var	year_SNAP_std_l4	"t"		//	Year of the first SNAP (T=-4)
+			lab	var	year_SNAP_std_l2	"t+2"	//	2 years after the first SNAP (T=-2)
+			lab	var	year_SNAP_std_l0	"t+4"	//	4 years after the first SNAP (T=0)
+			
+			
+			*	Generate interaction variable (SNAP x relative time duumies)
+			*	Not sure I am gonna use it...
+			/*
+			forval	t=1/7	{
+			    
+				cap	drop	year_SNAP_int`t'
+				gen		year_SNAP_int`t'	=	year_SNAP_std`t' & FS_rec_wth
+				replace	year_SNAP_int`t'=.	if	mi(year_SNAP_standard`t')
+				lab	var	year_SNAP_int`t'	"SNAP x relative time dummy"
+			}
+			*/
+			
+			*	Set sample of balanced households (no-missing value from 4-year ago, 2-year ago, 0-year, 2-year later and 4-year later)
+				*	Time period conditioned upon should be equal to the time period used to construct the standardized year.
+			*	Remember that FSD variables are constructed based on 4-year ago, 2-year ago and 0-year.
+				cap	drop	num_nonmiss_event
+				cap	drop	event_study_sample
+				gen	num_nonmiss_event	=	1	if	!mi(l4.year_SNAP_std)	&	!mi(l2.year_SNAP_std)	&	!mi(l0.year_SNAP_std)	&	!mi(f2.year_SNAP_std)	&	!mi(f4.year_SNAP_std)	//	Tag balanced individual
+				bys	x11101ll:	egen	event_study_sample	=	max(num_nonmiss_event)	if	!mi(year_SNAP_std)
+				lab	var	event_study_sample	"Balanced event study sample (-6 -4 -2 0 2)"
+				drop	num_nonmiss_event
+		
+			*	Cateogrization of individuals based on the # of cumulative SNAP redemption over 5 years "after" the first redemption (including the first one)
+				*	This variable is needed to categorize "a group of" observations into subgroup.
+					*	(1) Those who redeemed SNAP only once over the 5-year period
+					*	(2) Those who redeemed SNAP twice over the 5-year period
+					*	(3) Those who redeemed SNAP all 3 periods over the 5-year period (t-4, t-2, t)
+				*	It is to see how PFS change differently over time by different intensity of the fist SNAP exposure.
+				*	NOTE: I could construct it at individual-level since I limit to 5 years since the "first" SNAP exposure. I cannot create individual-level if I use "any" SNAP exposure
+				loc	var	SNAP_cum_fre_1st
+				cap	drop	`var'	
+				gen	`var'=.
+				
+					*	(0) Those who never participated in SNAP: should be zero (no SNAP participation over 3 period)
+					replace	`var'=0	if	year_SNAP_std==.	&	FS_rec_wth==0		&	f2.FS_rec_wth==0	&	f4.FS_rec_wth==0					
+					
+					*	(1) Those who participated only once over 5-year period, since the first participation.
+					replace	`var'=1	if	year_SNAP_std==-8	&	f6.FS_rec_wth==0	&	f8.FS_rec_wth==0	//	(t-8)
+					replace	`var'=1	if	year_SNAP_std==-6	&	f4.FS_rec_wth==0	&	f6.FS_rec_wth==0	//	(t-6)
+					replace	`var'=1	if	year_SNAP_std==-4	&	f2.FS_rec_wth==0	&	f4.FS_rec_wth==0	//	(t-4)
+					replace	`var'=1	if	year_SNAP_std==-2	&	FS_rec_wth==0		&	f2.FS_rec_wth==0	//	(t-2) 
+					replace	`var'=1	if	year_SNAP_std==0	&	l2.FS_rec_wth==0	&	FS_rec_wth==0		//	t
+										
+					*	(2)	1 more SNAP redemption after the first redemption.
+					replace	`var'=2	if	year_SNAP_std==-8	&	((f6.FS_rec_wth==1	&	f8.FS_rec_wth==0)	|	(f6.FS_rec_wth==0	&	f8.FS_rec_wth==1))	//	(t-8)
+					replace	`var'=2	if	year_SNAP_std==-6	&	((f4.FS_rec_wth==1	&	f6.FS_rec_wth==0)	|	(f4.FS_rec_wth==0	&	f6.FS_rec_wth==1))	//	(t-6)
+					replace	`var'=2	if	year_SNAP_std==-4	&	((f2.FS_rec_wth==1	&	f4.FS_rec_wth==0)	|	(f2.FS_rec_wth==0	&	f4.FS_rec_wth==1))	//	(t-4)
+					replace	`var'=2	if	year_SNAP_std==-2	&	((FS_rec_wth==1		&	f2.FS_rec_wth==0)	|	(FS_rec_wth==0		&	f2.FS_rec_wth==1))	//	(t-2)
+					replace	`var'=2	if	year_SNAP_std==0	&	((l2.FS_rec_wth==1	&	FS_rec_wth==0)		|	(l2.FS_rec_wth==0	&	FS_rec_wth==1))	//	(t)
+					
+					*	(3) All 3 redemption over the five-year period
+					replace	`var'=3	if	year_SNAP_std==-8	&	f6.FS_rec_wth==1	&	f8.FS_rec_wth==1	//	(t-8)
+					replace	`var'=3	if	year_SNAP_std==-6	&	f4.FS_rec_wth==1	&	f6.FS_rec_wth==1	//	(t-6)
+					replace	`var'=3	if	year_SNAP_std==-4	&	f2.FS_rec_wth==1	&	f4.FS_rec_wth==1	//	(t-4)
+					replace	`var'=3	if	year_SNAP_std==-2	&	FS_rec_wth==1		&	f2.FS_rec_wth==1	//	(t-2)
+					replace	`var'=3	if	year_SNAP_std==0	&	l2.FS_rec_wth==1	&	FS_rec_wth==1	//	(t)
+					
+					lab	var	`var'	"\# of cumulative SNAP redemption since the first redemption over 5-year"
+					
+					lab	define	`var'	0	"N/A - No SNAP at all"	1	"Once"	2	"Twice"		3	"Three times", replace
+					lab	val	`var'	`var'
+			
+			
+			*	Tabluate cumulative SNAP frequency over event study sample
+				tab	SNAP_cum_fre_1st	if	event_study_sample==1, m
+				
+				br	x11101ll	year	FS_rec_wth	year_SNAP_std	year_SNAP_std_??	if	event_study_sample
+		
 
 		*	Check discontinuity of final variables by checking weighted average
 		*use	"${SNAP_dtInt}/SNAP_long_const", clear
 		preserve
-			collapse (mean) FS_rec_wth foodexp_tot_exclFS foodexp_tot_inclFS foodexp_tot_exclFS_pc foodexp_tot_inclFS_pc foodexp_W_TFP_pc overTFP_exclFS overTFP_inclFS [aw=wgt_long_fam_adj], by(year)
+			collapse (mean) FS_rec_wth foodexp_tot_exclFS foodexp_tot_inclFS foodexp_tot_exclFS_pc foodexp_tot_inclFS_pc foodexp_W_TFP_pc overTFP_exclFS overTFP_inclFS [aw=wgt_long_ind], by(year)
 			tempfile	foodvar_check
 			save		`foodvar_check'
 		restore
@@ -4267,6 +5368,37 @@
 		
 			
 			*/
+	
+	*	Change in food expenditure
+
+			*	W/O SNAP benefit
+			loc	var	foodexp_exclFS_diff
+			cap	drop	`var'
+			gen	`var'	=	foodexp_tot_exclFS_pc_real	-	l2.foodexp_tot_exclFS_pc_real
+			lab	var	`var'	"Diff in food exp (w/o SNAP)"
+			
+			*	with SNAP benefit
+			loc	var	foodexp_inclFS_diff
+			cap	drop	`var'
+			gen	`var'	=	foodexp_tot_inclFS_pc_real	-	l2.foodexp_tot_inclFS_pc_real
+			lab	var	`var'	"Diff in food exp (with SNAP)"
+				
+	*	Food expenditure normalized at (COLI-adjusted) TFP cost
+
+			*	With SNAP benefit
+			loc	var	foodexp_inclFS_TFP_normal
+			cap	drop	`var'
+			
+			gen	`var'	=	(foodexp_tot_inclFS_pc_real	-	foodexp_W_TFP_pc_COLI_real)	/	foodexp_W_TFP_pc_real
+			lab	var	`var'	"Food exp normalized at TFP - with SNAP"
+			
+			*	Without SNAP benefit
+			loc	var	foodexp_exclFS_TFP_normal
+			cap	drop	`var'
+			
+			gen	`var'	=	(foodexp_tot_exclFS_pc_real	-	foodexp_W_TFP_pc_COLI_real)	/	foodexp_W_TFP_pc_real
+			lab	var	`var'	"Food exp normalized at TFP  - without SNAP"
+				
 		
 		
 		*	Save cleaned

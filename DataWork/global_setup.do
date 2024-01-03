@@ -154,7 +154,7 @@
 		*	South
 		global	state_group6	rp_state_enum33	rp_state_enum40	//	NC, SC
 		global	state_group7	rp_state_enum11	//	GA
-		global	state_group8	rp_state_enum17	rp_state_enum41	rp_state_enum48	//	KT, TN, WV
+		global	state_group8	rp_state_enum17	rp_state_enum42	rp_state_enum48	//	KT, TN, WV
 		global	state_group9	rp_state_enum10	//	FL
 		global	state_group10	rp_state_enum2	rp_state_enum4	rp_state_enum24 rp_state_enum18	//	AL, AR, MS, LA
 		global	state_group11	rp_state_enum43	//	TX
