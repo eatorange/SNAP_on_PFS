@@ -8,6 +8,14 @@
 	keep	if	inrange(year,1997,2014)
 
 	xtset	rp_state	year 
+	
+	*	Association b/w SNAP index and unemployment rate
+	cap	drop	index_hat
+	reg	SNAP_index_w	unemp_rate
+	xtreg	SNAP_index_w	unemp_rate, fe
+	reg	SNAP_index_w	unemp_rate	i.rp_state i.year // It seems there's a positive association b/w unemployment ratea nd index...
+	reg	SNAP_index_w	unemp_rate	i.rp_state i.year if inrange(year,1997,2006)	//	BUt that's largely driven by huge increase in unemployment during the GR! Once limit to no GR, no effects.
+	
 
 	
 	*	Construct change variables
