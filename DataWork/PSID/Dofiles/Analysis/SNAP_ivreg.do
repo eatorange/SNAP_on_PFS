@@ -12,7 +12,7 @@
 			*	Note: already done in dynamics data.
 			*keep	if	inrange(year,1997,2013)
 			
-
+	
 			*	Construct individual indicator
 			sort	x11101ll	year
 				
@@ -48,8 +48,15 @@
 					gen no`var'_9713=1		if	num`var'==0 // never been this status all the time.
 					lab	var	no`var'_9713	"no `var' over 1997-2013"
 				}
+				
+				
+			*	(2024-1-9) Keep the following samples only
+			*	This code should only be works under "different sample" Github branch.
+				*	i)	balanced
+				*	ii) same RP only
+			keep	if	sameRP_9713==1
 			
-	
+				
 			
 			*	(2023-08-20)	Keep non-missing PFS obs only.
 			*	(2023-09-09)	Already done in dynamics data.
@@ -65,13 +72,13 @@
 
 					*	Re-scaled version
 					cap	drop	SNAP_index_`type'_0to1
-					summ	SNAP_index_`type'  [aw=wgt_long_ind]
+					summ	SNAP_index_`type'  [aw=wgt_long_fam]
 					gen		SNAP_index_`type'_0to1	=	(SNAP_index_`type'-r(min)) / (r(max) - r(min))
 					lab	var	SNAP_index_`type'_0to1		"SNAP Policy Index (`type' \& rescaled)"
 							
 					*	Standardized version				
 					cap drop SNAP_index_`type'_std
-					summ	SNAP_index_`type'  [aw=wgt_long_fam_adj]
+					summ	SNAP_index_`type'  [aw=wgt_long_fam]
 					gen	SNAP_index_`type'_std = (SNAP_index_`type' - r(mean)) / r(sd)
 					lab	var	SNAP_index_`type'_std	"SNAP policy index (`type' \& standardized)"
 					
@@ -202,8 +209,8 @@
 				
 				local	summvars	/*`indvars'*/	`HHvars'	`famvars'	`moneyvars' `SNAPvars' `IVs'	`FSvars'
 				
-				*estpost summ	`indvars'	[aw=wgt_long_fam_adj]	if	!mi(PFS_ppml)	//	all sample
-				*estpost summ	`indvars'	[aw=wgt_long_fam_adj]	if	!mi(PFS_ppml)	&	balanced_9713==1	&	income_ever_below_200_9713==1	/*  num_waves_in_FU_uniq>=2	 &*/	  // Temporary condition. Need to think proper condition.
+				*estpost summ	`indvars'	[aw=wgt_long_fam]	if	!mi(PFS_ppml)	//	all sample
+				*estpost summ	`indvars'	[aw=wgt_long_fam]	if	!mi(PFS_ppml)	&	balanced_9713==1	&	income_ever_below_200_9713==1	/*  num_waves_in_FU_uniq>=2	 &*/	  // Temporary condition. Need to think proper condition.
 				
 				
 				*	All, unweighted
@@ -213,19 +220,19 @@
 				estpost tabstat	`summvars' 	if	!mi(PFS_ppml)	&	income_ever_below_130_9713==1,	statistics(count	mean	sd) columns(statistics)	// save
 				est	store	sumstat_inc130_nowgt
 				*	Income belowe 130, unweighted
-				estpost tabstat	`summvars'	 if	!mi(PFS_ppml)	[aw=wgt_long_ind],	statistics(count	mean	sd) columns(statistics)		// save
+				estpost tabstat	`summvars'	 if	!mi(PFS_ppml)	[aw=wgt_long_fam],	statistics(count	mean	sd) columns(statistics)		// save
 				est	store	sumstat_all_wgt
 				*	Income below 130, weighted
-				estpost tabstat	`summvars' 	if	!mi(PFS_ppml)	&	income_ever_below_130_9713==1	[aw=wgt_long_ind],	statistics(count	mean	sd) columns(statistics)	// save
+				estpost tabstat	`summvars' 	if	!mi(PFS_ppml)	&	income_ever_below_130_9713==1	[aw=wgt_long_fam],	statistics(count	mean	sd) columns(statistics)	// save
 				est	store	sumstat_inc130_wgt
 				
 				
 					*	FS amount per capita in real dollars (only those used)
-					*estpost tabstat	 FS_rec_amt_capita	if in_sample==1	&	!mi(PFS_ppml)	&	income_below_200==1	& FS_rec_wth==1 [aw=wgt_long_fam_adj],	statistics(mean	sd	min	max) columns(statistics)	// save
+					*estpost tabstat	 FS_rec_amt_capita	if in_sample==1	&	!mi(PFS_ppml)	&	income_below_200==1	& FS_rec_wth==1 [aw=wgt_long_fam],	statistics(mean	sd	min	max) columns(statistics)	// save
 				
 			
 				
-				esttab	sumstat_all_nowgt	sumstat_inc130_nowgt	sumstat_all_wgt	sumstat_inc130_nowgt	using	"${SNAP_outRaw}/Tab_1_Sumstats.csv",  ///
+				esttab	sumstat_all_nowgt	sumstat_inc130_nowgt	sumstat_all_wgt	sumstat_inc130_wgt	using	"${SNAP_outRaw}/Tab_1_Sumstats.csv",  ///
 					cells("count(fmt(%12.0f)) mean(fmt(%12.2f)) sd(fmt(%12.2f))") label	title("Summary Statistics") noobs 	  replace
 									
 				esttab	sumstat_all_nowgt	sumstat_inc130_nowgt	using	"${SNAP_outRaw}/Tab_1_Sumstats.tex",  ///
@@ -297,35 +304,35 @@
 			
 				*	full sample, no individual FE
 				*reg		`depvar'	`indvars'	`HHvars'	`famvars'	`SNAPvars'	`regionvars'	`timevars'
-				reghdfe		`depvar'	`indvars'	`HHvars'	`famvars'	`SNAPvars'	[pw=wgt_long_ind], absorb(year rp_state)
+				reghdfe		`depvar'	`indvars'	`HHvars'	`famvars'	`SNAPvars'	[pw=wgt_long_fam], absorb(year rp_state)
 				estadd	local	wgt			"N", replace
 				estadd	local	ind_FE		"N", replace
-				summ	`depvar'	[aw=wgt_long_ind]
+				summ	`depvar'	[aw=wgt_long_fam]
 				estadd	scalar	meanPFS	=	r(mean), replace
 				est	store PFS_X_all_wgt_noiFE
 				
 				*	full sample, individual FE
 				*reg		`depvar'	`indvars'	`HHvars'	`famvars'	`SNAPvars'	`regionvars'	`timevars'
-				reghdfe		`depvar'	`indvars'	`HHvars'	`famvars'	`SNAPvars'	[pw=wgt_long_ind], absorb(year rp_state x11101ll)
+				reghdfe		`depvar'	`indvars'	`HHvars'	`famvars'	`SNAPvars'	[pw=wgt_long_fam], absorb(year rp_state x11101ll)
 				estadd	local	wgt			"N", replace
 				estadd	local	ind_FE		"Y", replace
-				summ	`depvar'	[aw=wgt_long_ind]
+				summ	`depvar'	[aw=wgt_long_fam]
 				estadd	scalar	meanPFS	=	r(mean), replace
 				est	store PFS_X_all_wgt_iFE
 				
 				*	inc130%, no individual FE
-				reghdfe		`depvar'	`indvars'	`HHvars'	`famvars'	`SNAPvars'	[pw=wgt_long_ind]	if	income_ever_below_130_9713==1, absorb(year rp_state)
+				reghdfe		`depvar'	`indvars'	`HHvars'	`famvars'	`SNAPvars'	[pw=wgt_long_fam]	if	income_ever_below_130_9713==1, absorb(year rp_state)
 				estadd	local	wgt			"N", replace
 				estadd	local	ind_FE		"N", replace
-				summ	`depvar'	[aw=wgt_long_ind]	if	income_ever_below_130_9713==1
+				summ	`depvar'	[aw=wgt_long_fam]	if	income_ever_below_130_9713==1
 				estadd	scalar	meanPFS	=	r(mean), replace
 				est	store PFS_X_inc130_wgt_noiFE
 							
 				*	inc130%, individual FE
-				reghdfe		`depvar'	`indvars'	`HHvars'	`famvars'	`SNAPvars'	[pw=wgt_long_ind]	if	income_ever_below_130_9713==1, absorb(year rp_state x11101ll)
+				reghdfe		`depvar'	`indvars'	`HHvars'	`famvars'	`SNAPvars'	[pw=wgt_long_fam]	if	income_ever_below_130_9713==1, absorb(year rp_state x11101ll)
 				estadd	local	wgt			"N", replace
 				estadd	local	ind_FE		"Y", replace
-				summ	`depvar'	[aw=wgt_long_ind]	if	income_ever_below_130_9713==1
+				summ	`depvar'	[aw=wgt_long_fam]	if	income_ever_below_130_9713==1
 				estadd	scalar	meanPFS	=	r(mean), replace
 				est	store PFS_X_inc130_wgt_iFE
 			
@@ -366,35 +373,35 @@
 		
 		*	Distribution of food expenditure difference
 			
-		twoway	(kdensity foodexp_exclFS_diff	[aw=wgt_long_ind]	if	FS_rec_wth==0, lc(blue) lp(dash) lwidth(medium) graphregion(fcolor(white)) legend(label(1 "Non-SNAP users"))) 	///
-				(kdensity foodexp_exclFS_diff	[aw=wgt_long_ind]	if	FS_rec_wth==1, lc(purple) lp(solid) lwidth(medium) graphregion(fcolor(white)) legend(label(2 "SNAP user"))), 	///
+		twoway	(kdensity foodexp_exclFS_diff	[aw=wgt_long_fam]	if	FS_rec_wth==0, lc(blue) lp(dash) lwidth(medium) graphregion(fcolor(white)) legend(label(1 "Non-SNAP users"))) 	///
+				(kdensity foodexp_exclFS_diff	[aw=wgt_long_fam]	if	FS_rec_wth==1, lc(purple) lp(solid) lwidth(medium) graphregion(fcolor(white)) legend(label(2 "SNAP user"))), 	///
 				title("Difference in food expenditure over 2-year") ytitle("Density") xtitle("Food expenditure difference") name(dist_multires_pov_nut, replace)	///
 				note(Food expenditure in real dollars. SNAP benefit excluded)
 		graph	export	"${SNAP_outRaw}/foodexp_diff_dist.png", as(png) replace
 	
 		*	Food expenditure normalized at TFP cost.
-		twoway	(kdensity foodexp_inclFS_TFP_normal	[aw=wgt_long_ind]	if	FS_rec_wth==1 & inrange(foodexp_inclFS_TFP_normal,-2,2), lc(blue) lp(dash) lwidth(medium) graphregion(fcolor(white)) legend(label(1 "SNAP users - with benefit"))) 	///
-				(kdensity foodexp_exclFS_TFP_normal	[aw=wgt_long_ind]	if	FS_rec_wth==1 & inrange(foodexp_exclFS_TFP_normal,-2,2), lc(purple) lp(solid) lwidth(medium) graphregion(fcolor(white)) legend(label(2 "SNAP users - w/o benefit"))), 	///
+		twoway	(kdensity foodexp_inclFS_TFP_normal	[aw=wgt_long_fam]	if	FS_rec_wth==1 & inrange(foodexp_inclFS_TFP_normal,-2,2), lc(blue) lp(dash) lwidth(medium) graphregion(fcolor(white)) legend(label(1 "SNAP users - with benefit"))) 	///
+				(kdensity foodexp_exclFS_TFP_normal	[aw=wgt_long_fam]	if	FS_rec_wth==1 & inrange(foodexp_exclFS_TFP_normal,-2,2), lc(purple) lp(solid) lwidth(medium) graphregion(fcolor(white)) legend(label(2 "SNAP users - w/o benefit"))), 	///
 				title("Food expenditure normalized at TFP cost") ytitle("Density") xline(0) xtitle("Food expenditure - normalized") name(foodexp_dist_SNAP, replace)
 		graph	export	"${SNAP_outRaw}/foodexp_dist_TFP_normal.png", as(png) replace
 		
 		*	PFS with cutoff
-		twoway	(kdensity PFS_ppml			[aw=wgt_long_ind]	if	FS_rec_wth==1, lc(blue) lp(dash) lwidth(medium) graphregion(fcolor(white)) legend(label(1 "SNAP users - with benefit"))) 	///
-				(kdensity PFS_ppml_exclFS	[aw=wgt_long_ind]	if	FS_rec_wth==1, lc(purple) lp(solid) lwidth(medium) graphregion(fcolor(white)) legend(label(2 "SNAP users - w/o benefit"))), 	///
+		twoway	(kdensity PFS_ppml			[aw=wgt_long_fam]	if	FS_rec_wth==1, lc(blue) lp(dash) lwidth(medium) graphregion(fcolor(white)) legend(label(1 "SNAP users - with benefit"))) 	///
+				(kdensity PFS_ppml_exclFS	[aw=wgt_long_fam]	if	FS_rec_wth==1, lc(purple) lp(solid) lwidth(medium) graphregion(fcolor(white)) legend(label(2 "SNAP users - w/o benefit"))), 	///
 				title("PFS") ytitle("Density") xtitle("PFS") xline(0.45) xlabel(0.25 0.45 "FI Cutoff (0.45)" 0.75 1.0) name(PFS_dist_SNAP, replace)
 		graph	export	"${SNAP_outRaw}/PFS_dist.png", as(png) replace
 		
 		
 		*	PFS with different group (full, low-income)
-		twoway	(kdensity PFS_ppml	[aw=wgt_long_ind], lc(blue) lp(dash) lwidth(medium) graphregion(fcolor(white)) legend(label(1 "Full sample"))) 	///
-				(kdensity PFS_ppml	[aw=wgt_long_ind]	if	income_ever_below_130_9713==1, lc(purple) lp(solid) lwidth(medium) graphregion(fcolor(white)) legend(label(2 "Low-income population"))), 	///
+		twoway	(kdensity PFS_ppml	[aw=wgt_long_fam], lc(blue) lp(dash) lwidth(medium) graphregion(fcolor(white)) legend(label(1 "Full sample"))) 	///
+				(kdensity PFS_ppml	[aw=wgt_long_fam]	if	income_ever_below_130_9713==1, lc(purple) lp(solid) lwidth(medium) graphregion(fcolor(white)) legend(label(2 "Low-income population"))), 	///
 				title("PFS Distribution") ytitle("Density") xtitle("PFS") xline(0.45) xlabel(0.25 0.45 "FI Cutoff (0.45)" 0.75 1.0) name(PFS_dist_SNAP, replace)
 		graph	export	"${SNAP_outRaw}/PFS_dist_byinc.png", as(png) replace
 				
 		
 		
-		summ	PFS_FI_ppml [aw=wgt_long_ind]
-		summ	PFS_FI_ppml [aw=wgt_long_ind] if income_ever_below_130_9713==1
+		summ	PFS_FI_ppml [aw=wgt_long_fam]
+		summ	PFS_FI_ppml [aw=wgt_long_fam] if income_ever_below_130_9713==1
 		
 		*graph	export	"${results}/multi_resil_pov_nut.png", as(png) replace
 		
@@ -406,16 +413,16 @@
 		local	moneyvars	
 		
 		
-		summ 	PFS_ppml  	[aw=wgt_long_fam_adj]	if !mi(PFS_ppml) & !mi(PFS_ppml_noCOLI) & inrange(year,1990,2015)
+		summ 	PFS_ppml  	[aw=wgt_long_fam]	if !mi(PFS_ppml) & !mi(PFS_ppml_noCOLI) & inrange(year,1990,2015)
 		scalar	mean_PFS	=	r(mean)
-		summ	PFS_ppml_noCOLI	[aw=wgt_long_fam_adj]	if !mi(PFS_ppml) & !mi(PFS_ppml_noCOLI) & inrange(year,1990,2015)
+		summ	PFS_ppml_noCOLI	[aw=wgt_long_fam]	if !mi(PFS_ppml) & !mi(PFS_ppml_noCOLI) & inrange(year,1990,2015)
 		scalar	mean_PFS_noCOLI	=	r(mean)
 		di	(mean_PFS-mean_PFS_noCOLI)/mean_PFS
 		
 		loc	var	diff_PFS_COLI_noCOLI
 		cap	drop	`var'
 		gen	`var'	=	abs(PFS_ppml-PFS_ppml_noCOLI)
-		summ	`var'	[aw=wgt_long_fam_adj]	if	inrange(year,1990,2015),d
+		summ	`var'	[aw=wgt_long_fam]	if	inrange(year,1990,2015),d
 		di r(mean)/mean_PFS
 		
 		graph twoway 	(kdensity PFS_ppml  			if !mi(PFS_ppml) & !mi(PFS_ppml_noCOLI) & inrange(year,1990,2015), graphregion(fcolor(white)) 	legend(label(1 "PFS (non-COLI)")))	///
@@ -443,26 +450,26 @@
 		/*
 		*	Outcome variables
 		summ	PFS_ppml	PFS_FI_ppml
-		summ	PFS_ppml PFS_FI_ppml	[aw=wgt_long_ind]
-		summ	PFS_ppml PFS_FI_ppml	[aw=wgt_long_ind] if income_ever_below_200_9713==1 &	balanced_9713==1
+		summ	PFS_ppml PFS_FI_ppml	[aw=wgt_long_fam]
+		summ	PFS_ppml PFS_FI_ppml	[aw=wgt_long_fam] if income_ever_below_200_9713==1 &	balanced_9713==1
 		
 		*	Uniq sample individuals
 		unique	x11101ll	if income_ever_below_200_9713==1 &	balanced_9713==1
 		
 		*	IV: Official SNAP index (unweighted and weighted)	
 		summ	SNAP_index_uw SNAP_index_w
-		summ	SNAP_index_uw SNAP_index_w	[aw=wgt_long_fam_adj]
-		summ	SNAP_index_uw SNAP_index_w	[aw=wgt_long_fam_adj] if income_ever_below_200_9713==1 
+		summ	SNAP_index_uw SNAP_index_w	[aw=wgt_long_fam]
+		summ	SNAP_index_uw SNAP_index_w	[aw=wgt_long_fam] if income_ever_below_200_9713==1 
 		
 		
-		summ	citi6016	[aw=wgt_long_fam_adj] if income_ever_below_200_9713==1 
+		summ	citi6016	[aw=wgt_long_fam] if income_ever_below_200_9713==1 
 		
 		*	(Corrlation and bivariate regression of stamp redemption with state/govt ideology)
 		pwcorr	FS_rec_wth	citi6016 inst6017_nom 	if	in_sample==1 & inrange(year,1997,2015)  & income_ever_below_200_9713==1,	sig
-		reg	FS_rec_wth	citi6016	[aw=wgt_long_fam_adj]	///
+		reg	FS_rec_wth	citi6016	[aw=wgt_long_fam]	///
 					if	in_sample==1 & inrange(year,1977,2019)  & income_ever_below_200_9713==1,	///
 					robust	cluster(x11101ll) 
-		reg	FS_rec_wth	inst6017_nom	[aw=wgt_long_fam_adj]	///
+		reg	FS_rec_wth	inst6017_nom	[aw=wgt_long_fam]	///
 					if	in_sample==1 & inrange(year,1977,2019)  & income_ever_below_200_9713==1,	///
 					robust	cluster(x11101ll) 
 		
@@ -479,29 +486,29 @@
 				
 				*	Start with OLS, no FE, no controls
 				
-				*reg	PFS_ppml	year_SNAP_std_l8 year_SNAP_std_l4 year_SNAP_std_l2 year_SNAP_std_l0	[aw=wgt_long_fam_adj]	if	event_study_sample==1	//	all event study sample
+				*reg	PFS_ppml	year_SNAP_std_l8 year_SNAP_std_l4 year_SNAP_std_l2 year_SNAP_std_l0	[aw=wgt_long_fam]	if	event_study_sample==1	//	all event study sample
 								
 							
-				reg	PFS_ppml	year_SNAP_std_l8 year_SNAP_std_l4 year_SNAP_std_l2 year_SNAP_std_l0	[aw=wgt_long_ind]	if	event_study_sample==1	&	SNAP_cum_fre_1st==1	//	SNAP only once over 5-year period (t-4, t-2 and t)
+				reg	PFS_ppml	year_SNAP_std_l8 year_SNAP_std_l4 year_SNAP_std_l2 year_SNAP_std_l0	[aw=wgt_long_fam]	if	event_study_sample==1	&	SNAP_cum_fre_1st==1	//	SNAP only once over 5-year period (t-4, t-2 and t)
 				est	store	SNAP_once
 				
-				reg	PFS_ppml	year_SNAP_std_l8 year_SNAP_std_l4 year_SNAP_std_l2 year_SNAP_std_l0	[aw=wgt_long_ind]	if	event_study_sample==1	&	SNAP_cum_fre_1st==2	//	SNAP only twice over 5-year period (t-4, t-2 and t)
+				reg	PFS_ppml	year_SNAP_std_l8 year_SNAP_std_l4 year_SNAP_std_l2 year_SNAP_std_l0	[aw=wgt_long_fam]	if	event_study_sample==1	&	SNAP_cum_fre_1st==2	//	SNAP only twice over 5-year period (t-4, t-2 and t)
 				est	store	SNAP_twice
 				
-				reg	PFS_ppml	year_SNAP_std_l8 year_SNAP_std_l4 year_SNAP_std_l2 year_SNAP_std_l0	[aw=wgt_long_ind]	if	event_study_sample==1	&	SNAP_cum_fre_1st==3	//	SNAP only twice over 5-year period (t-4, t-2 and t)
+				reg	PFS_ppml	year_SNAP_std_l8 year_SNAP_std_l4 year_SNAP_std_l2 year_SNAP_std_l0	[aw=wgt_long_fam]	if	event_study_sample==1	&	SNAP_cum_fre_1st==3	//	SNAP only twice over 5-year period (t-4, t-2 and t)
 				est	store	SNAP_thrice
 				
 				coefplot SNAP_once SNAP_twice	SNAP_thrice, drop(_cons) xline(0) vertical title(PFS after the first SNAP participation)
 				graph	export	"${SNAP_outRaw}/Cumul_SNAP_redemp_1st_noctrl.png", replace
 				
 				*	Control
-				reg	PFS_ppml	${FSD_on_FS_X}	${timevars}	year_SNAP_std_l8 year_SNAP_std_l4 year_SNAP_std_l2 year_SNAP_std_l0	[aw=wgt_long_ind]	if	event_study_sample==1	&	SNAP_cum_fre_1st==1	//	all event study sample 
+				reg	PFS_ppml	${FSD_on_FS_X}	${timevars}	year_SNAP_std_l8 year_SNAP_std_l4 year_SNAP_std_l2 year_SNAP_std_l0	[aw=wgt_long_fam]	if	event_study_sample==1	&	SNAP_cum_fre_1st==1	//	all event study sample 
 				est	store	SNAP_once_control
 				
-				reg	PFS_ppml	${FSD_on_FS_X}	${timevars}	year_SNAP_std_l8 year_SNAP_std_l4 year_SNAP_std_l2 year_SNAP_std_l0	[aw=wgt_long_ind]	if	event_study_sample==1	&	SNAP_cum_fre_1st==2	//	all event study sample 
+				reg	PFS_ppml	${FSD_on_FS_X}	${timevars}	year_SNAP_std_l8 year_SNAP_std_l4 year_SNAP_std_l2 year_SNAP_std_l0	[aw=wgt_long_fam]	if	event_study_sample==1	&	SNAP_cum_fre_1st==2	//	all event study sample 
 				est	store	SNAP_twice_control
 				
-				reg	PFS_ppml	${FSD_on_FS_X}	${timevars}	year_SNAP_std_l8 year_SNAP_std_l4 year_SNAP_std_l2 year_SNAP_std_l0	[aw=wgt_long_ind]	if	event_study_sample==1	&	SNAP_cum_fre_1st==3	//	all event study sample 
+				reg	PFS_ppml	${FSD_on_FS_X}	${timevars}	year_SNAP_std_l8 year_SNAP_std_l4 year_SNAP_std_l2 year_SNAP_std_l0	[aw=wgt_long_fam]	if	event_study_sample==1	&	SNAP_cum_fre_1st==3	//	all event study sample 
 				est	store	SNAP_thrice_control
 			
 				coefplot SNAP_once_control SNAP_twice_control	SNAP_thrice_control, keep(year_SNAP_std_l8	year_SNAP_std_l4	year_SNAP_std_l2	year_SNAP_std_l0) xline(0) vertical title(PFS after the first SNAP participation)
@@ -685,8 +692,8 @@
 				*	Weight setting
 				if	`weighted'==1	{
 					
-					global	reg_weight		[pw=wgt_long_ind]
-					global	sum_weight		[aw=wgt_long_ind]
+					global	reg_weight		[pw=wgt_long_fam]
+					global	sum_weight		[aw=wgt_long_fam]
 				}
 				else	{
 					
@@ -802,8 +809,8 @@
 					
 					
 					*	Mean value of PFS in each sapmle
-					*summ	${depvar}	[aw=wgt_long_ind] if	reg_sample_all==1
-					summ	${depvar}	[aw=wgt_long_ind] if	reg_sample_9713==1
+					*summ	${depvar}	[aw=wgt_long_fam] if	reg_sample_all==1
+					summ	${depvar}	[aw=wgt_long_fam] if	reg_sample_9713==1
 					
 				*	Impute individual-level average covariates over time, using regression sample only (to comply with Wooldridge (2019))
 				*	(2023-08-20) Let's think carefully the right way to aggregate time dumies
@@ -1014,11 +1021,11 @@
 				gen			PFS_FI_ppml_exclFS=0	if	!mi(PFS_ppml_exclFS)	&	!inrange(PFS_ppml_exclFS,0,0.45)
 				replace		PFS_FI_ppml_exclFS=1	if	!mi(PFS_ppml_exclFS)	&	inrange(PFS_ppml_exclFS,0,0.45)
 				
-				summ	PFS_ppml	[aw=wgt_long_ind]	if	PFS_FI_ppml==1 & FSdummy==0, d	//	full sample
-				summ	PFS_ppml	[aw=wgt_long_ind]	if	PFS_FI_ppml==1  & FSdummy==0 & income_ever_below_130_9713==1, d	//	full sample
+				summ	PFS_ppml	[aw=wgt_long_fam]	if	PFS_FI_ppml==1 & FSdummy==0, d	//	full sample
+				summ	PFS_ppml	[aw=wgt_long_fam]	if	PFS_FI_ppml==1  & FSdummy==0 & income_ever_below_130_9713==1, d	//	full sample
 				
-				summ	PFS_ppml_exclFS	[aw=wgt_long_ind]	if	PFS_FI_ppml_exclFS==1, d	//	full sample
-				summ	PFS_ppml_exclFS	[aw=wgt_long_ind]	if	PFS_FI_ppml_exclFS==1 & income_ever_below_130_9713==1, d	//	low-income
+				summ	PFS_ppml_exclFS	[aw=wgt_long_fam]	if	PFS_FI_ppml_exclFS==1, d	//	full sample
+				summ	PFS_ppml_exclFS	[aw=wgt_long_fam]	if	PFS_FI_ppml_exclFS==1 & income_ever_below_130_9713==1, d	//	low-income
 				
 					*	Tabulate results comparing OLS and IV
 												
@@ -1484,7 +1491,7 @@
 			
 				*	Run logistic regression, looping over weights
 				global	logit_weight_uw
-				global	logit_weight_w	 [pw=wgt_long_ind]
+				global	logit_weight_w	 [pw=wgt_long_fam]
 					
 				
 				foreach	weight	in	uw w	{
@@ -1596,7 +1603,7 @@
 					
 					graph	twoway	(kdensity	l4_FSdummy)	(kdensity	l4_SNAPhat_uw)
 								
-					ivreghdfe	PFS_ppml	 ${FSD_on_FS_X_l4} 	${timevars}	${Mundlak_vars_9713}  (l4_FSdummy = l4_SNAP_index_w /* l4_SNAPhat_uw */)	/*[aw=wgt_long_ind]*/ if	reg_sample_9713==1 & income_ever_below_130_9713==1, ///
+					ivreghdfe	PFS_ppml	 ${FSD_on_FS_X_l4} 	${timevars}	${Mundlak_vars_9713}  (l4_FSdummy = l4_SNAP_index_w /* l4_SNAPhat_uw */)	/*[aw=wgt_long_fam]*/ if	reg_sample_9713==1 & income_ever_below_130_9713==1, ///
 							/*absorb(x11101ll)*/	cluster (x11101ll)	first savefirst savefprefix(${Zname})  partial(*_bar9713)
 					
 					
@@ -1608,7 +1615,7 @@
 						global	endoX	l4_${endovar}
 						
 						
-						ivreghdfe	`depvar'	 ${FSD_on_FS_X_l4}	${timevars}	${Mundlak_vars_9713}  (${endoX} = ${Z})	/*[aw=wgt_long_ind]*/ if	reg_sample_9713==1 /* & income_ever_below_130_9713==1 */, ///
+						ivreghdfe	`depvar'	 ${FSD_on_FS_X_l4}	${timevars}	${Mundlak_vars_9713}  (${endoX} = ${Z})	/*[aw=wgt_long_fam]*/ if	reg_sample_9713==1 /* & income_ever_below_130_9713==1 */, ///
 							/*absorb(x11101ll)*/	cluster (x11101ll)	first savefirst savefprefix(${Zname})  partial(*_bar9713)
 						estadd	local	Mundlak	"Y"
 						estadd	local	YearFE	"Y"
@@ -1633,7 +1640,7 @@
 						global	endoX	SNAP_cum_5_1	SNAP_cum_5_2	SNAP_cum_5_3	
 						
 						
-						ivreghdfe	`depvar'	 ${FSD_on_FS_X_l4}		${timevars}	${Mundlak_vars_9713}  (${endoX} = ${Z})	/*[aw=wgt_long_ind]*/ if	reg_sample_9713==1  /* & income_ever_below_130_9713==1 */, ///
+						ivreghdfe	`depvar'	 ${FSD_on_FS_X_l4}		${timevars}	${Mundlak_vars_9713}  (${endoX} = ${Z})	/*[aw=wgt_long_fam]*/ if	reg_sample_9713==1  /* & income_ever_below_130_9713==1 */, ///
 							/*absorb(x11101ll)*/	cluster (x11101ll)	first savefirst savefprefix(${Zname})  partial(*_bar9713)
 						estadd	local	Mundlak	"Y"
 						estadd	local	YearFE	"Y"
@@ -1689,7 +1696,7 @@
 					loc	IVname		l4
 				
 					
-					ivreghdfe	${depvar}	${FSD_on_FS_X_l4}	${timevars}	${Mundlak_vars} (${endovar} = ${IV})	[aw=wgt_long_fam_adj] if	reg_sample==1, ///
+					ivreghdfe	${depvar}	${FSD_on_FS_X_l4}	${timevars}	${Mundlak_vars} (${endovar} = ${IV})	[aw=wgt_long_fam] if	reg_sample==1, ///
 						/*absorb(x11101ll)*/	cluster (x11101ll)	first savefirst savefprefix(${IVname})	  partial(*_bar)
 					
 					est	store	${depvar}_${IVname}_2nd
@@ -1712,7 +1719,7 @@
 					loc	IV			l4_SNAP_index_w	l4_FSdummy_hat	l2_SNAP_index_w	l2_FSdummy_hat	SNAP_index_w	FSdummy_hat	//	Z and Dhat in t-4
 					loc	IVname		alllag
 					
-					ivreghdfe	${depvar}	${FSD_on_FS_X_l4l2}	${FSD_on_FS_X}	${timevars}	${Mundlak_vars} (${endovar} = ${IV})	[aw=wgt_long_fam_adj] if	reg_sample==1, ///
+					ivreghdfe	${depvar}	${FSD_on_FS_X_l4l2}	${FSD_on_FS_X}	${timevars}	${Mundlak_vars} (${endovar} = ${IV})	[aw=wgt_long_fam] if	reg_sample==1, ///
 						/*absorb(x11101ll)*/	cluster (x11101ll)	first savefirst savefprefix(${IVname})	  partial(*_bar)
 					
 									
@@ -1820,7 +1827,7 @@
 					*loc	endovar	FS_rec_amt_real
 					*loc	IV		SSI_GDP_sl
 					loc	model	${depvar}_${endovarname}_${IVname}
-					ivreghdfe	${depvar}	 ${FSD_on_FS_X}	 (${endovar}	=	${IV})	[aw=wgt_long_fam_adj] if	income_below_200==1 &	!mi(${IV}) & reg_sample==1,	///
+					ivreghdfe	${depvar}	 ${FSD_on_FS_X}	 (${endovar}	=	${IV})	[aw=wgt_long_fam] if	income_below_200==1 &	!mi(${IV}) & reg_sample==1,	///
 							absorb(ib31.rp_state x11101ll) robust first savefirst savefprefix(`model')	 
 					est	store	`model'_2nd
 					scalar	Fstat_`model'	=	e(widstat)
@@ -1844,7 +1851,7 @@
 					*lab	var	FS_${endovar}_${depvar}_hat	"Predicted FS amount received last month"
 					
 					*	Now, regress 2nd stage, including FS across multiple periods	
-					reghdfe	${depvar} FS_${endovarname}_${IVname}_${depvar}_hat	l2.FS_${endovarname}_${IVname}_${depvar}_hat	${FSD_on_FS_X}	[aw=wgt_long_fam_adj]	///
+					reghdfe	${depvar} FS_${endovarname}_${IVname}_${depvar}_hat	l2.FS_${endovarname}_${IVname}_${depvar}_hat	${FSD_on_FS_X}	[aw=wgt_long_fam]	///
 						if	income_below_200==1 & !mi(${IV}),	vce(robust) absorb(ib31.rp_state x11101ll)
 			
 					est	store	${depvar}_${endovarname}_${IVname}_dyn_2nd
@@ -1874,14 +1881,14 @@
 					
 					
 					
-				summ	PFS_ppml SL_5 TFI_HCR CFI_HCR TFI_FIG CFI_FIG TFI_SFIG CFI_SFIG	if income_below_200==1 & !mi(citi6016) &	!mi(PFS_ppml)					[aw=wgt_long_fam_adj]	//	all sample
-				summ	PFS_ppml SL_5 TFI_HCR CFI_HCR TFI_FIG CFI_FIG TFI_SFIG CFI_SFIG	if income_below_200==1 & !mi(citi6016) &	!mi(PFS_ppml)	& PFS_FI_ppml==1 	[aw=wgt_long_fam_adj]	//	Food insecure by PFS
-				summ	PFS_ppml SL_5 TFI_HCR CFI_HCR TFI_FIG CFI_FIG TFI_SFIG CFI_SFIG	if income_below_200==1 & !mi(citi6016) &	!mi(PFS_ppml)	& FS_rec_wth==1 	[aw=wgt_long_fam_adj]	//	FS/SNAP beneficiaries
+				summ	PFS_ppml SL_5 TFI_HCR CFI_HCR TFI_FIG CFI_FIG TFI_SFIG CFI_SFIG	if income_below_200==1 & !mi(citi6016) &	!mi(PFS_ppml)					[aw=wgt_long_fam]	//	all sample
+				summ	PFS_ppml SL_5 TFI_HCR CFI_HCR TFI_FIG CFI_FIG TFI_SFIG CFI_SFIG	if income_below_200==1 & !mi(citi6016) &	!mi(PFS_ppml)	& PFS_FI_ppml==1 	[aw=wgt_long_fam]	//	Food insecure by PFS
+				summ	PFS_ppml SL_5 TFI_HCR CFI_HCR TFI_FIG CFI_FIG TFI_SFIG CFI_SFIG	if income_below_200==1 & !mi(citi6016) &	!mi(PFS_ppml)	& FS_rec_wth==1 	[aw=wgt_long_fam]	//	FS/SNAP beneficiaries
 			
 				*	Sub-sample (when SNAP index is available)
-				summ	PFS_ppml SL_5 TFI_HCR CFI_HCR TFI_FIG CFI_FIG if income_below_200==1 & !mi(citi6016) &	!mi(SNAP_index_w) & !mi(PFS_ppml)					[aw=wgt_long_fam_adj]	//	all sample
-				summ	PFS_ppml SL_5 TFI_HCR CFI_HCR TFI_FIG CFI_FIG if income_below_200==1 & !mi(citi6016) &	!mi(SNAP_index_w) & !mi(PFS_ppml)	& FS_rec_wth==1 	[aw=wgt_long_fam_adj]	//	FS/SNAP beneficiaries	
-				summ	PFS_ppml SL_5 TFI_HCR CFI_HCR TFI_FIG CFI_FIG if income_below_200==1 & !mi(citi6016) &	!mi(SNAP_index_w) & !mi(PFS_ppml)	& PFS_FI_ppml==1 	[aw=wgt_long_fam_adj]	//	Food insecure by PFS
+				summ	PFS_ppml SL_5 TFI_HCR CFI_HCR TFI_FIG CFI_FIG if income_below_200==1 & !mi(citi6016) &	!mi(SNAP_index_w) & !mi(PFS_ppml)					[aw=wgt_long_fam]	//	all sample
+				summ	PFS_ppml SL_5 TFI_HCR CFI_HCR TFI_FIG CFI_FIG if income_below_200==1 & !mi(citi6016) &	!mi(SNAP_index_w) & !mi(PFS_ppml)	& FS_rec_wth==1 	[aw=wgt_long_fam]	//	FS/SNAP beneficiaries	
+				summ	PFS_ppml SL_5 TFI_HCR CFI_HCR TFI_FIG CFI_FIG if income_below_200==1 & !mi(citi6016) &	!mi(SNAP_index_w) & !mi(PFS_ppml)	& PFS_FI_ppml==1 	[aw=wgt_long_fam]	//	Food insecure by PFS
 				
 		
 		*	Print relevant models toegether
@@ -1972,15 +1979,15 @@
 			*	Density Estimate of Food Security Indicator (Figure A1)
 				
 				*	ALL households
-				graph twoway 		(kdensity HFSM_rescale	[aw=wgt_long_fam_adj]	if	!mi(HFSM_rescale)	&	!mi(PFS_ppml) & inrange(year,1977,2015))	///
-									(kdensity PFS_ppml		[aw=wgt_long_fam_adj]	if	!mi(HFSM_rescale)	&	!mi(PFS_ppml) & inrange(year,1977,2015)),	///
+				graph twoway 		(kdensity HFSM_rescale	[aw=wgt_long_fam]	if	!mi(HFSM_rescale)	&	!mi(PFS_ppml) & inrange(year,1977,2015))	///
+									(kdensity PFS_ppml		[aw=wgt_long_fam]	if	!mi(HFSM_rescale)	&	!mi(PFS_ppml) & inrange(year,1977,2015)),	///
 									/*title (Density Estimates of the USDA scale and the PFS)*/	xtitle(Scale) ytitle(Density)	 ylabel(0(3)21)	///
 									name(FSSS_PFS, replace) graphregion(color(white)) bgcolor(white) title(All)		///
 									legend(lab (1 "FSSS (rescaled)") lab(2 "PFS") rows(1))					
 					
 				*	Income below 200% & until 2015 (study sample)
-				graph twoway 		(kdensity HFSM_rescale	[aw=wgt_long_fam_adj]	if	!mi(HFSM_rescale)	&	!mi(PFS_ppml) & income_below_200==1 & inrange(year,1977,2015))	///
-									(kdensity PFS_ppml		[aw=wgt_long_fam_adj]	if	!mi(HFSM_rescale)	&	!mi(PFS_ppml) & income_below_200==1 & inrange(year,1977,2015)),	///
+				graph twoway 		(kdensity HFSM_rescale	[aw=wgt_long_fam]	if	!mi(HFSM_rescale)	&	!mi(PFS_ppml) & income_below_200==1 & inrange(year,1977,2015))	///
+									(kdensity PFS_ppml		[aw=wgt_long_fam]	if	!mi(HFSM_rescale)	&	!mi(PFS_ppml) & income_below_200==1 & inrange(year,1977,2015)),	///
 									/*title (Density Estimates of the USDA scale and the PFS)*/	xtitle(Scale) ytitle(Density)  ylabel(0(3)21)		///
 									name(FSSS_PFS_below200, replace) graphregion(color(white)) bgcolor(white) title(Income below 200%)		///
 									legend(lab (1 "FSSS (rescaled)") lab(2 "PFS") rows(1))	
@@ -1990,16 +1997,16 @@
 			
 			
 			*	PFS by gender
-			graph twoway 		(kdensity PFS_ppml	[aw=wgt_long_fam_adj]	if	!mi(PFS_ppml) & inrange(year,1977,2015) & income_below_200==1 & ind_female==0, bwidth(0.05) )	///
-								(kdensity PFS_ppml	[aw=wgt_long_fam_adj]	if	!mi(PFS_ppml) & inrange(year,1977,2015) & income_below_200==1 & ind_female==1, bwidth(0.05) ),	///
+			graph twoway 		(kdensity PFS_ppml	[aw=wgt_long_fam]	if	!mi(PFS_ppml) & inrange(year,1977,2015) & income_below_200==1 & ind_female==0, bwidth(0.05) )	///
+								(kdensity PFS_ppml	[aw=wgt_long_fam]	if	!mi(PFS_ppml) & inrange(year,1977,2015) & income_below_200==1 & ind_female==1, bwidth(0.05) ),	///
 								/*title (Density Estimates of the USDA scale and the PFS)*/	xtitle(PFS) ytitle(Density)		///
 								name(PFS_ind_gender, replace) graphregion(color(white)) bgcolor(white)	title(by Gender)	///
 								legend(lab (1 "Male") lab(2 "Female") rows(1))	
 								
 								
 			*	PFS by race
-			graph twoway 		(kdensity PFS_ppml	[aw=wgt_long_fam_adj]	if	inrange(year,1977,2015) & rp_nonWhte==0, bwidth(0.05) )	///
-								(kdensity PFS_ppml	[aw=wgt_long_fam_adj]	if	inrange(year,1977,2015) & rp_nonWhte==1, bwidth(0.05) ),	///
+			graph twoway 		(kdensity PFS_ppml	[aw=wgt_long_fam]	if	inrange(year,1977,2015) & rp_nonWhte==0, bwidth(0.05) )	///
+								(kdensity PFS_ppml	[aw=wgt_long_fam]	if	inrange(year,1977,2015) & rp_nonWhte==1, bwidth(0.05) ),	///
 								/*title (Density Estimates of the USDA scale and the PFS)*/	xtitle(PFS) ytitle(Density)		///
 								name(PFS_rp_race, replace) graphregion(color(white)) bgcolor(white) title(by Race)		///
 								legend(lab (1 "White") lab(2 "non-White") rows(1))	
@@ -2035,7 +2042,7 @@
 		*	Earlier years have very high PFS, need to think of why it is happening...
 		preserve
 			keep	if	reg_sample==1 
-			collapse	(mean) PFS_ppml FSSS_rescale [aw=wgt_long_ind], by(year)
+			collapse	(mean) PFS_ppml FSSS_rescale [aw=wgt_long_fam], by(year)
 			graph	twoway	(line PFS_ppml year) (line FSSS_rescale year)
 		restore
 		
@@ -2164,18 +2171,18 @@
 				local	IVs		SNAP_index_w	citi6016	inst6017_nom
 				local	FSDvars	PFS_ppml	//SL_5	TFI_HCR	CFI_HCR	TFI_FIG	CFI_FIG	TFI_SFIG	CFI_SFIG	
 				
-				//estpost summ	`indvars'	[aw=wgt_long_fam_adj]	if	!mi(PFS_ppml)	//	all sample
-				//estpost summ	`indvars'	[aw=wgt_long_fam_adj]	if	!mi(PFS_ppml)	&	balanced_9713==1	&	income_ever_below_200_9713==1	/*  num_waves_in_FU_uniq>=2	 &*/	  // Temporary condition. Need to think proper condition.
+				//estpost summ	`indvars'	[aw=wgt_long_fam]	if	!mi(PFS_ppml)	//	all sample
+				//estpost summ	`indvars'	[aw=wgt_long_fam]	if	!mi(PFS_ppml)	&	balanced_9713==1	&	income_ever_below_200_9713==1	/*  num_waves_in_FU_uniq>=2	 &*/	  // Temporary condition. Need to think proper condition.
 				
 				local	summvars	/*`indvars'*/	`rpvars'	`famvars'	`FSvars'	`IVs'	`FSDvars'
 	
-				estpost tabstat	`summvars'	 if	!mi(PFS_ppml)	[aw=wgt_long_fam_adj],	statistics(count	mean	sd	min	max) columns(statistics)		// save
+				estpost tabstat	`summvars'	 if	!mi(PFS_ppml)	[aw=wgt_long_fam],	statistics(count	mean	sd	min	max) columns(statistics)		// save
 				est	store	sumstat_all
-				estpost tabstat	`summvars' 	if	!mi(PFS_ppml)	&	/* balanced_9713==1	& */	income_ever_below_200_9713==1	[aw=wgt_long_fam_adj],	statistics(count	mean	sd	min	max) columns(statistics)	// save
+				estpost tabstat	`summvars' 	if	!mi(PFS_ppml)	&	/* balanced_9713==1	& */	income_ever_below_200_9713==1	[aw=wgt_long_fam],	statistics(count	mean	sd	min	max) columns(statistics)	// save
 				est	store	sumstat_9713
 				
 					*	FS amount per capita in real dollars (only those used)
-					estpost tabstat	 FS_rec_amt_capita	if in_sample==1	&	!mi(PFS_ppml)	&	income_below_200==1	& FS_rec_wth==1 [aw=wgt_long_fam_adj],	statistics(mean	sd	min	max) columns(statistics)	// save
+					estpost tabstat	 FS_rec_amt_capita	if in_sample==1	&	!mi(PFS_ppml)	&	income_below_200==1	& FS_rec_wth==1 [aw=wgt_long_fam],	statistics(mean	sd	min	max) columns(statistics)	// save
 				
 			
 				
@@ -2189,8 +2196,8 @@
 					cells("mean(fmt(%12.2f)) sd(fmt(%12.2f)) min(fmt(%12.2f)) max(fmt(%12.2f))") label	title("Summary Statistics") noobs 	  replace	
 					
 				
-				summ	PFS_ppml SL_5 TFI_HCR CFI_HCR TFI_FIG CFI_FIG if in_sample==1	&	income_below_200==1 & PFS_FI_ppml==1 [aw=wgt_long_fam_adj],d
-				summ	PFS_ppml SL_5 TFI_HCR CFI_HCR TFI_FIG CFI_FIG if in_sample==1	&	income_below_200==1	& PFS_FI_ppml==1 & FS_rec_wth!=1 [aw=wgt_long_fam_adj],d // didn't receive SNAP
+				summ	PFS_ppml SL_5 TFI_HCR CFI_HCR TFI_FIG CFI_FIG if in_sample==1	&	income_below_200==1 & PFS_FI_ppml==1 [aw=wgt_long_fam],d
+				summ	PFS_ppml SL_5 TFI_HCR CFI_HCR TFI_FIG CFI_FIG if in_sample==1	&	income_below_200==1	& PFS_FI_ppml==1 & FS_rec_wth!=1 [aw=wgt_long_fam],d // didn't receive SNAP
 
 			
 			
@@ -2494,7 +2501,7 @@
 			
 			preserve
 			
-			collapse foodexp_tot_exclFS_pc_real foodexp_tot_inclFS_pc_real	[iweight=wgt_long_fam_adj], by(year)
+			collapse foodexp_tot_exclFS_pc_real foodexp_tot_inclFS_pc_real	[iweight=wgt_long_fam], by(year)
 			
 			graph	twoway	(line	fs_insecure year, lpattern(dash_dot) yaxis(1))	///
 							(line	fs_insecure_vlfs year, lpattern(dash) yaxis(1))	///
