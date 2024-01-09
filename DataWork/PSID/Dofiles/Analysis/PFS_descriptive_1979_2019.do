@@ -77,7 +77,7 @@
 
 	
 	
-	*	Categorize food security status based on annual food security prevalence rate (1996-2019)
+	*	Categorize food security status based on annual food security prevalence rate (1995-2019)
 	*	CAUTION: TAKES SOME TIME
 	*	This code is take from the LBH, with a few minor modification 
 		
@@ -225,14 +225,57 @@
 				lab	var	PFS_threshold_ppml_noCOLI			"Threshold value (PFS)"
 				
 			 }	//	qui
+	
+	compress
+	save	"${SNAP_dtInt}/SNAP_long_PFS_cat", replace	//	Save for now, as the code above takes too much time
+		
+	
+	
+	*	Categorize food security status based on annual food security prevalence rate (pre-1995)
+	use	"${SNAP_dtInt}/SNAP_long_PFS_cat", clear
 			
-		save	"${SNAP_dtInt}/SNAP_long_PFS_cat", replace	
-	
+			*	Thresholds of 1995-2019, determined by the code above, to determine thresholds for earlier period.		
+			tab PFS_threshold_ppml_noCOLI
+			
+			*	Time trend
+			collapse (mean) PFS_threshold_ppml_noCOLI, by(year)
+			
+			summ	PFS_threshold_ppml_noCOLI	//	Average threshold
+			
+			graph	twoway	(connected PFS_threshold_ppml_noCOLI	year if inrange(year,1995,2019)), ytitle(Probability) title(Threshold probability of being food secure: 1995-2019)	///
+			note(Threshold defined based on the official food insecuriy prevalence rate) name(cutoff_prob_PFS_9519, replace)
 		
+			graph display cutoff_prob_PFS_9519, ysize(4) xsize(9.0)
+			graph	export	"${SNAP_outRaw}/PFS_cutoff_prob_PFS_9519.png", as(png) replace
+			graph	close
+
+	
+	*	Based on the stats and figure above, I set average threshold by 0.5
 		
+	use	"${SNAP_dtInt}/SNAP_long_PFS_cat", clear	
+		
+		replace	PFS_FI_ppml_noCOLI=1			if	inrange(PFS_ppml_noCOLI,0,0.5)	&	inrange(year,1979,1994)
+		replace	PFS_threshold_ppml_noCOLI=0.5	if	inrange(year,1979,1994)
 	
+		*	FI trends (both PFS and FSSS)
+		preserve
+			collapse (mean) PFS_FI_ppml_noCOLI	FSSS_FI	FI_pct	[aw=wgt_long_ind], by(year)
+			
+			
+			twoway	(line PFS_FI_ppml_noCOLI	year if inrange(year,1999,2019), lc(green) lp(solid) lwidth(medium)  graphregion(fcolor(white)) legend(label(1 "PFS)")))	///
+					(line FI_pct	year if inrange(year,1999,2019), lc(black) lp(longdash) lwidth(medium)	 graphregion(fcolor(white)) legend(label(2 "USDA official")))	///
+					(connected FSSS_FI	year if inlist(year,1999,2001,2003), lc(red) lp(shortdash) lwidth(medium)	msymbol(circle)	graphregion(fcolor(white)) legend(label(3 "FSSS")))	///
+					(connected FSSS_FI	year if inlist(year,2015,2017,2019), lc(red) lp(shortdash) lwidth(medium)	msymbol(circle) graphregion(fcolor(white)) legend(label(4 "FSSS") row(2) size(small) keygap(0.1) symxsize(5))),	///
+					title("Food Insecurity Prevalence Rates") ytitle("Fraction") xtitle("Year") name(FI_prevalence_cutoffs, replace)
+			
+			graph	export	"${SNAP_outRaw}/PFS_FSSS_FI_trend.png", as(png) replace
+			graph	close	
+		restore
 	
+			
+	*	(2024-1-5) I disable the following code, as we no longer us this method.
 	
+	/*
 	
 	*	Construct FI indicator based on PFS
 	*	In LBH, we used flexible cut-off; set cut-off such that FI(PFS) prevalence rate is equal to the offical FI reported in the annual USDA report.
@@ -306,7 +349,8 @@
 		replace	`var'=0	if	!mi(PFS_ppml_noCOLI)	&	!inrange(PFS_ppml_noCOLI,0,0.5)
 		replace	`var'=1	if	!mi(PFS_ppml_noCOLI)	&	inrange(PFS_ppml_noCOLI,0,0.5)
 		lab	var	`var'	"Food insecure (PFS < 0.5)"
-			
+		*/
+		
 	
 		*	Generate FS variable (the opposite of FI)
 		foreach	var	in	ppml_noCOLI	{
@@ -486,7 +530,7 @@
 	
 	
 	
-	*	Summary stats, pooled
+	*	Table 1: Summary stats, pooled
 
 		*	Additional macros are added for summary stats
 		
@@ -534,7 +578,9 @@
 		
 		
 		
-		*	Figure 1: Scatter plot of survey waves and SNAP frequency
+		*	(2024-1-5) This plot was for internal discussion only, so disable it.
+		/*
+		*	 Scatter plot of survey waves and SNAP frequency
 		
 			*	First, collapse data to individual-level (should be unweighted)
 			preserve
@@ -588,14 +634,9 @@
 				graph	close
 				*/
 			restore
-			
+			*/
 	
-	
-		
-	
-	
-	
-	
+
 	
 	*	Annual trend
 
@@ -700,7 +741,7 @@
 			graph	export	"${SNAP_outRaw}/race_annual.png", replace	
 			graph	close	
 			
-			*	Figure 2
+			*	Figure 2: Gender and Racial Composition
 			grc1leg gender_annual race_annual, rows(1) cols(2) legendfrom(gender_annual)	graphregion(color(white)) position(6)	graphregion(color(white))	///
 					title(Gender and Racial Composition of Reference Person) name(gender_race, replace) 	///
 					note("Source: U.S. Census" "Shaded region (1988-1991) are missing in the sample" 	"All married couple households are treated as male RP in Census" ///
@@ -711,7 +752,9 @@
 			graph	close
 			
 			
-			*	Figure 3: SNAP participation rate and poverty rate
+			*	(2024-1-5) We no longer use this graph, so disable it.
+			/*
+			*	SNAP participation rate and poverty rate
 			graph	twoway	(line FS_rec_wth	 	year, lpattern(dash) xaxis(1) yaxis(1) legend(label(1 "SNAP - Sample")))	///
 							(line frac_SNAP_person	year, lpattern(dash_dot) xaxis(1) yaxis(1) legend(label(2 "SNAP - Census and USDA")))	///
 							(line pov_rate_national	year, lpattern(dot) xaxis(1 2) yaxis(1)  legend(label(3 "Poverty Rate"))),  ///
@@ -723,7 +766,7 @@
 			graph display snap_annual, ysize(4) xsize(9.0)
 			graph	export	"${SNAP_outRaw}/SNAP_rate_sample_Census_USDA.png", replace	
 			graph	close
-			
+			*/
 			
 			*	Figure A1: Food expenditure per capita (including stamp benefit), TFP cost (real)
 			graph	twoway	(line foodexp_tot_inclFS_pc_real	year, lpattern(dash) xaxis(1 2) yaxis(1)  legend(label(1 "Food exp")))  ///
@@ -737,7 +780,10 @@
 			graph	close	
 			
 			
-				*	PFS and FSSS dummies with unemployment rate
+		
+			/*	No longer used.
+			{		
+			*	PFS and FSSS dummies with unemployment rate
 			graph	twoway	(line PFS_FI_ppml_noCOLI	year, lpattern(dash_dot) xaxis(1 2) yaxis(1)  legend(label(1 "PFS < 0.5")))  ///
 							(line FSSS_FI_official	year, /*lpattern(dash_dot)*/ xaxis(1 2) yaxis(1)  legend(label(2 "By FSSS")))  ///
 							(line unemp_rate	year, lpattern(dot) xaxis(1 2) yaxis(2)  legend(label(3 "Unemployment Rate (%)"))),  ///
@@ -748,9 +794,10 @@
 							title(Food Insecurity with Unemployment Rate)	bgcolor(white)	graphregion(color(white)) /*note(Source: USDA & BLS)*/	name(PFS_FSSS_annual, replace)
 			graph	export	"${SNAP_outRaw}/PFS_FSSS_official_dummies_annual.png", replace	
 			graph	close	
-			
-			/*	No longer used.
-			{		
+				
+				
+				
+				
 			*	Age (RP)
 			*	Since Census data does NOT release average age, we use the median age instead	
 			graph	twoway	(line rp_age_med			year, lpattern(dash) xaxis(1) yaxis(1) legend(label(1 "Study Sample (PSID)")))	///
@@ -846,26 +893,22 @@
 		use	"${SNAP_dtInt}/SNAP_descdta_1979_2019", clear
 		
 		
-			*	PFS by RP's gender and race and education
-			graph	box	PFS_ppml_noCOLI		[aw=wgt_long_ind], over(rp_female) over(rp_nonWhte)	over(rp_edu_cat) nooutsides name(outcome_subgroup_rp, replace) title(Food Security by Subgroup) note("")
-			graph	export	"${SNAP_outRaw}/PFS_by_rp_subgroup.png", replace	
-			graph	close
-			
-			*	PFS by individual's gender and race and education
+			*	Rank correlation b/w PFS and FSSS
 				
-				*	Cleaning for label
-				lab	define	ind_nonWhite	0	"White"	1	"Non-White", replace
-				lab	val	ind_nonWhite	ind_nonWhite
+				*	Rescale FSSS
+				loc	var	FSSS_rescale
+				cap	drop	`var'
+				gen	double	`var'	=	(9.3-HFSM_scale)/9.3
+				replace	`var'=0	if	HFSM_raw==18	
 				
-				*	Temporarily replace "inapp(education)" as missing
-				recode	ind_edu_cat	(0=.)	
-				
-			graph	box	PFS_ppml_noCOLI		[aw=wgt_long_ind], over(ind_female, sort(1)) over(ind_nonWhite, sort(1))	over(ind_edu_cat, sort(1)) nooutsides name(outcome_subgroup_ind, replace) title(Food Security by Subgroup) note("")
+				*	Rank correlation (CAUTION: Kendalls tau takes some time)
+				spearman	PFS_ppml_noCOLI	FSSS_rescale, stats(rho obs p) star(0.05)
+				ktau		PFS_ppml_noCOLI	FSSS_rescale, stats(taua taub obs p) star(0.05)
 			
-			graph display outcome_subgroup_ind, ysize(4) xsize(9.0)
-			graph	export	"${SNAP_outRaw}/PFS_by_ind_subgroup.png", replace	
-			graph	close
 			
+		
+		
+
 			*	PFS by individual's gender, race and education
 			
 			*	Temporarily contruct individual race variable
@@ -962,18 +1005,7 @@
 
 			
 			
-			
-			*	Distribution of PFS over time, by category
-			*	"lgraph" ssc ins required	 
-				*	Overall 
-				
-				*	These two lone show that they generate the same mean estimates.
-				summ	PFS_ppml_noCOLI	[aw=wgt_long_ind] if year==1997
-				svy, subpop(if year==1997): mean PFS_ppml_noCOLI
-				
-				lgraph PFS_ppml_noCOLI year [aw=wgt_long_ind], errortype(iqr) separate(0.01) title(PFS) note(25th and 75th percentile)
-				graph	export	"${SNAP_outRaw}/PFS_annual.png", replace
-				graph	close
+
 				
 				/*
 				{	
@@ -1083,23 +1115,7 @@
 				}
 				
 					*/	
-			
-				
-		*	Rank correlation b/w PFS and FSSS
-			
-			*	Rescale FSSS
-			loc	var	FSSS_rescale
-			cap	drop	`var'
-			gen	double	`var'	=	(9.3-HFSM_scale)/9.3
-			replace	`var'=0	if	HFSM_raw==18	
-			
-			*	Rank correlation
-			spearman	PFS_ppml_noCOLI	FSSS_rescale, stats(rho obs p) star(0.05)
-			ktau		PFS_ppml_noCOLI	FSSS_rescale, stats(taua taub obs p) star(0.05)
-		
-		
-		
-		
+	
 		*	(2023-12-24) Food exp and TFP cost per capita (nominal and real)
 		preserve
 			collapse	(mean) HFSM_FI	PFS_ppml	PFS_FI_ppml_noCOLI	foodexp_W_TFP_pc	foodexp_W_TFP_pc_real	CPI	///
@@ -1118,15 +1134,16 @@
 		*	Compute FI trend b/w PFS and FSSS
 		preserve
 				
-			collapse	(mean) HFSM_FI	PFS_ppml	PFS_FI_ppml_noCOLI	foodexp_W_TFP_pc_real	FI_pct	[aw=wgt_long_ind], by(year)	//	weighted average by year
+			collapse	(mean) HFSM_FI	PFS_ppml_noCOLI	PFS_FI_ppml_noCOLI	foodexp_W_TFP_pc_real	FI_pct	[aw=wgt_long_ind], by(year)	//	weighted average by year
 		
 			twoway	(line PFS_FI_ppml_noCOLI	year if inrange(year,1979,2019),	lc(blue) lp(solid) lwidth(medium)  graphregion(fcolor(white))) 	 ///
 					(connected HFSM_FI	year if inlist(year,1999,2001,2003), lc(red) lp(shortdash) lwidth(medium)	msymbol(circle)	graphregion(fcolor(white)))	 ///
-					(connected HFSM_FI	year if inlist(year,2015,2017,2019), lc(red) lp(shortdash) lwidth(medium)	msymbol(circle) graphregion(fcolor(white)))	///
+					(connected HFSM_FI	year if inlist(year,2015,2017,2019), lc(red) lp(shortdash) lwidth(medium)	msymbol(circle) graphregion(fcolor(white)))		///
 					(line FI_pct		year if inrange(year,1979,2019),	lc(black) lp(dash) lwidth(medium)  graphregion(fcolor(white))), 	 ///
-					legend(order(1 "PFS" 2 "FSSS" 4 "USDA official") row(1) size(small) keygap(0.1) symxsize(5)) title("Food Insecurity Prevalence") ytitle("Fraction") xtitle("Year") name(FI_pravelence_measures, replace)	///
-					note(USDA official is person-level)
-
+					legend(order(1 "PFS" 2 "FSSS" /* 4 "USDA official (individual-level)" */) row(1) size(small) keygap(0.1) symxsize(5)) ///
+					title("Food Insecurity Prevalence (1979-2019)") ytitle("Fraction") xtitle("Year") name(FI_pravelence_measures, replace)	
+			
+			graph 	display FI_pravelence_measures, ysize(4) xsize(9.0)
 			graph	export	"${SNAP_outRaw}/PFS_FI_rate_PFS_FSSS.png", as(png) replace
 			graph	close	
 		restore
@@ -1134,50 +1151,103 @@
 		
 		
 		
+		*	Table 2: Food Security Status as estimated by PFS and FSSS
 		
-		*	Decompose into 4 categories.
+			*	Decompose into 4 categories.			
+			loc	var	PFS_FI_FSSS_FI
+			cap	drop	`var'
+			gen	`var'=.
+			replace	`var'=0	if	!mi(PFS_FI_ppml_noCOLI)	&	!mi(HFSM_FI)
+			replace	`var'=1	if	PFS_FI_ppml_noCOLI==1	&	HFSM_FI==1
+			lab	var	`var'	"FI(PFS) and FI(FSSS)"
 			
-		loc	var	PFS_FI_FSSS_FI
-		cap	drop	`var'
-		gen	`var'=.
-		replace	`var'=0	if	!mi(PFS_FI_ppml_noCOLI)	&	!mi(HFSM_FI)
-		replace	`var'=1	if	PFS_FI_ppml_noCOLI==1	&	HFSM_FI==1
-		lab	var	`var'	"FI(PFS) and FI(FSSS)"
-		
-		loc	var	PFS_FS_FSSS_FS
-		cap	drop	`var'
-		gen	`var'=.
-		replace	`var'=0	if	!mi(PFS_FI_ppml_noCOLI)	&	!mi(HFSM_FI)
-		replace	`var'=1	if	PFS_FI_ppml_noCOLI==0	&	HFSM_FI==0
-		lab	var	`var'	"FS(PFS) and FS(FSSS)"
-		
-		loc	var	PFS_FI_FSSS_FS
-		cap	drop	`var'
-		gen	`var'=.
-		replace	`var'=0	if	!mi(PFS_FI_ppml_noCOLI)	&	!mi(HFSM_FI)
-		replace	`var'=1	if	PFS_FI_ppml_noCOLI==1	&	HFSM_FI==0
-		lab	var	`var'	"FI(PFS) and FS(FSSS)"
-		
-		loc	var	PFS_FS_FSSS_FI
-		cap	drop	`var'
-		gen	`var'=.
-		replace	`var'=0	if	!mi(PFS_FI_ppml_noCOLI)	&	!mi(HFSM_FI)
-		replace	`var'=1	if	PFS_FI_ppml_noCOLI==0	&	HFSM_FI==1
-		lab	var	`var'	"FS(PFS) and FI(FSSS)"
-		
-		summ	PFS_FI_FSSS_FI	PFS_FS_FSSS_FS	PFS_FI_FSSS_FS	PFS_FS_FSSS_FI
-		summ	PFS_FI_FSSS_FI	PFS_FS_FSSS_FS	PFS_FI_FSSS_FS	PFS_FS_FSSS_FI	[aweight=wgt_long_ind]
+			loc	var	PFS_FS_FSSS_FS
+			cap	drop	`var'
+			gen	`var'=.
+			replace	`var'=0	if	!mi(PFS_FI_ppml_noCOLI)	&	!mi(HFSM_FI)
+			replace	`var'=1	if	PFS_FI_ppml_noCOLI==0	&	HFSM_FI==0
+			lab	var	`var'	"FS(PFS) and FS(FSSS)"
+			
+			loc	var	PFS_FI_FSSS_FS
+			cap	drop	`var'
+			gen	`var'=.
+			replace	`var'=0	if	!mi(PFS_FI_ppml_noCOLI)	&	!mi(HFSM_FI)
+			replace	`var'=1	if	PFS_FI_ppml_noCOLI==1	&	HFSM_FI==0
+			lab	var	`var'	"FI(PFS) and FS(FSSS)"
+			
+			loc	var	PFS_FS_FSSS_FI
+			cap	drop	`var'
+			gen	`var'=.
+			replace	`var'=0	if	!mi(PFS_FI_ppml_noCOLI)	&	!mi(HFSM_FI)
+			replace	`var'=1	if	PFS_FI_ppml_noCOLI==0	&	HFSM_FI==1
+			lab	var	`var'	"FS(PFS) and FI(FSSS)"
+			
+			summ	PFS_FI_FSSS_FI	PFS_FS_FSSS_FS	PFS_FI_FSSS_FS	PFS_FS_FSSS_FI
+			summ	PFS_FI_FSSS_FI	PFS_FS_FSSS_FS	PFS_FI_FSSS_FS	PFS_FS_FSSS_FI	[aweight=wgt_long_ind]
+			
+				
+			*	Individual-vars
+			tabstat	PFS_FS_FSSS_FS	PFS_FI_FSSS_FI	PFS_FI_FSSS_FS	PFS_FS_FSSS_FI	[aw=wgt_long_ind] if inlist(year,1999,2001,2003,2015,2017,2019),	///
+				statistics(/*count*/	mean		/*sd	min	 median	p95 max*/	) columns(statistics)  by(year)	save	// save
+			
+			mat	matching_PFS_FSSS	=	r(Stat1)	\	r(Stat2)	\	r(Stat3)	\	r(Stat4)	\	r(Stat5)	\	r(Stat6)	\	r(StatTotal)
+			mat	matching_PFS_FSSS	=	matching_PFS_FSSS'	
+			
+			mat	rownames	matching_PFS_FSSS	=	"FS(PFS) and FS(FSSS)"	"FI(PFS) and FI(FSSS)"	"FI(PFS) and FS(FSSS)"	"FS(PFS) and FI(FSSS)"
+			mat	colnames	matching_PFS_FSSS	=	"1999"	"2001"	"2003"	"2015"	"2017"	"2019"	"Total"
+			mat	list	matching_PFS_FSSS
+			
+				*	Export
+			putexcel	set "${SNAP_outRaw}/PFS_FSSS_FI_by_year.xlsx", sheet(Tab2_PFS_FSSS_match) replace /*modify*/
+			putexcel	A5	=	matrix(matching_PFS_FSSS), names overwritefmt nformat(number_d2)	
 		
 			
-		*	Individual-vars
-		estpost tabstat	PFS_FS_FSSS_FS	PFS_FI_FSSS_FI	PFS_FI_FSSS_FS	PFS_FS_FSSS_FI	[aw=wgt_long_ind],	statistics(count	mean		/*sd	min	 median	p95 max*/	) columns(statistics)  by(year)		// save
-		est	store	PFS_FSSS_FI_by_year
+			
+/*
+			estpost tabstat	PFS_FS_FSSS_FS	PFS_FI_FSSS_FI	PFS_FI_FSSS_FS	PFS_FS_FSSS_FI	[aw=wgt_long_ind],	statistics(count	mean		/*sd	min	 median	p95 max*/	) columns(statistics)  by(year)		// save
+			est	store	PFS_FSSS_FI_by_year
 
+			*	Export table 2
+			esttab	PFS_FSSS_FI_by_year	using	"${SNAP_outRaw}/PFS_FSSS_FI_by_year.csv",  ///
+					cells("count(fmt(%12.0f)) mean(fmt(%12.2f)) sd(fmt(%12.2f)) min(fmt(%12.2f)) max(fmt(%12.2f))") label	title("Summary Statistics") noobs 	  replace
 		
-		esttab	PFS_FSSS_FI_by_year	using	"${SNAP_outRaw}/PFS_FSSS_FI_by_year.csv",  ///
-				cells("count(fmt(%12.0f)) mean(fmt(%12.2f)) sd(fmt(%12.2f)) min(fmt(%12.2f)) max(fmt(%12.2f))") label	title("Summary Statistics") noobs 	  replace
+*/
 		
-
+		
+					
+			
+			*	Figure 4: PFS by RP's gender and race and education
+			graph	box	PFS_ppml_noCOLI		[aw=wgt_long_ind], over(rp_female) over(rp_nonWhte)	over(rp_edu_cat) nooutsides name(outcome_subgroup_rp, replace) title(Food Security by Subgroup) note("")
+			graph	export	"${SNAP_outRaw}/PFS_by_rp_subgroup.png", replace	
+			graph	close
+			
+							
+				*	Cleaning for label
+				lab	define	ind_nonWhite	0	"White"	1	"Non-White", replace
+				lab	val	ind_nonWhite	ind_nonWhite
+				
+				*	Replace "inapp(education)" as missing
+				recode	ind_edu_cat	(0=.)	
+				
+				graph	box	PFS_ppml_noCOLI		[aw=wgt_long_ind], over(ind_female, sort(1)) over(ind_nonWhite, sort(1))	over(ind_edu_cat, sort(1)) nooutsides name(outcome_subgroup_ind, replace) title(Food Security by Subgroup) note("")
+				
+				graph display outcome_subgroup_ind, ysize(4) xsize(9.0)
+				graph	export	"${SNAP_outRaw}/PFS_by_ind_subgroup.png", replace	
+				graph	close
+			
+					
+			*	Figure 5: Annual PFS
+			*	"lgraph" ssc ins required	 
+				*	Overall 
+				
+				*	These two lone show that they generate the same mean estimates.
+				summ	PFS_ppml_noCOLI	[aw=wgt_long_ind] if year==1997
+				svy, subpop(if year==1997): mean PFS_ppml_noCOLI
+				
+				lgraph PFS_ppml_noCOLI year [aw=wgt_long_ind], errortype(iqr) separate(0.01) title(PFS) note(25th and 75th percentile) name(PFS_annual)
+				graph 	display PFS_annual, ysize(4) xsize(9.0)
+				graph	export	"${SNAP_outRaw}/PFS_annual.png", replace
+				graph	close
 		
 		
 	/****************************************************************
@@ -1421,7 +1491,7 @@
 		
 		*	Figures
 			
-			*	All population
+			*	Figure 6: All population
 			graph hbar spell_pct_all, over(spell_length, sort(spell_percent_w) /*descending*/	label(labsize(vsmall)))	legend(lab (1 "Fraction") size(small) rows(1))	///
 				bar(1, fcolor(gs03*0.5)) /*bar(2, fcolor(gs10*0.6))*/ graphregion(color(white)) bgcolor(white) title(Distribution of Spell Length) ytitle(Fraction)
 		
@@ -1631,10 +1701,14 @@
 		putexcel	A55	=	matrix(trans_2by2_entry_byyr), names overwritefmt nformat(number_d2)	//	3a
 		putexcel	A70	=	matrix(trans_2by2_chronic_byyr), names overwritefmt nformat(number_d2)	//	3a
 		
+		*	Make it as a graph
+		
 		/*	Equivalent, but takes longer time to run. I just leave it as a reference
 		svy, subpop(if rp_female==0):	tab	l2_PFS_FS_ppml_noCOLI	PFS_FS_ppml
 		mat	trans_2by2_joint_male = e(b)[1,1], e(b)[1,2], e(b)[1,3], e(b)[1,4]	
 		*/
+		
+		
 		
 		
 		*	Conpare dynamics - PFS and FSSS
@@ -1783,6 +1857,12 @@
 
 		
 		
+		
+		
+	
+	
+	*	Change in food security status
+		
 		*use	"${SNAP_dtInt}/SNAP_descdta_1979_2019", clear
 		*keep	x11101ll	year	wgt_long_ind	sampstr sampcls year	l2_PFS_FI_ppml_noCOLI PFS_FI_ppml_noCOLI
 		*	2 X 2 (FS, FI)	-	FS status over two subsequent periods
@@ -1808,8 +1888,10 @@
 		*	Make a matrix of year matrix
 		
 		
-		*	We test whether svy-structure adjusted and non-svy-structure adjusted give the same results.
+		*	We test whether svy-structure adjusted (used in AJAE article) and non-svy-structure adjusted (where this paper is based upon) give the same results.
 			*	NOT using svy-structure adjusted 
+			tab	l2_PFS_FI_ppml_noCOLI PFS_FI_ppml_noCOLI	if year==1997, missing matcell(temp_1997)
+			
 			tab	l2_PFS_FI_ppml_noCOLI PFS_FI_ppml_noCOLI	[aw=wgt_long_ind] if year==1997, missing matcell(temp_1997)
 			mat temp2_1997 = temp_1997 / r(N)
 			
@@ -1825,7 +1907,7 @@
 			mat list e(b)
 			mat	trans_change_1997 = e(b)[1,4], e(b)[1,2], e(b)[1,6]	//	Still FI, newly FI, previous status unknown.
 			mat list trans_change_1997
-		
+
 		
 		
 		local	run_fig3=0	//	Estimates sub-group level persistence. Takes a long time to run. (2023-09-24) Conformality error happens. Need to figure out so turn it off until then.
@@ -1896,7 +1978,7 @@
 			
 			
 			
-			*	Figure 2 & 3
+			*	Figure 8
 			*	Need to plot from matrix, thus create a temporary dataset to do this
 			preserve
 			
