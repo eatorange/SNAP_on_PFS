@@ -741,15 +741,16 @@
 			graph	export	"${SNAP_outRaw}/race_annual.png", replace	
 			graph	close	
 			
-			*	Figure 2: Gender and Racial Composition
+			*	Figure 1: Sex and Racial Composition
 			grc1leg gender_annual race_annual, rows(1) cols(2) legendfrom(gender_annual)	graphregion(color(white)) position(6)	graphregion(color(white))	///
-					title(Gender and Racial Composition of Reference Person) name(gender_race, replace) 	///
+					title(Sex and Racial Composition of Reference Person) name(gender_race, replace) 	///
 					note("Source: U.S. Census" "Shaded region (1988-1991) are missing in the sample" 	"All married couple households are treated as male RP in Census" ///
 						"All households without White RP are treated as non-White in Census")  
 					
 			graph display gender_race, ysize(4) xsize(9.0)
 			graph	export	"${SNAP_outRaw}/gender_race_annual.png", as(png) replace
 			graph	close
+			
 			
 			
 			*	(2024-1-5) We no longer use this graph, so disable it.
@@ -895,23 +896,71 @@
 		
 			*	Rank correlation b/w PFS and FSSS
 				
+							*	PFS by RP's gender and race and education
+			
+				*	Median PFS for selected group
+				summ	PFS_ppml_noCOLI	[aw=wgt_long_ind]	if	ind_female==1	&	ind_edu_cat==1	&	ind_nonWhite==1, d	//	Non-white, women, less than HS
+				summ	PFS_ppml_noCOLI	[aw=wgt_long_ind]	if	ind_female==0	&	ind_edu_cat==4	&	ind_nonWhite==0, d	//	white, men, college
+			
+// 			graph	box	PFS_ppml_noCOLI		[aw=wgt_long_ind], over(rp_female) over(rp_nonWhte)	over(rp_edu_cat) nooutsides name(outcome_subgroup_rp, replace) title(Food Security by Subgroup) note("")
+// 			graph	export	"${SNAP_outRaw}/PFS_by_rp_subgroup.png", replace	
+// 			graph	close
+//			
+			*	PFS by individual's gender and race and education
+
+				
 				*	Rescale FSSS
 				loc	var	FSSS_rescale
 				cap	drop	`var'
 				gen	double	`var'	=	(9.3-HFSM_scale)/9.3
 				replace	`var'=0	if	HFSM_raw==18	
 				
+
 				*	Rank correlation (CAUTION: Kendalls tau takes some time)
 				spearman	PFS_ppml_noCOLI	FSSS_rescale, stats(rho obs p) star(0.05)
 				ktau		PFS_ppml_noCOLI	FSSS_rescale, stats(taua taub obs p) star(0.05)
 			
+
+				*	Temporarily replace "inapp(education)" as missing
+				recode	ind_edu_cat	(0=.)	
+					
+				graph	box	PFS_ppml_noCOLI		[aw=wgt_long_ind], over(ind_female, sort(1)) over(ind_nonWhite, sort(1))	over(ind_edu_cat, sort(1)) ///
+						nooutsides ylabel(0.1(0.1)1.0)	name(outcome_subgroup_ind, replace) title(Food Security by Subgroup) note("")
+									
+				graph 	display outcome_subgroup_ind, ysize(4) xsize(9.0)
+				graph	export	"${SNAP_outRaw}/PFS_by_ind_subgroup.png", replace	
+				graph	close
+
 			
-		
+			
 		
 
 			*	PFS by individual's gender, race and education
 			
 			*	Temporarily contruct individual race variable
+			
+			
+			*	Distribution of PFS over time, by category
+				*	"lgraph" ssc ins required	 
+				*	Overall 
+				
+				*	These two lone show that they generate the same mean estimates.
+				summ	PFS_ppml_noCOLI	[aw=wgt_long_ind] if year==1997
+				svy, subpop(if year==1997): mean PFS_ppml_noCOLI
+				
+				bys	year:	summ	PFS_FI_ppml_noCOLI	[aw=wgt_long_ind]	//	12% average FI prevalence.
+				
+				summ	PFS_FI_ppml_noCOLI	[aw=wgt_long_ind]	//	12% average FI prevalence.
+				
+				lgraph PFS_ppml_noCOLI year [aw=wgt_long_ind], errortype(iqr) separate(0.01) title(PFS) note(25th and 75th percentile)
+				graph	export	"${SNAP_outRaw}/PFS_annual.png", replace
+				graph	close
+>>>>>>> Stashed changes
+				
+			
+			
+			
+			
 			
 			
 			*	PFS and NME
@@ -1487,8 +1536,12 @@
 		svmat	spell_pct_all
 		
 		rename	spell_pct_all?	(spell_pct_all	spell_pct_male	spell_pct_female	spell_pct_nonWhite	spell_pct_White	spell_pct_nocol	spell_pct_col)
+		lab	var	spell_length	"Spell Length"
 		
-		
+		*	Y-axis title in h-bar
+		gen	ytitle=22	//	https://www.statalist.org/forums/forum/general-stata-discussion/general/1457183-create-title-of-categorical-axis-in-hbar
+		lab	def	ytitle	22	"Spell Length"
+		lab	val	ytitle	ytitle
 		*	Figures
 			
 			*	Figure 6: All population
@@ -1496,6 +1549,12 @@
 				bar(1, fcolor(gs03*0.5)) /*bar(2, fcolor(gs10*0.6))*/ graphregion(color(white)) bgcolor(white) title(Distribution of Spell Length) ytitle(Fraction)
 		
 			graph	export	"${SNAP_outRaw}/Spell_length_dist.png", replace
+			*	All population
+			graph hbar spell_pct_all, over(spell_length, sort(spell_percent_w)  /*descending*/	label(labsize(vsmall))) over(ytitle, label(angle(90) labsize(small)))	///
+				bar(1, fcolor(gs03*0.5)) /*bar(2, fcolor(gs10*0.6))*/ ytitle(Fraction) graphregion(color(white)) bgcolor(white) title(Distribution of Spell Length) name(dist_spell_length, replace)
+			
+			graph display dist_spell_length, ysize(4) xsize(9.0)
+			graph	export	"${SNAP_outRaw}/Spell_length_dist.png", as(png) replace
 			graph	close
 			
 			*	By gender
