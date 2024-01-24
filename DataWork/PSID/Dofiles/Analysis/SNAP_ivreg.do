@@ -63,6 +63,11 @@
 			
 			*keep	if	!mi(PFS_ppml)
 		
+		
+		*	Import official USDA food security prevalence rate
+		
+		
+		
 	
 		*	Additional cleaning
 			
