@@ -292,6 +292,7 @@
 			
 		
 		*	(4) Control, time FE, Mundlak
+		*	(2024-1-30) I found the previous Mundlak is misleading, since I did not include time-average of the first indiependent variable (like predicted FSdummy)
 		global	RHS	${FSD_on_FS_X}	${timevars}	${Mundlak_vars}
 		
 		
@@ -319,8 +320,11 @@
 			*	IV 
 			
 				*	Non-linear
+				cap	drop	SNAP_index_w_bar
+				bys	x11101ll:	egen	SNAP_index_w_bar	=	mean(SNAP_index_w) if reg_sample==1	//	Time-average of ${endovar}_hat_bar
+				
 				cap	drop	${endovar}_hat
-				logit	${endovar}	${IV}	${RHS}	 ${reg_weight}	if reg_sample==1, vce(cluster x11101ll) 
+				logit	${endovar}	${IV}	SNAP_index_w_bar	${RHS}	 ${reg_weight}	if reg_sample==1, vce(cluster x11101ll) 
 				predict	${endovar}_hat
 				lab	var	${endovar}_hat	"Predicted SNAP"		
 				margins, dydx(SNAP_index_w) post
@@ -332,9 +336,11 @@
 				summ	${endovar}	${sum_weight}	if	e(sample)==1
 				estadd	scalar	mean_SNAP	=	 r(mean)
 				est	store	logit_SPI_mund
+	
 				
-				ivreghdfe	${depvar}	${RHS}	(${endovar} = ${endovar}_hat)	${reg_weight} if reg_sample==1, ///
+				ivreghdfe	${depvar}	${RHS}	(${endovar} = SNAP_index_w)	${reg_weight} if reg_sample==1, ///
 					/*absorb(x11101ll)*/	cluster (x11101ll)		first savefirst savefprefix(${Zname})
+				
 				estadd	local	Controls	"Y"
 				estadd	local	YearFE		"Y"
 				estadd	local	Mundlak		"Y"
@@ -357,6 +363,8 @@
 				
 				*	Replicate using binary indicator
 				ivreghdfe	PFS_FI_ppml	${RHS} 	(${endovar} = ${endovar}_hat)	${reg_weight} if reg_sample==1, ///
+						/*absorb(x11101ll)*/	cluster (x11101ll)	
+				ivreghdfe	PFS_FI_ppml	${RHS} 	(${endovar} = SNAP_index_w)	${reg_weight} if reg_sample==1, ///
 						/*absorb(x11101ll)*/	cluster (x11101ll)	
 				estadd	local	Controls	"Y"
 				estadd	local	YearFE		"Y"
@@ -396,7 +404,9 @@
 			predict SNAPhat_xtlogit
 			
 			*	OLS
-			reghdfe		${depvar}	${endovar}	${RHS}		 ${reg_weight} if reg_sample==1 & xtlogit_sample==1, cluster(x11101ll) absorb(x11101ll)	//	OLS
+			cap	drop	temp
+			reghdfe		${depvar}	${endovar}	${RHS}		 ${reg_weight} if reg_sample==1 /* & xtlogit_sample==1 */, cluster(x11101ll) absorb(x11101ll)	//	OLS
+			predict	temp
 			estadd	local	Controls	"Y"
 			estadd	local	YearFE		"Y"
 			estadd	local	Mundlak		"Y"
@@ -423,8 +433,11 @@
 				est	store	logit_SPI_indFE
 				
 			ivreghdfe	${depvar}	${RHS}	(${endovar} = ${endovar}_hat)	${reg_weight} if reg_sample==1, absorb(x11101ll)	cluster(x11101ll) 	first savefirst savefprefix(${Zname})
-			*ivreghdfe	${depvar}	${RHS}	(${endovar} = SNAP_index_w)	${reg_weight} if reg_sample==1, absorb(x11101ll)	cluster(x11101ll) 	first savefirst savefprefix(${Zname})
+			ivreghdfe	${depvar}	${RHS}	(${endovar} = SNAP_index_w)	${reg_weight} if reg_sample==1, absorb(x11101ll)	cluster(x11101ll) 	first savefirst savefprefix(${Zname})
 			*xtivreg2	${depvar}	${RHS}	(${endovar} = ${endovar}_hat)	${reg_weight} if reg_sample==1, fe cluster(x11101ll) first	//		 savefirst savefprefix(${Zname})
+			
+			
+			
 				estadd	local	Controls	"Y"
 				estadd	local	YearFE		"Y"
 				estadd	local	Mundlak		"Y"

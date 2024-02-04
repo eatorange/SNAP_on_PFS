@@ -1,6 +1,8 @@
 *	Check equivalnce between CRE (Mundlak) and FE
 *	Note that xtlogit drops observations which as within-zero variation in dependent variable.
 
+*	(2024-1-30) I FOUND CRE AND FE ARE MOSTLY EQUIVALENT WHEN I INCLUDE TIME-AVERAGE OF ENDOGENOUS VARIABLE, WHICH I HAVE PREVIUOSLY EXCLUDED SO FAR!
+
 	*	Tag observations with zero within-variance in SNAP status
 	global	RHS	${FSD_on_FS_X}	${timevars}	//	Excluding Mundlak
 	
@@ -10,10 +12,128 @@
 	gen xtlogit_sample=1 if e(sample)
 	predict SNAPhat_xtlogit
 	
+	*	Time-average of controls and time dummies
+	global	Mundlak_vars	//	clear global
+	ds	${FSD_on_FS_X} ${timevars}
+	foreach	var	in	`r(varlist)'	{
+		cap	drop	`var'_bar
+		bys	x11101ll:	egen	`var'_bar	=	mean(`var') if reg_sample==1
+		global	Mundlak_vars	${Mundlak_vars}	`var'_bar
+	}
+	di	"${Mundlak_vars}"
+
+	
+	*	2024-1-30
+	*	I find that CRE is almost equivalent to FE when I include time-average of first independent variable (i.e. SNAP index for the fist stage, etc.)
+		
+		
+		*	3-stage model
+		
+			*	1st-stage: Non-linear regression of SNAP status on IV
+			cap	drop	${endovar}_hat
+			logit	${endovar}	${IV}	${RHS}	SNAP_index_w_bar	${Mundlak_vars}	 ${reg_weight}	if reg_sample==1, vce(cluster x11101ll) 
+			predict	${endovar}_hat
+			lab	var	${endovar}_hat	"Predicted SNAP"		
+			margins, dydx(SNAP_index_w) post
+			estadd	local	Controls	"Y"
+			estadd	local	YearFE		"Y"
+			estadd	local	Mundlak		"Y"
+			scalar	Fstat_CD_${Zname}	=	 e(cdf)
+			scalar	Fstat_KP_${Zname}	=	e(widstat)
+			summ	${endovar}	${sum_weight}	if	e(sample)==1
+			estadd	scalar	mean_SNAP	=	 r(mean)
+			est	store	logit_SPI_mund
+
+	
+			*	2nd stage: Linear regression of SNAP on predicted SNAP
+			**	I do this manually, since automatic IV regression does not allow me to include two different time-averarge variables (time average of ${endovar}_hat in the 2nd stage, and of FSdummy_hat in the 3rd stage)
+				*	Also this gives me a concern of forbidden regression.
+			cap	drop	${endovar}_hat_bar
+			bys	x11101ll:	egen	${endovar}_hat_bar	=	mean(${endovar}_hat) if reg_sample==1	//	Time-average of ${endovar}_hat_bar
+				
+			cap	drop	FSdummy_hat2
+			reghdfe	${endovar}	${endovar}_hat	${endovar}_hat_bar	${RHS}	${Mundlak_vars} ${reg_weight}	if reg_sample==1, vce(cluster x11101ll) 
+			predict	FSdummy_hat2
+			
+				*	Compare with FE. Can see it is almost identical
+				reghdfe	${endovar}	${endovar}_hat	${RHS}	 ${reg_weight}	if reg_sample==1, absorb(x11101ll)	vce(cluster x11101ll) 
+			
+			*	3rd stage
+			cap	drop	FSdummy_hat2_bar
+			bys	x11101ll:	egen	FSdummy_hat2_bar	=	mean(FSdummy_hat2) if reg_sample==1	//	Constructe time-average of the fitted value.
+			
+			reghdfe	${depvar}	FSdummy_hat2	FSdummy_hat2_bar	${RHS}	${Mundlak_vars}	 ${reg_weight}	if reg_sample==1, vce(cluster x11101ll) 
+			
+				*	Compare with FE. Coefficients slightly differ, but mostly equivalent.
+				reghdfe	${depvar}	FSdummy_hat2	${RHS}	 ${reg_weight}	if reg_sample==1, absorb(x11101ll)	vce(cluster x11101ll) 
+					
+					
+	
+		*	Conventional 2-stage model (SNAP index as IV directly)
+		cap	drop	FSdummy_hat3
+		reghdfe	${endovar}	${IV}	SNAP_index_w_bar	${RHS}	${Mundlak_vars}	 ${reg_weight}	if reg_sample==1, vce(cluster x11101ll) 	//	1st stage
+		predict	FSdummy_hat3
+		
+			*	Compare with FE. Coeffcient and SE almost identical
+			reghdfe	${endovar}	${IV}	${RHS}	 ${reg_weight}	if reg_sample==1, absorb(x11101ll)	vce(cluster x11101ll) 
+		
+		
+		cap	drop	FSdummy_hat3_bar
+		bys	x11101ll:	egen	FSdummy_hat3_bar	=	mean(FSdummy_hat3) if reg_sample==1	//	Constructe time-average of the fitted value.
+		
+		reghdfe	${depvar}	FSdummy_hat3	FSdummy_hat3_bar	${RHS}		${Mundlak_vars}	 ${reg_weight}	if reg_sample==1, vce(cluster x11101ll) 	//	2nd stage
+			
+			*	Compare with FE. COEFFICIENT VARIES A LOT.... BUT WHY?
+			*	But coefficient is almost identical to automatic IV with 2-stage FE
+			reghdfe	${depvar}	FSdummy_hat3	${RHS}	 ${reg_weight}	if reg_sample==1, absorb(x11101ll)	vce(cluster x11101ll) 
+		
+			*	But coefficient is almost identical to automatic IV with 2-stage FE
+			ivreghdfe	PFS_ppml	${RHS} 	(${endovar} = SNAP_index_w)	${reg_weight} if reg_sample==1, absorb(x11101ll)	cluster (x11101ll)	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	/// Before 2024/1/30
+	
+	
+	
 	*	Compare CRE and FE
 	
 		*	OLS naive regression (PFS on SNAP)
 		
+			*	very simple model (bivariate, no weight)
+			*	coefficients on rp_female are the same, but constant and standard errors are different
+			reghdfe		PFS_ppml	rp_female	if	reg_sample==1, cluster(x11101ll)	//	OLS
+			xtreg	PFS_ppml	rp_female	if	reg_sample==1, fe cluster(x11101ll)	//	FE with clustering
+			reg		PFS_ppml	rp_female	rp_female_bar	if	reg_sample==1, cluster(x11101ll)	//	CRE, manual. beta and se same as FE.
+			xthybrid	PFS_ppml	rp_female	if	reg_sample==1, cre se clusterid(x11101ll)	//	CRE, user-written code. beta same as FE but se differs.
+			
+			*	More controls
+			reghdfe		${depvar}	${endovar}	${RHS}	if	reg_sample==1, cluster(x11101ll)	//	OLS
+			reghdfe		${depvar}	${endovar}	${RHS}	if reg_sample==1, cluster(x11101ll)  absorb(x11101ll)	//	FE
+			reghdfe		${depvar}	${endovar}	${RHS}	FSdummy_bar	${Mundlak_vars}		if reg_sample==1, cluster(x11101ll)	// CRE, manual
+			xthybrid	${depvar}	${endovar}	${RHS}		if reg_sample==1, cluster(x11101ll)	cre //  absorb(x11101ll)	//	CRE
+			
+			if reg_sample==1 & xtlogit_sample==1
+			
 			*	Including those with zero within variation in outcome
 			*	Similar in sign and significance, but magnitude is somewhat different
 			reghdfe		${depvar}	${endovar}	${RHS}	${Mundlak_vars}		 ${reg_weight} if reg_sample==1, cluster(x11101ll)	//  absorb(x11101ll)	//	CRE
@@ -28,7 +148,7 @@
 			
 			*	Linear directly using SNAP
 			*	Sign and significance are OK, but magnitude is different by 50%
-			reghdfe		${endovar}	${IV}	${RHS}	${Mundlak_vars}		 ${reg_weight} if reg_sample==1, cluster(x11101ll)	//  CRE, including zero whtin-variation
+			reghdfe		${endovar}	${IV}	${RHS}	SNAP_index_w_bar ${Mundlak_vars}		 ${reg_weight} if reg_sample==1, cluster(x11101ll)	//  CRE, including zero whtin-variation
 			reghdfe		${endovar}	${IV}	${RHS}	${reg_weight} if reg_sample==1, cluster(x11101ll) absorb(x11101ll)	//  FE, including zero within-variation
 			
 			*	Sign and significance are OK, but magnitude is getting closer.
