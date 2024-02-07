@@ -243,9 +243,9 @@
 			summ	PFS_threshold_ppml_noCOLI	//	Average threshold
 			
 			graph	twoway	(connected PFS_threshold_ppml_noCOLI	year if inrange(year,1995,2019)), ytitle(Probability) title(Threshold probability of being food secure: 1995-2019)	///
-			note(Threshold defined based on the official food insecuriy prevalence rate) name(cutoff_prob_PFS_9519, replace)
+			note(Threshold defined based on the official food insecuriy prevalence rate) 	ysc(range(0 1)) bgcolor(white) ylabel(0(0.2)1)	graphregion(color(white)) 	name(cutoff_prob_PFS_9519, replace)
 		
-			graph display cutoff_prob_PFS_9519, ysize(4) xsize(9.0)
+			graph display cutoff_prob_PFS_9519, ysize(8) xsize(12.0)
 			graph	export	"${SNAP_outRaw}/PFS_cutoff_prob_PFS_9519.png", as(png) replace
 			graph	close
 
@@ -528,6 +528,52 @@
 			distinct	x11101ll	if	baseline_indiv==1	//	# of baseline individuals
 			distinct	x11101ll	if	splitoff_indiv==1	//	# of splitoff individuals
 	
+		*	Additional cleaning
+		
+			*	(2024-2-26) Individual-level race
+			*	Race is not observed in every period for individuals. It is observed only when (i) RP (ii) Spouse (after 1985)
+			*	But since our individuals are RP or SP at least once during the survey period, we observe individuals' race at least once for each individual (except small share of ppl  who were not RP prior to 1985)
+			*	So we replace missing races in certain periods with the race from the observed period(s).
+			
+				*	Validate the race is time-invariant througout the study period.
+				cap	drop	min_ind_White
+				cap	drop	max_ind_White
+				cap	drop	min_ind_nonWhite
+				cap	drop	max_ind_nonWhite
+				bys	x11101ll: egen min_ind_White = min(ind_White)
+				bys	x11101ll: egen max_ind_White = max(ind_White)
+				bys	x11101ll: egen min_ind_nonWhite = min(ind_nonWhite)
+				bys	x11101ll: egen max_ind_nonWhite = max(ind_nonWhite)
+				
+				*	In principal, race should be time-invariant. Let's see if that's the case.
+				loc	var		same_race_over_time
+				cap	drop	`var'
+				gen		`var'=0	if	min_ind_White!=max_ind_White
+				replace	`var'=1	if	min_ind_White==max_ind_White
+				lab	var	`var'	"=1 if race is time-invariant"
+				
+				tab	`var'	//	Less than 3% of have time-varying race
+			
+				*	For individuals with time-varying race, I use the race reported in the "first" observed period.
+				cap	drop	obsno
+				cap	drop	ind_race_missing
+				cap	drop	first_nm_race_ind
+				
+				sort	x11101ll	year, stable
+				bys	x11101ll:	gen	long	obsno	=	_n
+				bys	x11101ll:	gen	ind_race_missing	=	missing(ind_White)
+				bys	x11101ll	(ind_race_missing	obsno):	gen	first_nm_race_ind	=	ind_White[1]
+				
+				lab	var	obsno	"# of observations per individual"
+				lab	var	ind_race_missing	"=1 if individual racial status is missing"
+				labb	var	first_nm_race_ind	"Individual racial status of the first observed year"
+				
+				br	x11101ll	year	ind_White	same_race_over_time	obsno	ind_race_missing	ind_race_missing
+				
+				
+			
+				
+	
 	
 	
 	*	Table 1: Summary stats, pooled
@@ -571,7 +617,7 @@
 
 		
 		esttab	sumstat_ind	sumstat_indyear	using	"${SNAP_outRaw}/Sumstats_desc_7919.csv",  ///
-				cells("count(fmt(%12.0f)) mean(fmt(%12.2f)) sd(fmt(%12.2f)) min(fmt(%12.2f)) max(fmt(%12.2f))") label	title("Summary Statistics") noobs 	  replace
+				cells("count(fmt(%12.0f)) mean(fmt(%12.2f)) sd(fmt(%12.2f))") label	title("Summary Statistics") noobs 	  replace
 		
 		
 		
@@ -716,28 +762,24 @@
 		use	"${SNAP_dtInt}/SNAP_1979_2019_census_annual", clear
 	
 			*	Gender (RP) 
-			graph	twoway	(line rp_female 			year, lpattern(dash) xaxis(1) yaxis(1) legend(label(1 "Study Sample (PSID)")))	///
-							(line pct_rp_female_Census	year, lpattern(dash_dot) xaxis(1) yaxis(1) legend(label(2 "Census"))),	///
-							/*(line rp_disabled	year, lpattern(dash_dot) xaxis(1 2) yaxis(1)  legend(label(3 "Disabled"))), */ ///
-							xline(1987 1992 /*2007*/, axis(1) lcolor(black) lpattern(dash))	///
-							xline(1989 1990, lwidth(10) lc(gs12)) xlabel(1980(10)2010 2019)  ///
-							xtitle(Year)	/*xtitle("", axis(1))*/	ytitle("Fraction", axis(1)) ///
-							ytitle("Percentage", axis(1)) title(Female)	yscale(r(0 0.5)) ylabel(0(0.1)0.5)	bgcolor(white)	graphregion(color(white)) 	name(gender_annual, replace)	
-							/*note("Source: U.S. Census." "All married couple households in the Census are treated as male householder")*/
+			graph	twoway	(line pct_rp_female_Census	year, lpattern(dash_dot) xaxis(1) yaxis(1))	///
+							(line rp_female year if inrange(year,1979,1988)			, lpattern(dash) xaxis(1) yaxis(1))		///	
+							(line rp_female year if inrange(year,1991,2019)			, lpattern(dash) xaxis(1) yaxis(1)),	///	
+							legend(order(1 "Census" 2 "Study Sample (PSID)") row(1)  keygap(0.1) symxsize(5)) ///
+							xtitle(Year)	/*xtitle("", axis(1))*/	///
+							ytitle("Fraction", axis(1)) title(Female)	yscale(r(0 0.5)) ylabel(0(0.2)1) yscale(range(0 1) titlegap(1))	bgcolor(white)	graphregion(color(white)) 	name(gender_annual, replace)	
 			
 			graph	export	"${SNAP_outRaw}/gender_annual.png", replace	
 			graph	close	
 			
 			*	Race (RP)
-			graph	twoway	(line rp_nonWhte 			year, lpattern(dash) xaxis(1) yaxis(1) legend(label(1 "Study Sample (PSID)")))	///
-							(line pct_rp_nonWhite_Census	year, lpattern(dash_dot) xaxis(1) yaxis(1) legend(label(2 "Census"))),	///
-							/*(line rp_disabled	year, lpattern(dash_dot) xaxis(1 2) yaxis(1)  legend(label(3 "Disabled"))), */ ///
-							xline(1987 1992 /*2007*/, axis(1) lcolor(black) lpattern(dash))	///
-							xline(1989 1990, lwidth(10) lc(gs12)) xlabel(1980(10)2010 2019)  ///
-							xtitle(Year)	/*xtitle("", axis(1))*/	ytitle("Fraction", axis(1)) ///
-							ytitle("Percentage", axis(1)) title(non-White)		yscale(r(0 0.5)) ylabel(0(0.1)0.5)	bgcolor(white)	graphregion(color(white)) 	name(race_annual, replace)	
-							/*note("Source: U.S. Census." "Shaded region (1988-1991) are missing in the sample" "All households without White householder are treated as non-White in Census")*/
-			
+			graph	twoway	(line pct_rp_nonWhite_Census	year, lpattern(dash_dot) xaxis(1) yaxis(1))	///
+							(line rp_nonWhte year if inrange(year,1979,1988)			, lpattern(dash) xaxis(1) yaxis(1))		///	
+							(line rp_nonWhte year if inrange(year,1991,2019)			, lpattern(dash) xaxis(1) yaxis(1)),	///	
+							legend(order(1 "Census" 2 "Study Sample (PSID)") row(1)  keygap(0.1) symxsize(5)) ///
+							xtitle(Year)	/*xtitle("", axis(1))*/	///
+							ytitle("Fraction", axis(1)) title(non-White)	yscale(r(0 0.5)) ylabel(0(0.2)1) yscale(range(0 1) titlegap(1))	bgcolor(white)	graphregion(color(white)) 	name(race_annual, replace)	
+
 			graph	export	"${SNAP_outRaw}/race_annual.png", replace	
 			graph	close	
 			
@@ -745,9 +787,9 @@
 			grc1leg gender_annual race_annual, rows(1) cols(2) legendfrom(gender_annual)	graphregion(color(white)) position(6)	graphregion(color(white))	///
 					title(Sex and Racial Composition of Reference Person) name(gender_race, replace) 	///
 					note("Source: U.S. Census" "Shaded region (1988-1991) are missing in the sample" 	"All married couple households are treated as male RP in Census" ///
-						"All households without White RP are treated as non-White in Census")  
+						"All households without White RP are treated as non-White in Census" )  
 					
-			graph display gender_race, ysize(4) xsize(9.0)
+			graph display gender_race, ysize(8) xsize(12.0)
 			graph	export	"${SNAP_outRaw}/gender_race_annual.png", as(png) replace
 			graph	close
 			
@@ -777,6 +819,7 @@
 							xtitle(Year)	xtitle("", axis(2))	ytitle("Food exp with stamp benefit ($)", axis(1)) ///
 							/*ytitle("Stamp benefit ($)", axis(2))*/ title(Food expenditure and TFP cost (monthly per capita))	bgcolor(white)	graphregion(color(white)) /*note(Source: USDA & BLS)*/	name(foodexp_TFP_annual, replace)
 			
+			graph display foodexp_TFP_annual, ysize(8) xsize(12.0)
 			graph	export	"${SNAP_outRaw}/foodexp_TFP_annual.png", replace	
 			graph	close	
 			
@@ -921,24 +964,6 @@
 				ktau		PFS_ppml_noCOLI	FSSS_rescale, stats(taua taub obs p) star(0.05)
 			
 
-				*	Temporarily replace "inapp(education)" as missing
-				recode	ind_edu_cat	(0=.)	
-					
-				graph	box	PFS_ppml_noCOLI		[aw=wgt_long_ind], over(ind_female, sort(1)) over(ind_nonWhite, sort(1))	over(ind_edu_cat, sort(1)) ///
-						nooutsides ylabel(0.1(0.1)1.0)	name(outcome_subgroup_ind, replace) title(Food Security by Subgroup) note("")
-									
-				graph 	display outcome_subgroup_ind, ysize(4) xsize(9.0)
-				graph	export	"${SNAP_outRaw}/PFS_by_ind_subgroup.png", replace	
-				graph	close
-
-			
-			
-		
-
-			*	PFS by individual's gender, race and education
-			
-			*	Temporarily contruct individual race variable
-			
 			
 			*	Distribution of PFS over time, by category
 				*	"lgraph" ssc ins required	 
@@ -952,16 +977,20 @@
 				
 				summ	PFS_FI_ppml_noCOLI	[aw=wgt_long_ind]	//	12% average FI prevalence.
 				
-				lgraph PFS_ppml_noCOLI year [aw=wgt_long_ind], errortype(iqr) separate(0.01) title(PFS) note(25th and 75th percentile)
+				*	Figure 2
+				lgraph PFS_ppml_noCOLI year [aw=wgt_long_ind], errortype(iqr) separate(0.01) title(PFS (1979-2019)) note(25th and 75th percentile) bgcolor(white)	///
+					graphregion(color(white)) /*note(Source: USDA & BLS)*/	 yscale(range(0.5 1) titlegap(1)) 	ylabel(0.5(0.1)1) 	name(PFS_annual, replace) ytitle(Average)
+					
+				graph 	display PFS_annual, ysize(8) xsize(12.0)
 				graph	export	"${SNAP_outRaw}/PFS_annual.png", replace
 				graph	close
->>>>>>> Stashed changes
 				
 			
 			
 			
 			
 			
+
 			
 			*	PFS and NME
 			/*
@@ -1180,7 +1209,7 @@
 		restore
 			
 		
-		*	Compute FI trend b/w PFS and FSSS
+		*	Figure 3: Compute FI trend b/w PFS and FSSS
 		preserve
 				
 			collapse	(mean) HFSM_FI	PFS_ppml_noCOLI	PFS_FI_ppml_noCOLI	foodexp_W_TFP_pc_real	FI_pct	[aw=wgt_long_ind], by(year)	//	weighted average by year
@@ -1189,10 +1218,11 @@
 					(connected HFSM_FI	year if inlist(year,1999,2001,2003), lc(red) lp(shortdash) lwidth(medium)	msymbol(circle)	graphregion(fcolor(white)))	 ///
 					(connected HFSM_FI	year if inlist(year,2015,2017,2019), lc(red) lp(shortdash) lwidth(medium)	msymbol(circle) graphregion(fcolor(white)))		///
 					(line FI_pct		year if inrange(year,1979,2019),	lc(black) lp(dash) lwidth(medium)  graphregion(fcolor(white))), 	 ///
-					legend(order(1 "PFS" 2 "FSSS" /* 4 "USDA official (individual-level)" */) row(1) size(small) keygap(0.1) symxsize(5)) ///
+					legend(order(1 "PFS" 2 "FSSS" /* 4 "USDA official (individual-level)" */) row(1) size(small) keygap(0.1) symxsize(5)) yscale(range(0 0.2) titlegap(1)) ylabel(0(0.025)0.2) ///
 					title("Food Insecurity Prevalence (1979-2019)") ytitle("Fraction") xtitle("Year") name(FI_pravelence_measures, replace)	
 			
-			graph 	display FI_pravelence_measures, ysize(4) xsize(9.0)
+			graph 	display FI_pravelence_measures, ysize(8) xsize(12.0)
+			
 			graph	export	"${SNAP_outRaw}/PFS_FI_rate_PFS_FSSS.png", as(png) replace
 			graph	close	
 		restore
@@ -1265,39 +1295,47 @@
 		
 					
 			
-			*	Figure 4: PFS by RP's gender and race and education
-			graph	box	PFS_ppml_noCOLI		[aw=wgt_long_ind], over(rp_female) over(rp_nonWhte)	over(rp_edu_cat) nooutsides name(outcome_subgroup_rp, replace) title(Food Security by Subgroup) note("")
+			* PFS by RP's gender and race and education
+			graph	box	PFS_ppml_noCOLI		[aw=wgt_long_ind], over(rp_female, sort(1)) over(rp_nonWhte, sort(1))	over(rp_edu_cat, sort(1)) ///
+					nooutsides name(outcome_subgroup_rp, replace) title(Food Security by Subgroup) note("")
 			graph	export	"${SNAP_outRaw}/PFS_by_rp_subgroup.png", replace	
 			graph	close
 			
-							
-				*	Cleaning for label
+			
+			*	Figure 4: PFS by individual's sex, race and education
+			
+			
+				*	Cleaning for Individual race label
 				lab	define	ind_nonWhite	0	"White"	1	"Non-White", replace
 				lab	val	ind_nonWhite	ind_nonWhite
+		
 				
 				*	Replace "inapp(education)" as missing
 				recode	ind_edu_cat	(0=.)	
 				
-				graph	box	PFS_ppml_noCOLI		[aw=wgt_long_ind], over(ind_female, sort(1)) over(ind_nonWhite, sort(1))	over(ind_edu_cat, sort(1)) nooutsides name(outcome_subgroup_ind, replace) title(Food Security by Subgroup) note("")
+				graph	box	PFS_ppml_noCOLI		[aw=wgt_long_ind], over(ind_female, sort(1)) over(ind_nonWhite, sort(1))	over(ind_edu_cat, sort(1)) nooutsides ///
+					bgcolor(white)	graphregion(color(white))	///
+					name(outcome_subgroup_ind, replace) title(Estimated Food Security by Subgroup) note("")
 				
-				graph display outcome_subgroup_ind, ysize(4) xsize(9.0)
+				graph display outcome_subgroup_ind, ysize(8) xsize(12.0)
 				graph	export	"${SNAP_outRaw}/PFS_by_ind_subgroup.png", replace	
 				graph	close
-			
+				
+
 					
-			*	Figure 5: Annual PFS
-			*	"lgraph" ssc ins required	 
-				*	Overall 
-				
-				*	These two lone show that they generate the same mean estimates.
-				summ	PFS_ppml_noCOLI	[aw=wgt_long_ind] if year==1997
-				svy, subpop(if year==1997): mean PFS_ppml_noCOLI
-				
-				lgraph PFS_ppml_noCOLI year [aw=wgt_long_ind], errortype(iqr) separate(0.01) title(PFS) note(25th and 75th percentile) name(PFS_annual)
-				graph 	display PFS_annual, ysize(4) xsize(9.0)
-				graph	export	"${SNAP_outRaw}/PFS_annual.png", replace
-				graph	close
-		
+// 			*	Figure 5: Annual PFS
+// 			*	"lgraph" ssc ins required	 
+// 				*	Overall 
+//				
+// 				*	These two lone show that they generate the same mean estimates.
+// 				summ	PFS_ppml_noCOLI	[aw=wgt_long_ind] if year==1997
+// 				svy, subpop(if year==1997): mean PFS_ppml_noCOLI
+//				
+// 				lgraph PFS_ppml_noCOLI year [aw=wgt_long_ind], errortype(iqr) separate(0.01) title(PFS) note(25th and 75th percentile) name(PFS_annual)
+// 				graph 	display PFS_annual, ysize(4) xsize(9.0)
+// 				graph	export	"${SNAP_outRaw}/PFS_annual.png", replace
+// 				graph	close
+//		
 		
 	/****************************************************************
 		SECTION 3: Regression
@@ -1544,16 +1582,19 @@
 		lab	val	ytitle	ytitle
 		*	Figures
 			
-			*	Figure 6: All population
+/*
+			
 			graph hbar spell_pct_all, over(spell_length, sort(spell_percent_w) /*descending*/	label(labsize(vsmall)))	legend(lab (1 "Fraction") size(small) rows(1))	///
 				bar(1, fcolor(gs03*0.5)) /*bar(2, fcolor(gs10*0.6))*/ graphregion(color(white)) bgcolor(white) title(Distribution of Spell Length) ytitle(Fraction)
 		
 			graph	export	"${SNAP_outRaw}/Spell_length_dist.png", replace
-			*	All population
+			
+*/
+			*	Figure 5: All population
 			graph hbar spell_pct_all, over(spell_length, sort(spell_percent_w)  /*descending*/	label(labsize(vsmall))) over(ytitle, label(angle(90) labsize(small)))	///
 				bar(1, fcolor(gs03*0.5)) /*bar(2, fcolor(gs10*0.6))*/ ytitle(Fraction) graphregion(color(white)) bgcolor(white) title(Distribution of Spell Length) name(dist_spell_length, replace)
 			
-			graph display dist_spell_length, ysize(4) xsize(9.0)
+			graph display dist_spell_length, ysize(8) xsize(12.0)
 			graph	export	"${SNAP_outRaw}/Spell_length_dist.png", as(png) replace
 			graph	close
 			
@@ -1753,7 +1794,7 @@
 		mat	list	trans_2by2_entry_byyr
 		mat	list	trans_2by2_chronic_byyr
 		
-		*	Export
+		*	Export Table 3
 		putexcel	set "${SNAP_outRaw}/Trans_matrix_7919_ind", sheet(Fig_3) replace /*modify*/
 		putexcel	A5	=	matrix(trans_2by2_combined), names overwritefmt nformat(number_d2)	//	3a
 		putexcel	A40	=	matrix(trans_2by2_persistence_byyr), names overwritefmt nformat(number_d2)	//	3a
@@ -1837,6 +1878,7 @@
 		
 		
 		*	(2023-12-27)	Spell length - PFS and FSSS
+		*	Exports matrix to Excel file for figure 6.
 		
 			*	Spell length using FSSS
 			sort	x11101ll	year
@@ -1910,9 +1952,9 @@
 				mat	colnames	spell_9919_tot	=	"FSSS"	 "PFS"
 				mat	list	spell_9919_tot
 				
-				putexcel	set "${SNAP_outRaw}/Spell_9919_PFS_FSSS", sheet(PFS_FSSS_spell) replace
-				putexcel	A3	=	"Spell length, 1999-2003 and 2015-2019"
-				putexcel	A5	=	matrix(spell_9919_tot), names overwritefmt nformat(number_d2)	//	3a
+				putexcel	set "${SNAP_outRaw}/Spell_9919_PFS_FSSS", sheet(PFS_FSSS_spell) modify
+				putexcel	B3	=	"Spell length, 1999-2003 and 2015-2019"
+				putexcel	B5	=	matrix(spell_9919_tot), names overwritefmt nformat(number_d2)	//	3a
 
 		
 		
@@ -2037,7 +2079,7 @@
 			
 			
 			
-			*	Figure 8
+			*	Figure 7
 			*	Need to plot from matrix, thus create a temporary dataset to do this
 			preserve
 			
@@ -2068,12 +2110,14 @@
 				}
 				*/
 				
-				*	Figure 2	(Change in food security status by year)
+				*	Figure 7	(Change in food security status by year)
 					
 					*	B&W 
 					graph bar still_FI newly_FI	status_unknown, over(year, label(angle(vertical))) stack legend(lab (1 "Still FI") 	lab(2 "Newly FI")	lab(3 "Previously unknown")rows(1))	///
 					graphregion(color(white)) bgcolor(white)  bar(1, fcolor(gs11)) bar(2, fcolor(gs6)) bar(3, fcolor(gs1))	///
-					ytitle(Fraction of Population) title(Change in Food Security Status)	ylabel(0(.025)0.125) 	
+					ytitle(Fraction of Population) title(Change in Food Security Status)	ylabel(0(.025)0.125) 	name(change_status_byyear, replace)
+					
+					graph display change_status_byyear, ysize(8) xsize(12.0)
 					graph	export	"${SNAP_outRaw}/change_in_status_7919.png", replace
 					graph	close
 					
