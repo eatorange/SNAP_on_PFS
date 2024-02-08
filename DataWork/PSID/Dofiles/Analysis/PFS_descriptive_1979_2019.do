@@ -481,7 +481,60 @@
 			lab	val	rp_disabled	rp_disabled
 			
 			
+	
+		*	(2024-2-26) Individual-level race
+		*	Race is not observed in every period for individuals. It is observed only when (i) RP (ii) Spouse (after 1985)
+		*	But since our individuals are RP or SP at least once during the survey period, we observe individuals' race at least once for each individual (except small share of ppl  who were not RP prior to 1985)
+		*	So we replace missing races in certain periods with the race from the observed period(s).
+		
+				*	Validate the race is time-invariant througout the study period.
+				cap	drop	min_ind_White
+				cap	drop	max_ind_White
+				cap	drop	min_ind_nonWhite
+				cap	drop	max_ind_nonWhite
+				bys	x11101ll: egen min_ind_White = min(ind_White)
+				bys	x11101ll: egen max_ind_White = max(ind_White)
+				bys	x11101ll: egen min_ind_nonWhite = min(ind_nonWhite)
+				bys	x11101ll: egen max_ind_nonWhite = max(ind_nonWhite)
+				
+				*	In principal, race should be time-invariant. Let's see if that's the case.
+				loc	var		same_race_over_time
+				cap	drop	`var'
+				gen		`var'=0	if	min_ind_White!=max_ind_White
+				replace	`var'=1	if	min_ind_White==max_ind_White
+				lab	var	`var'	"=1 if race is time-invariant"
+				
+				tab	`var'	//	Less than 3% of have time-varying race
+			
+				*	TReplace missing race with the first observed non-missing race.
+				cap	drop	obsno
+				cap	drop	ind_race_missing
+				cap	drop	first_nm_race_ind
+				
+				sort	x11101ll	year, stable
+				bys	x11101ll:	gen	long	obsno	=	_n
+				bys	x11101ll:	gen	ind_race_W_missing	=	missing(ind_White)
+				bys	x11101ll	(ind_race_W_missing	obsno):	gen	first_nm_ind_W	=	ind_White[1]
+				
+				
+				lab	var	obsno	"# of observations per individual"
+				lab	var	ind_race_W_missing	"=1 if individual racial status is missing"
+				lab	var	first_nm_ind_W	"=1 if the first non-missing raical status is White"
+				
 
+				br	x11101ll	year	ind_White	same_race_over_time	obsno	ind_race_W_missing	first_nm_ind_W
+				
+				*	Update missing racial status
+				**	NOTE: 3% of obs have still missing race.
+				replace	ind_White		=	1	if	mi(ind_White)		&	first_nm_ind_W==1
+				replace	ind_White		=	0	if	mi(ind_White)		&	first_nm_ind_W==0
+				replace	ind_nonWhite	=	1	if	mi(ind_nonWhite)	&	first_nm_ind_W==0
+				replace	ind_nonWhite	=	0	if	mi(ind_nonWhite)	&	first_nm_ind_W==1
+				
+	
+	
+		
+		
 			/*
 			*	4-year college degree
 			*	Current variable (rp_col) also set value to 1 if RP said "yes" to "do you have a college degree?" and has less than 16 years of education.
@@ -527,54 +580,7 @@
 			distinct	x11101ll	//	# of unique individuals in sample
 			distinct	x11101ll	if	baseline_indiv==1	//	# of baseline individuals
 			distinct	x11101ll	if	splitoff_indiv==1	//	# of splitoff individuals
-	
-		*	Additional cleaning
-		
-			*	(2024-2-26) Individual-level race
-			*	Race is not observed in every period for individuals. It is observed only when (i) RP (ii) Spouse (after 1985)
-			*	But since our individuals are RP or SP at least once during the survey period, we observe individuals' race at least once for each individual (except small share of ppl  who were not RP prior to 1985)
-			*	So we replace missing races in certain periods with the race from the observed period(s).
-			
-				*	Validate the race is time-invariant througout the study period.
-				cap	drop	min_ind_White
-				cap	drop	max_ind_White
-				cap	drop	min_ind_nonWhite
-				cap	drop	max_ind_nonWhite
-				bys	x11101ll: egen min_ind_White = min(ind_White)
-				bys	x11101ll: egen max_ind_White = max(ind_White)
-				bys	x11101ll: egen min_ind_nonWhite = min(ind_nonWhite)
-				bys	x11101ll: egen max_ind_nonWhite = max(ind_nonWhite)
-				
-				*	In principal, race should be time-invariant. Let's see if that's the case.
-				loc	var		same_race_over_time
-				cap	drop	`var'
-				gen		`var'=0	if	min_ind_White!=max_ind_White
-				replace	`var'=1	if	min_ind_White==max_ind_White
-				lab	var	`var'	"=1 if race is time-invariant"
-				
-				tab	`var'	//	Less than 3% of have time-varying race
-			
-				*	For individuals with time-varying race, I use the race reported in the "first" observed period.
-				cap	drop	obsno
-				cap	drop	ind_race_missing
-				cap	drop	first_nm_race_ind
-				
-				sort	x11101ll	year, stable
-				bys	x11101ll:	gen	long	obsno	=	_n
-				bys	x11101ll:	gen	ind_race_missing	=	missing(ind_White)
-				bys	x11101ll	(ind_race_missing	obsno):	gen	first_nm_race_ind	=	ind_White[1]
-				
-				lab	var	obsno	"# of observations per individual"
-				lab	var	ind_race_missing	"=1 if individual racial status is missing"
-				labb	var	first_nm_race_ind	"Individual racial status of the first observed year"
-				
-				br	x11101ll	year	ind_White	same_race_over_time	obsno	ind_race_missing	ind_race_missing
-				
-				
-			
-				
-	
-	
+
 	
 	*	Table 1: Summary stats, pooled
 
