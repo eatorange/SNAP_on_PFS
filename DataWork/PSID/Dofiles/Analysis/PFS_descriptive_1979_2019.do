@@ -505,6 +505,7 @@
 				lab	var	`var'	"=1 if race is time-invariant"
 				
 				tab	`var'	//	Less than 3% of have time-varying race
+				unique	x11101ll	if	`var'==0	//	# of individuals with time-varying.
 			
 				*	TReplace missing race with the first observed non-missing race.
 				cap	drop	obsno
@@ -532,9 +533,26 @@
 				replace	ind_nonWhite	=	0	if	mi(ind_nonWhite)	&	first_nm_ind_W==1
 				
 	
-	
+			* (2024-02-08) Replace missing educational attainment when a child (15-year-old or younger) with RP's attainment.
+			
+			foreach	var	in	edu_cat	NoHS	HS	somecol	col	{
+				
+				replace	ind_`var'	=	rp_`var'	if	ind_`var'==0 & inrange(age_ind,1,15)
+				
+				
+			}
 		
-		
+			*	Replace full category variable as missing if inappropriate
+			replace	ind_edu_cat=.n	if	ind_edu_cat==0
+			
+				*	Replace dummies as missing if full category is missing
+				replace	ind_NoHS=.n		if	mi(ind_edu_cat)
+				replace	ind_HS=.n		if	mi(ind_edu_cat)
+				replace	ind_somecol=.n	if	mi(ind_edu_cat)
+				replace	ind_col=.n		if	mi(ind_edu_cat)
+			
+			
+			
 			/*
 			*	4-year college degree
 			*	Current variable (rp_col) also set value to 1 if RP said "yes" to "do you have a college degree?" and has less than 16 years of education.
@@ -1316,18 +1334,26 @@
 				lab	val	ind_nonWhite	ind_nonWhite
 		
 				
-				*	Replace "inapp(education)" as missing
-				recode	ind_edu_cat	(0=.)	
-				
 				graph	box	PFS_ppml_noCOLI		[aw=wgt_long_ind], over(ind_female, sort(1)) over(ind_nonWhite, sort(1))	over(ind_edu_cat, sort(1)) nooutsides ///
 					bgcolor(white)	graphregion(color(white))	///
-					name(outcome_subgroup_ind, replace) title(Estimated Food Security by Subgroup) note("")
+					name(outcome_subgroup_ind, replace) title(Estimated Food Security by Subgroup) note("")	///
+					note("Extreme values – smaller than the lower quartile minus 1.5 times interquartile range,"  "or greater than the upper quartile plus 1.5 times interquartile range – are not plotted.")
 				
 				graph display outcome_subgroup_ind, ysize(8) xsize(12.0)
 				graph	export	"${SNAP_outRaw}/PFS_by_ind_subgroup.png", replace	
 				graph	close
 				
-
+				
+				*	Stats in the text
+				summ	PFS_ppml_noCOLI [aw=wgt_long_ind]	if	ind_female==1	&	ind_nonWhite==1	&	ind_edu_cat==1, d
+				summ	PFS_ppml_noCOLI [aw=wgt_long_ind]	if	ind_female==0	&	ind_nonWhite==0	&	ind_edu_cat==4, d
+				
+				
+				*	Missing values
+				tab	ind_White,m
+				unique	x11101ll	if	mi(ind_White)
+				tab	ind_edu_cat,m
+				unique	x11101ll	if	mi(ind_edu_cat)
 					
 // 			*	Figure 5: Annual PFS
 // 			*	"lgraph" ssc ins required	 
@@ -1805,7 +1831,7 @@
 		putexcel	A5	=	matrix(trans_2by2_combined), names overwritefmt nformat(number_d2)	//	3a
 		putexcel	A40	=	matrix(trans_2by2_persistence_byyr), names overwritefmt nformat(number_d2)	//	3a
 		putexcel	A55	=	matrix(trans_2by2_entry_byyr), names overwritefmt nformat(number_d2)	//	3a
-		putexcel	A70	=	matrix(trans_2by2_chronic_byyr), names overwritefmt nformat(number_d2)	//	3a
+		putexcel	A70	=	matrix(trans_2by2_chronic_byyr), names overwritefmt nformat(number_d2)	//	Table 4
 		
 		*	Make it as a graph
 		
