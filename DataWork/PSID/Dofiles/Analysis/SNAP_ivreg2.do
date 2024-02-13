@@ -74,17 +74,18 @@
 	reghdfe	${depvar}	${FSD_on_FS_X}	${timevars}	${reg_weight}	${lowincome}, cluster(x11101ll) absorb(x11101ll)
 	gen	reg_sample=1	if	e(sample)
 	
-			ds	${FSD_on_FS_X} ${timevars}
-			foreach	var	in	`r(varlist)'	{
-				cap	drop	`var'_bar
-				bys	x11101ll:	egen	`var'_bar	=	mean(`var') if reg_sample==1
-			}
-			qui	ds	*_bar
-			global	Mundlak_vars	`r(varlist)'
-			
-			di	"${Mundlak_vars}"
-	
-	
+		ds	${FSD_on_FS_X} ${timevars}
+		foreach	var	in	`r(varlist)'	{
+			cap	drop	`var'_bar
+			bys	x11101ll:	egen	`var'_bar	=	mean(`var') if reg_sample==1
+		}
+		qui	ds	*_bar
+		global	Mundlak_vars	`r(varlist)'
+		
+		di	"${Mundlak_vars}"
+
+	cap	drop	FSdummy_bar
+	bys	x11101ll:	egen	FSdummy_bar	=	mean(FSdummy) if reg_sample==1
 	
 	
 	
@@ -109,6 +110,7 @@
 		estadd	local	Controls	"N"
 		estadd	local	YearFE		"N"
 		estadd	local	Mundlak		"N"
+		estadd	local	IndFE		"N"
 		estadd	scalar	r2c	=	e(r2)
 		summ	PFS_ppml	${sum_weight}				
 		estadd	scalar	mean_PFS	=	 r(mean)					
@@ -119,6 +121,7 @@
 			estadd	local	Controls	"N"
 			estadd	local	YearFE		"N"
 			estadd	local	Mundlak		"N"
+			estadd	local	IndFE		"N"
 			estadd	scalar	r2c	=	e(r2)
 			summ	PFS_ppml	${sum_weight}				
 			estadd	scalar	mean_PFS	=	 r(mean)					
@@ -139,6 +142,7 @@
 			estadd	local	Controls	"N"
 			estadd	local	YearFE		"N"
 			estadd	local	Mundlak		"N"
+			estadd	local	IndFE		"N"
 			scalar	Fstat_CD_${Zname}	=	 e(cdf)
 			scalar	Fstat_KP_${Zname}	=	e(widstat)
 			summ	${endovar}	${sum_weight}	if	e(sample)==1
@@ -150,6 +154,7 @@
 			estadd	local	Controls	"N"
 			estadd	local	YearFE		"N"
 			estadd	local	Mundlak		"N"
+			estadd	local	IndFE		"N"
 			scalar	Fstat_CD_${Zname}	=	 e(cdf)
 			scalar	Fstat_KP_${Zname}	=	e(widstat)
 			summ	PFS_ppml	${sum_weight}	if	e(sample)==1
@@ -160,6 +165,7 @@
 			estadd	local	Controls	"N"
 			estadd	local	YearFE		"N"
 			estadd	local	Mundlak		"N"
+			estadd	local	IndFE		"N"
 			estadd	scalar	Fstat_CD	=	Fstat_CD_${Zname}, replace
 			estadd	scalar	Fstat_KP	=	Fstat_KP_${Zname}, replace
 			summ	${endovar}	${sum_weight}	if	e(sample)==1
@@ -173,6 +179,7 @@
 			estadd	local	Controls	"N"
 			estadd	local	YearFE		"N"
 			estadd	local	Mundlak		"N"
+			estadd	local	IndFE		"N"
 			scalar	Fstat_CD_${Zname}	=	 e(cdf)
 			scalar	Fstat_KP_${Zname}	=	e(widstat)
 			summ	PFS_ppml	${sum_weight}	if	e(sample)==1
@@ -190,6 +197,7 @@
 			estadd	local	Controls	"Y"
 			estadd	local	YearFE		"N"
 			estadd	local	Mundlak		"N"
+			estadd	local	IndFE		"N"
 			estadd	scalar	r2c	=	e(r2)
 			summ	PFS_ppml	${sum_weight}				
 			estadd	scalar	mean_PFS	=	 r(mean)					
@@ -206,6 +214,7 @@
 				estadd	local	Controls	"Y"
 				estadd	local	YearFE		"N"
 				estadd	local	Mundlak		"N"
+				estadd	local	IndFE		"N"
 				scalar	Fstat_CD_${Zname}	=	 e(cdf)
 				scalar	Fstat_KP_${Zname}	=	e(widstat)
 				summ	${endovar}	${sum_weight}	if	e(sample)==1
@@ -217,6 +226,7 @@
 				estadd	local	Controls	"Y"
 				estadd	local	YearFE		"N"
 				estadd	local	Mundlak		"N"
+				estadd	local	IndFE		"N"
 				scalar	Fstat_CD_${Zname}	=	 e(cdf)
 				scalar	Fstat_KP_${Zname}	=	e(widstat)
 				summ	PFS_ppml	${sum_weight}	if	e(sample)==1
@@ -227,6 +237,7 @@
 				estadd	local	Controls	"Y"
 				estadd	local	YearFE		"N"
 				estadd	local	Mundlak		"N"
+				estadd	local	IndFE		"N"
 				estadd	scalar	Fstat_CD	=	Fstat_CD_${Zname}, replace
 				estadd	scalar	Fstat_KP	=	Fstat_KP_${Zname}, replace
 				summ	${endovar}	${sum_weight}	if	e(sample)==1
@@ -245,6 +256,7 @@
 			estadd	local	Controls	"Y"
 			estadd	local	YearFE		"Y"
 			estadd	local	Mundlak		"N"
+			estadd	local	IndFE		"N"
 			estadd	scalar	r2c	=	e(r2)
 			summ	PFS_ppml	${sum_weight}				
 			estadd	scalar	mean_PFS	=	 r(mean)					
@@ -261,6 +273,7 @@
 				estadd	local	Controls	"Y"
 				estadd	local	YearFE		"Y"
 				estadd	local	Mundlak		"N"
+				estadd	local	IndFE		"N"
 				scalar	Fstat_CD_${Zname}	=	 e(cdf)
 				scalar	Fstat_KP_${Zname}	=	e(widstat)
 				summ	${endovar}	${sum_weight}	if	e(sample)==1
@@ -272,6 +285,7 @@
 				estadd	local	Controls	"Y"
 				estadd	local	YearFE		"Y"
 				estadd	local	Mundlak		"N"
+				estadd	local	IndFE		"N"
 				scalar	Fstat_CD_${Zname}	=	 e(cdf)
 				scalar	Fstat_KP_${Zname}	=	e(widstat)
 				summ	PFS_ppml	${sum_weight}	if	e(sample)==1
@@ -282,6 +296,7 @@
 				estadd	local	Controls	"Y"
 				estadd	local	YearFE		"Y"
 				estadd	local	Mundlak		"N"
+				estadd	local	IndFE		"N"
 				estadd	scalar	Fstat_CD	=	Fstat_CD_${Zname}, replace
 				estadd	scalar	Fstat_KP	=	Fstat_KP_${Zname}, replace
 				summ	${endovar}	${sum_weight}	if	e(sample)==1
@@ -297,20 +312,24 @@
 		
 		
 			*	OLS
-			reg		${depvar}	${endovar}	${RHS}		 ${reg_weight} if reg_sample==1, cluster(x11101ll)	//	OLS
-			estadd	local	Controls	"Y"
-			estadd	local	YearFE		"Y"
-			estadd	local	Mundlak		"Y"
-			estadd	scalar	r2c	=	e(r2)
-			summ	PFS_ppml	${sum_weight}				
-			estadd	scalar	mean_PFS	=	 r(mean)					
-			est	store	OLS_mund		
-			
-				*	Replicate using binary indicator
-				reg		PFS_FI_ppml	${endovar}	${RHS}		 ${reg_weight} if reg_sample==1, cluster(x11101ll)	//	OLS
+				
+				*	Y = PFS
+				reg		${depvar}	${endovar}	FSdummy_bar	${RHS}		 ${reg_weight} if reg_sample==1, cluster(x11101ll)	//	OLS
 				estadd	local	Controls	"Y"
 				estadd	local	YearFE		"Y"
 				estadd	local	Mundlak		"Y"
+				estadd	local	IndFE		"N"
+				estadd	scalar	r2c	=	e(r2)
+				summ	PFS_ppml	${sum_weight}				
+				estadd	scalar	mean_PFS	=	 r(mean)					
+				est	store	OLS_mund		
+			
+				*	Y = FI or not (binary indicator)
+				reg		PFS_FI_ppml	${endovar}	FSdummy_bar	${RHS}		 ${reg_weight} if reg_sample==1, cluster(x11101ll)	//	OLS
+				estadd	local	Controls	"Y"
+				estadd	local	YearFE		"Y"
+				estadd	local	Mundlak		"Y"
+				estadd	local	IndFE		"N"
 				estadd	scalar	r2c	=	e(r2)
 				summ	PFS_ppml	${sum_weight}				
 				estadd	scalar	mean_PFS	=	 r(mean)					
@@ -318,63 +337,108 @@
 			
 							
 			*	IV 
-			
-				*	Non-linear
-				cap	drop	SNAP_index_w_bar
-				bys	x11101ll:	egen	SNAP_index_w_bar	=	mean(SNAP_index_w) if reg_sample==1	//	Time-average of ${endovar}_hat_bar
+			cap	drop	SNAP_index_w_bar
+			bys	x11101ll:	egen	SNAP_index_w_bar	=	mean(SNAP_index_w) if reg_sample==1	//	Time-average of ${endovar}_hat_bar
 				
-				cap	drop	${endovar}_hat
-				logit	${endovar}	${IV}	SNAP_index_w_bar	${RHS}	 ${reg_weight}	if reg_sample==1, vce(cluster x11101ll) 
-				predict	${endovar}_hat
-				lab	var	${endovar}_hat	"Predicted SNAP"		
-				margins, dydx(SNAP_index_w) post
-				estadd	local	Controls	"Y"
-				estadd	local	YearFE		"Y"
-				estadd	local	Mundlak		"Y"
-				scalar	Fstat_CD_${Zname}	=	 e(cdf)
-				scalar	Fstat_KP_${Zname}	=	e(widstat)
-				summ	${endovar}	${sum_weight}	if	e(sample)==1
-				estadd	scalar	mean_SNAP	=	 r(mean)
-				est	store	logit_SPI_mund
-	
+				*	IV = Non-linearly predicted SNAP (3-stage)
 				
-				ivreghdfe	${depvar}	${RHS}	(${endovar} = SNAP_index_w)	${reg_weight} if reg_sample==1, ///
-					/*absorb(x11101ll)*/	cluster (x11101ll)		first savefirst savefprefix(${Zname})
-				
-				estadd	local	Controls	"Y"
-				estadd	local	YearFE		"Y"
-				estadd	local	Mundlak		"Y"
-				scalar	Fstat_CD_${Zname}	=	 e(cdf)
-				scalar	Fstat_KP_${Zname}	=	e(widstat)
-				summ	PFS_ppml	${sum_weight}	if	e(sample)==1
-				estadd	scalar	mean_PFS	=	 r(mean)
-				est	store	${Zname}_mund_2nd
-			
-				est	restore	${Zname}${endovar}
-				estadd	local	Controls	"Y"
-				estadd	local	YearFE		"Y"
-				estadd	local	Mundlak		"Y"
-				estadd	scalar	Fstat_CD	=	Fstat_CD_${Zname}, replace
-				estadd	scalar	Fstat_KP	=	Fstat_KP_${Zname}, replace
-				summ	${endovar}	${sum_weight}	if	e(sample)==1
-				estadd	scalar	mean_SNAP	=	 r(mean) 
-				est	store	${Zname}_mund_1st	
-				est	drop	${Zname}${endovar}
-				
-				*	Replicate using binary indicator
-				ivreghdfe	PFS_FI_ppml	${RHS} 	(${endovar} = ${endovar}_hat)	${reg_weight} if reg_sample==1, ///
-						/*absorb(x11101ll)*/	cluster (x11101ll)	
-				ivreghdfe	PFS_FI_ppml	${RHS} 	(${endovar} = SNAP_index_w)	${reg_weight} if reg_sample==1, ///
-						/*absorb(x11101ll)*/	cluster (x11101ll)	
-				estadd	local	Controls	"Y"
-				estadd	local	YearFE		"Y"
-				estadd	local	Mundlak		"Y"
-				scalar	Fstat_CD_${Zname}	=	 e(cdf)
-				scalar	Fstat_KP_${Zname}	=	e(widstat)
-				summ	PFS_ppml	${sum_weight}	if	e(sample)==1
-				estadd	scalar	mean_PFS	=	 r(mean)
-				est	store	${Zname}_FI_mund_2nd	
+					*	1st stage - logit regression
+					cap	drop	${endovar}_hat_nl
+					logit	${endovar}	${IV}	SNAP_index_w_bar	${RHS}	 ${reg_weight}	if reg_sample==1, vce(cluster x11101ll) 
+					predict	${endovar}_hat_nl
+					lab	var	${endovar}_hat_nl	"(Non-linearly) Predicted SNAP"		
+					margins, dydx(SNAP_index_w) post
+					estadd	local	Controls	"Y"
+					estadd	local	YearFE		"Y"
+					estadd	local	Mundlak		"Y"
+					estadd	local	IndFE		"N"
+					scalar	Fstat_CD_${Zname}	=	 e(cdf)
+					scalar	Fstat_KP_${Zname}	=	e(widstat)
+					summ	${endovar}	${sum_weight}	if	e(sample)==1
+					estadd	scalar	mean_SNAP	=	 r(mean)
+					est	store	logit_SPI_mund
 		
+					*	Note that I can no longer use automatic regression, as different stage requires different time-average variable
+					*	Manual 2nd stage: linear regression of SNAP on non-linear predicted SNAP
+					cap	drop	${endovar}_hat_nl_bar
+					bys	x11101ll:	egen	${endovar}_hat_nl_bar	=	mean(${endovar}_hat_nl) if reg_sample==1	//	Time-average of ${endovar}_hat_bar
+					
+					cap	drop	FSdummy_hat_l
+					reghdfe		${endovar}	${endovar}_hat_nl	${endovar}_hat_nl_bar	${RHS}	 ${reg_weight}	if reg_sample==1, vce(cluster x11101ll) 
+					predict		FSdummy_hat_l
+					
+			
+					*	Manual 3rd stage - regression of PFS on predicted SNAP hat
+					cap	drop	${endovar}_hat_l_bar
+					bys	x11101ll:	egen	FSdummy_hat_l_bar	=	mean(${endovar}_hat_l) if reg_sample==1	//	Time-average of ${endovar}_hat_bar
+								
+					reghdfe	${depvar}	${endovar}_hat_l	${endovar}_hat_l_bar	${RHS}	 ${reg_weight}	if reg_sample==1, vce(cluster x11101ll) 
+					
+					
+					*	Automatic regression
+					*	It's wrong, but runs just to see the results
+					ivreghdfe	${depvar}	${endovar}_hat_nl_bar ${RHS}	(${endovar} = ${endovar}_hat_nl)	${reg_weight} if reg_sample==1, ///
+					/*absorb(x11101ll)*/	cluster (x11101ll)		first savefirst savefprefix(${Zname})
+					
+					
+				
+				*	IV = SNAP index (conventional 2nd-stage)
+				
+					*	1st stage (manual)
+					cap	drop	${endovar}_hat_l
+					reghdfe		${endovar}	SNAP_index_w	SNAP_index_w_bar	${RHS}	 ${reg_weight}	if reg_sample==1, vce(cluster x11101ll) 
+					predict		${endovar}_hat_l
+					
+					
+					*	2nd stage (manual)
+					cap	drop	${endovar}_hat_l_bar
+					bys	x11101ll:	egen	FSdummy_hat_l_bar	=	mean(${endovar}_hat_l) if reg_sample==1	//	Time-average of ${endovar}_hat_bar
+					
+					reghdfe	${depvar}	${endovar}_hat_l	${endovar}_hat_l_bar	${RHS}	 ${reg_weight}	if reg_sample==1, vce(cluster x11101ll) 
+				
+					
+					*	Automatic 2SLS regression (wrong, but just to see the result)
+					ivreghdfe	${depvar}	${RHS}	SNAP_index_w_bar	(${endovar} = SNAP_index_w)	${reg_weight} if reg_sample==1, ///
+						/*absorb(x11101ll)*/	cluster (x11101ll)		first savefirst savefprefix(${Zname})
+					
+					/*		(2024-2-12) Disable as I no longer use Mundlak
+					estadd	local	Controls	"Y"
+					estadd	local	YearFE		"Y"
+					estadd	local	Mundlak		"Y"
+					estadd	local	IndFE		"N"
+					scalar	Fstat_CD_${Zname}	=	 e(cdf)
+					scalar	Fstat_KP_${Zname}	=	e(widstat)
+					summ	PFS_ppml	${sum_weight}	if	e(sample)==1
+					estadd	scalar	mean_PFS	=	 r(mean)
+					est	store	${Zname}_mund_2nd
+				
+					est	restore	${Zname}${endovar}
+					estadd	local	Controls	"Y"
+					estadd	local	YearFE		"Y"
+					estadd	local	Mundlak		"Y"
+					estadd	local	IndFE		"N"
+					estadd	scalar	Fstat_CD	=	Fstat_CD_${Zname}, replace
+					estadd	scalar	Fstat_KP	=	Fstat_KP_${Zname}, replace
+					summ	${endovar}	${sum_weight}	if	e(sample)==1
+					estadd	scalar	mean_SNAP	=	 r(mean) 
+					est	store	${Zname}_mund_1st	
+					est	drop	${Zname}${endovar}
+				
+					*	Replicate using binary indicator
+					ivreghdfe	PFS_FI_ppml	${RHS} 	(${endovar} = ${endovar}_hat)	${reg_weight} if reg_sample==1, ///
+							/*absorb(x11101ll)*/	cluster (x11101ll)	
+					ivreghdfe	PFS_FI_ppml	${RHS} 	(${endovar} = SNAP_index_w)	${reg_weight} if reg_sample==1, ///
+							/*absorb(x11101ll)*/	cluster (x11101ll)	
+					estadd	local	Controls	"Y"
+					estadd	local	YearFE		"Y"
+					estadd	local	Mundlak		"Y"
+					estadd	local	IndFE		"N"
+					scalar	Fstat_CD_${Zname}	=	 e(cdf)
+					scalar	Fstat_KP_${Zname}	=	e(widstat)
+					summ	PFS_ppml	${sum_weight}	if	e(sample)==1
+					estadd	scalar	mean_PFS	=	 r(mean)
+					est	store	${Zname}_FI_mund_2nd	
+			
 			
 				*	Plot grpahs of comparing predicted probablity
 				cap	drop	SNAPhat_OLS
@@ -389,7 +453,7 @@
 				graph display SNAPhat_OLS_MLE, ysize(4) xsize(9.0)
 				graph	export	"${SNAP_outRaw}/SNAPhat_OLS_MLE.png", as(png) replace
 				graph	close	
-			
+				*/
 	
 			*	(5) Control, time FE, individual FE
 		global	RHS	${FSD_on_FS_X}	${timevars}	
@@ -405,71 +469,104 @@
 			
 			*	OLS
 			cap	drop	temp
-			reghdfe		${depvar}	${endovar}	${RHS}		 ${reg_weight} if reg_sample==1 /* & xtlogit_sample==1 */, cluster(x11101ll) absorb(x11101ll)	//	OLS
+			reghdfe		${depvar}	${endovar}	${RHS}		 ${reg_weight} if xtlogit_sample==1 /* & xtlogit_sample==1 */, cluster(x11101ll) absorb(x11101ll)	//	OLS
 			predict	temp
 			estadd	local	Controls	"Y"
 			estadd	local	YearFE		"Y"
-			estadd	local	Mundlak		"Y"
+			estadd	local	Mundlak		"N"
+			estadd	local	IndFE		"Y"
 			estadd	scalar	r2c	=	e(r2)
 			summ	PFS_ppml	${sum_weight}				
 			estadd	scalar	mean_PFS	=	 r(mean)					
 			est	store	OLS_indFE		
 			
 		
-				*	Non-linear
-				cap	drop	${endovar}_hat
-				*xtlogit	${endovar}	${IV}	${RHS}	 if reg_sample==1, fe
-				clogit	${endovar}	${IV}	${RHS}	 if reg_sample==1, group(x11101ll) cluster(x11101ll)
-				predict	${endovar}_hat
-				lab	var	${endovar}_hat	"Predicted SNAP"		
-				margins, dydx(SNAP_index_w) post
-				estadd	local	Controls	"Y"
-				estadd	local	YearFE		"Y"
-				estadd	local	Mundlak		"Y"
-				scalar	Fstat_CD_${Zname}	=	 e(cdf)
-				scalar	Fstat_KP_${Zname}	=	e(widstat)
-				summ	${endovar}	${sum_weight}	if	e(sample)==1
-				estadd	scalar	mean_SNAP	=	 r(mean)
-				est	store	logit_SPI_indFE
+			*	IV
 				
-			ivreghdfe	${depvar}	${RHS}	(${endovar} = ${endovar}_hat)	${reg_weight} if reg_sample==1, absorb(x11101ll)	cluster(x11101ll) 	first savefirst savefprefix(${Zname})
-			ivreghdfe	${depvar}	${RHS}	(${endovar} = SNAP_index_w)	${reg_weight} if reg_sample==1, absorb(x11101ll)	cluster(x11101ll) 	first savefirst savefprefix(${Zname})
-			*xtivreg2	${depvar}	${RHS}	(${endovar} = ${endovar}_hat)	${reg_weight} if reg_sample==1, fe cluster(x11101ll) first	//		 savefirst savefprefix(${Zname})
+				*	IV = Non-linear predicted SNAP
+					
+					*	(1st stage): logit SNAP participation on index
+					cap	drop	${endovar}_hat_nl
+					*xtlogit	${endovar}	${IV}	${RHS}	 if reg_sample==1, fe
+					clogit	${endovar}	${IV}	${RHS}	 if reg_sample==1, group(x11101ll) cluster(x11101ll)
+					predict	${endovar}_hat_nl
+					lab	var	${endovar}_hat_nl	"(NOn-linear) Predicted SNAP"		
+					margins, dydx(SNAP_index_w) post
+					estadd	local	Controls	"Y"
+					estadd	local	YearFE		"Y"
+					estadd	local	Mundlak		"N"
+					estadd	local	IndFE		"Y"
+					scalar	Fstat_CD_${Zname}	=	 e(cdf)
+					scalar	Fstat_KP_${Zname}	=	e(widstat)
+					summ	${endovar}	${sum_weight}	if	e(sample)==1
+					estadd	scalar	mean_SNAP	=	 r(mean)
+					est	store	logit_SPI_indFE
+					
+					*	Manual 2nd stage
+					cap	drop ${endovar}_hat_l
+					reghdfe	${endovar}	 ${endovar}_hat_nl	${RHS}	${reg_weight} if reg_sample==1, absorb(x11101ll)	cluster(x11101ll) 
+					predict ${endovar}_hat_l
+					
+					*	Manual 3rd stage
+					reghdfe	${depvar}	${endovar}_hat_l	${RHS}	${reg_weight} if reg_sample==1, absorb(x11101ll)	cluster(x11101ll) 
+					
+					
+					*	Automatic 2nd stage
+					ivreghdfe	${depvar}	${RHS}	(${endovar} = ${endovar}_hat_nl)	${reg_weight} if reg_sample==1, absorb(x11101ll)	cluster(x11101ll) 	first savefirst savefprefix(${Zname})
+					
+				*	IV = SNAP index (conventional)
+					
+					*	Manual 1st stage (too see how many of obs have negative participation rate.)
+					cap	drop ${endovar}_hat_l
+					reghdfe	${endovar}	 SNAP_index_w	${RHS}	${reg_weight} if reg_sample==1, absorb(x11101ll)	cluster(x11101ll) 
+					predict ${endovar}_hat_l	
+					summ	${endovar}_hat_l,d	//	Less than 5 %
+					
+					*	Manual 2nd stage
+					reghdfe	${endovar}	 ${endovar}_hat_l	${RHS}	${reg_weight} if reg_sample==1, absorb(x11101ll)	cluster(x11101ll) 
+					
+					*	Automatic
+					ivreghdfe	${depvar}	${RHS}	(${endovar} = SNAP_index_w)	${reg_weight} if reg_sample==1, absorb(x11101ll)	cluster(x11101ll) 	first savefirst savefprefix(${Zname})
+					
+					estadd	local	Controls	"Y"
+					estadd	local	YearFE		"Y"
+					estadd	local	Mundlak		"N"
+					estadd	local	IndFE		"Y"
+					scalar	Fstat_CD_${Zname}	=	 e(cdf)
+					scalar	Fstat_KP_${Zname}	=	e(widstat)
+					summ	PFS_ppml	${sum_weight}	if	e(sample)==1
+					estadd	scalar	mean_PFS	=	 r(mean)
+					est	store	${Zname}_indFE_2nd
+				
+					est	restore	${Zname}${endovar}
+					estadd	local	Controls	"Y"
+					estadd	local	YearFE		"Y"
+					estadd	local	Mundlak		"N"
+					estadd	local	IndFE		"Y"
+					estadd	scalar	Fstat_CD	=	Fstat_CD_${Zname}, replace
+					estadd	scalar	Fstat_KP	=	Fstat_KP_${Zname}, replace
+					summ	${endovar}	${sum_weight}	if	e(sample)==1
+					estadd	scalar	mean_SNAP	=	 r(mean) 
+					est	store	${Zname}_indFE_1st	
+					est	drop	${Zname}${endovar}
+					
+		
 			
-			
-			
-				estadd	local	Controls	"Y"
-				estadd	local	YearFE		"Y"
-				estadd	local	Mundlak		"Y"
-				scalar	Fstat_CD_${Zname}	=	 e(cdf)
-				scalar	Fstat_KP_${Zname}	=	e(widstat)
-				summ	PFS_ppml	${sum_weight}	if	e(sample)==1
-				estadd	scalar	mean_PFS	=	 r(mean)
-				est	store	${Zname}_indFE_2nd
-			
-				est	restore	${Zname}${endovar}
-				estadd	local	Controls	"Y"
-				estadd	local	YearFE		"Y"
-				estadd	local	Mundlak		"Y"
-				estadd	scalar	Fstat_CD	=	Fstat_CD_${Zname}, replace
-				estadd	scalar	Fstat_KP	=	Fstat_KP_${Zname}, replace
-				summ	${endovar}	${sum_weight}	if	e(sample)==1
-				estadd	scalar	mean_SNAP	=	 r(mean) 
-				est	store	${Zname}_indFE_1st	
-				est	drop	${Zname}${endovar}
+				
 		
 		
 		
 		
 		
 		*	1st stage
-		esttab	logit_SPI_biv	logit_SPI_ctrl	logit_SPI_timeFE	logit_SPI_mund logit_SPI_indFE	SPI_w_Dhat_biv_1st 	SPI_w_Dhat_ctrl_1st	SPI_w_Dhat_timeFE_1st	SPI_w_Dhat_mund_1st	SPI_w_Dhat_indFE_1st using "${SNAP_outRaw}/PFS_1st_20231014.csv", ///
-					cells(b(star fmt(%8.3f)) se(fmt(2) par)) stats(N r2c mean_SNAP Controls YearFE Mundlak	Fstat_CD	Fstat_KP, fmt(0 2) label("N" "R2" "Mean SNAP" "Controls" "Year FE" "Mundlak" "F-stat(CD)" "F-stat(KP)" )) ///
+		esttab	logit_SPI_biv	logit_SPI_ctrl	logit_SPI_timeFE	/* logit_SPI_mund */ logit_SPI_indFE	SPI_w_Dhat_biv_1st 	SPI_w_Dhat_ctrl_1st	SPI_w_Dhat_timeFE_1st	/* SPI_w_Dhat_mund_1st */	SPI_w_Dhat_indFE_1st using "${SNAP_outRaw}/PFS_1st.csv", ///
+					cells(b(star fmt(%8.3f)) se(fmt(2) par)) stats(N r2c mean_SNAP Controls YearFE IndFE	Fstat_CD	Fstat_KP, fmt(0 2) label("N" "R2" "Mean SNAP" "Controls" "Year FE" "Mundlak" "F-stat(CD)" "F-stat(KP)" )) ///
 					incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	keep(SNAP_index_w ${endovar}_hat)	///
 					title(PFS on FS dummy)		replace	
 					
-		esttab	logit_SPI_biv	/* logit_SPI_ctrl */	logit_SPI_timeFE	logit_SPI_mund	SPI_w_Dhat_biv_1st 	/* SPI_w_Dhat_ctrl_1st */	SPI_w_Dhat_timeFE_1st	SPI_w_Dhat_mund_1st		using "${SNAP_outRaw}/PFS_1st_20231014.tex", ///
-				cells(b(star fmt(%8.3f)) se(fmt(2) par)) stats(N mean_SNAP Controls YearFE Mundlak	Fstat_KP, fmt(0 2) label("N" "Mean SNAP" "Controls" "Year FE" "Mundlak"  "F-stat(KP)" )) ///
+		esttab	logit_SPI_biv		/* logit_SPI_ctrl */		logit_SPI_timeFE		/* logit_SPI_mund */	logit_SPI_indFE	///
+				SPI_w_Dhat_biv_1st 	/* SPI_w_Dhat_ctrl_1st */	SPI_w_Dhat_timeFE_1st	/* SPI_w_Dhat_mund_1st */	SPI_w_Dhat_indFE_1st			using "${SNAP_outRaw}/PFS_1st.tex", ///
+				cells(b(star fmt(%8.3f)) se(fmt(2) par)) stats(N mean_SNAP Controls YearFE IndFE	Fstat_KP, fmt(0 2) label("N" "Mean SNAP" "Controls" "Year FE" "Mundlak"  "F-stat(KP)" )) ///
 				incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	keep(SNAP_index_w ${endovar}_hat /*age_ind       ind_col*/)	///
 				title(SNAP on SPI)	note(Controls include RP’s characteristics (gender, age, age squared race, marital status, disability and college degree). Mundlak includes time-average of controls and year fixed effects. Estimates are adjusted with longitudinal individual survey weight provided in the PSID. Standard errors are clustered at individual-level.)	replace	
 
@@ -477,31 +574,31 @@
 				
 				
 		*	2nd stage
-		esttab	OLS_biv SPI_w_Dhat_biv_2nd	OLS_ctrl	SPI_w_Dhat_ctrl_2nd	OLS_timeFE	SPI_w_Dhat_timeFE_2nd	OLS_mund	 SPI_w_Dhat_mund_2nd	OLS_indFE	SPI_w_Dhat_indFE_2nd	using "${SNAP_outRaw}/PFS_2nd_20231014.csv", ///
-				mgroups("OLS" "IV" "OLS" "IV" "OLS" "IV" "OLS" "IV", pattern(1 1 1 1 1 1 1 1))	///
-					cells(b(star fmt(%8.3f)) se(fmt(2) par)) stats(N r2c mean_PFS Controls YearFE Mundlak, fmt(0 2) label("N" "R$^2$" "Mean PFS" "Controls" "Year FE" "Mundlak" )) ///
+		esttab	OLS_biv SPI_w_Dhat_biv_2nd	OLS_ctrl	SPI_w_Dhat_ctrl_2nd	OLS_timeFE	SPI_w_Dhat_timeFE_2nd	/* OLS_mund	 SPI_w_Dhat_mund_2nd */	OLS_indFE	SPI_w_Dhat_indFE_2nd	using "${SNAP_outRaw}/PFS_2nd.csv", ///
+				mgroups("OLS" "IV" "OLS" "IV" "OLS" "IV", pattern(1 1 1 1 1 1))	///
+					cells(b(star fmt(%8.3f)) se(fmt(2) par)) stats(N r2c mean_PFS Controls YearFE IndFE, fmt(0 2) label("N" "R$^2$" "Mean PFS" "Controls" "Year FE" "Ind FE" )) ///
 					incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	keep(${endovar})	///
 					title(PFS on FS dummy)		replace	
 					
-		esttab	OLS_biv SPI_w_Dhat_biv_2nd	/* OLS_ctrl	SPI_w_Dhat_ctrl_2nd	 */ OLS_timeFE	SPI_w_Dhat_timeFE_2nd	OLS_mund	 SPI_w_Dhat_mund_2nd	using "${SNAP_outRaw}/PFS_2nd_20231014.tex", ///
-				mgroups("OLS" "IV" "OLS" "IV" "OLS" "IV" "OLS" "IV", pattern(1 1 1 1 1 1 1 1))	///
-					cells(b(star fmt(%8.3f)) se(fmt(2) par)) stats(N r2c mean_PFS Controls YearFE Mundlak, fmt(0 2) label("N" "R$^2$" "Mean PFS" "Controls" "Year FE" "Mundlak" )) ///
+		esttab	OLS_biv SPI_w_Dhat_biv_2nd	/* OLS_ctrl	SPI_w_Dhat_ctrl_2nd	 */ OLS_timeFE	SPI_w_Dhat_timeFE_2nd	/* OLS_mund */	 SPI_w_Dhat_mund_2nd	using "${SNAP_outRaw}/PFS_2nd_20231014.tex", ///
+				mgroups("OLS" "IV" "OLS" "IV" "OLS" "IV", pattern(1 1 1 1 1 1))	///
+					cells(b(star fmt(%8.3f)) se(fmt(2) par)) stats(N r2c mean_PFS Controls YearFE IndFE, fmt(0 2) label("N" "R$^2$" "Mean PFS" "Controls" "Year FE" "Ind FE" )) ///
 					incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	keep(${endovar})	///
 					title(PFS on FS dummy)		replace	
 		
 		
 		*	PFS and FI together (bivariate and Mundlak only)
-		esttab	OLS_biv 	SPI_w_Dhat_biv_2nd		OLS_mund 	SPI_w_Dhat_mund_2nd		///
-				OLS_FI_biv	SPI_w_Dhat_FI_biv_2nd	OLS_FI_mund	SPI_w_Dhat_FI_mund_2nd		using "${SNAP_outRaw}/PFS_2nd_combined_20231112.csv", ///
-				mgroups("OLS" "IV" "OLS" "IV" "OLS" "IV" "OLS" "IV", pattern(1 1 1 1 1 1 1 1))	///
-					cells(b(star fmt(%8.3f)) se(fmt(2) par)) stats(N r2c mean_PFS Controls, fmt(0 2) label("N" "R$^2$" "Mean PFS" "Controls/Year FE/Mundlak" )) ///
+		esttab	OLS_biv 	SPI_w_Dhat_biv_2nd		SPI_w_Dhat_indFE_2nd		///
+				OLS_FI_biv	SPI_w_Dhat_FI_biv_2nd	SPI_w_Dhat_indFE_2nd		using "${SNAP_outRaw}/PFS_2nd_combined.csv", ///
+				mgroups("OLS" "IV" "OLS" "IV" "OLS" "IV", pattern(1 1 1 1 1 1))	///
+					cells(b(star fmt(%8.3f)) se(fmt(2) par)) stats(N r2c mean_PFS Controls, fmt(0 2) label("N" "R$^2$" "Mean PFS" "Controls/Year FE/Ind FE" )) ///
 					incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	keep(${endovar})	///
 					title(PFS on FS dummy)		replace	
 					
-		esttab	OLS_biv 	SPI_w_Dhat_biv_2nd		OLS_mund 	SPI_w_Dhat_mund_2nd		///
-				OLS_FI_biv	SPI_w_Dhat_FI_biv_2nd	OLS_FI_mund	SPI_w_Dhat_FI_mund_2nd	using "${SNAP_outRaw}/PFS_2nd_combined_20231112.tex", ///
-				mgroups("OLS" "IV" "OLS" "IV" "OLS" "IV" "OLS" "IV", pattern(1 1 1 1 1 1 1 1))	///
-					cells(b(star fmt(%8.3f)) se(fmt(2) par)) stats(N r2c mean_PFS Controls, fmt(0 2) label("N" "R$^2$" "Mean PFS"  "Controls/Year FE/Mundlak" )) ///
+		esttab	OLS_biv 	SPI_w_Dhat_biv_2nd		SPI_w_Dhat_indFE_2nd		///
+				OLS_FI_biv	SPI_w_Dhat_FI_biv_2nd	SPI_w_Dhat_indFE_2nd	using "${SNAP_outRaw}/PFS_2nd_combined.tex", ///
+				mgroups("OLS" "IV" "OLS" "IV" "OLS" "IV", pattern(1 1 1 1 1 1))	///
+					cells(b(star fmt(%8.3f)) se(fmt(2) par)) stats(N r2c mean_PFS Controls, fmt(0 2) label("N" "R$^2$" "Mean PFS"  "Controls/Year FE/Ind FE" )) ///
 					incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	keep(${endovar})	///
 					title(PFS on FS dummy)		replace	
 		

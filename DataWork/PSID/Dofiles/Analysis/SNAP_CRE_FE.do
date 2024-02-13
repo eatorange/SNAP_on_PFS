@@ -21,15 +21,40 @@
 		global	Mundlak_vars	${Mundlak_vars}	`var'_bar
 	}
 	di	"${Mundlak_vars}"
+	cap	drop	SNAP_index_w_bar
+	bys	x11101ll:	egen	SNAP_index_w_bar	=	mean(SNAP_index_w) if reg_sample==1	//	Time-average of ${endovar}_hat_bar
+				
+	
+	
+	*	First-difference estimator
+	global	d_FSD_on_FS_X
+	ds	PFS_ppml	FSdummy	SNAP_index_w	${FSD_on_FS_X}
+	foreach	var	in	`r(varlist)'	{
+		
+		di	"var is `var'"
+		cap	drop	d_`var'
+		gen	d_`var'	=	`var'	-	l2.`var'
+	
+		if	inlist(`var',PFS_ppml,SNAP_index_w,FSdummy)	{
+			
+		}
+		else	{
+			di	"`var' is inside loop"
+			global	d_FSD_on_FS_X	${d_FSD_on_FS_X}	d_`var'
+		}
 
+	}
+	
+	
 	
 	*	2024-1-30
 	*	I find that CRE is almost equivalent to FE when I include time-average of first independent variable (i.e. SNAP index for the fist stage, etc.)
 		
 		
-		*	3-stage model
+		*	(1)	3-stage model
 		
 			*	1st-stage: Non-linear regression of SNAP status on IV
+			*	Note that I added "SNAP_inde_w_bar", time-average of SNAP indices
 			cap	drop	${endovar}_hat
 			logit	${endovar}	${IV}	${RHS}	SNAP_index_w_bar	${Mundlak_vars}	 ${reg_weight}	if reg_sample==1, vce(cluster x11101ll) 
 			predict	${endovar}_hat
@@ -69,29 +94,60 @@
 					
 					
 	
-		*	Conventional 2-stage model (SNAP index as IV directly)
-		cap	drop	FSdummy_hat3
-		reghdfe	${endovar}	${IV}	SNAP_index_w_bar	${RHS}	${Mundlak_vars}	 ${reg_weight}	if reg_sample==1, vce(cluster x11101ll) 	//	1st stage
-		predict	FSdummy_hat3
-		
-			*	Compare with FE. Coeffcient and SE almost identical
-			reghdfe	${endovar}	${IV}	${RHS}	 ${reg_weight}	if reg_sample==1, absorb(x11101ll)	vce(cluster x11101ll) 
-		
-		
-		cap	drop	FSdummy_hat3_bar
-		bys	x11101ll:	egen	FSdummy_hat3_bar	=	mean(FSdummy_hat3) if reg_sample==1	//	Constructe time-average of the fitted value.
-		
-		reghdfe	${depvar}	FSdummy_hat3	FSdummy_hat3_bar	${RHS}		${Mundlak_vars}	 ${reg_weight}	if reg_sample==1, vce(cluster x11101ll) 	//	2nd stage
+		*	(2)	Conventional 2-stage model (SNAP index as IV directly)
 			
-			*	Compare with FE. COEFFICIENT VARIES A LOT.... BUT WHY?
-			*	But coefficient is almost identical to automatic IV with 2-stage FE
-			reghdfe	${depvar}	FSdummy_hat3	${RHS}	 ${reg_weight}	if reg_sample==1, absorb(x11101ll)	vce(cluster x11101ll) 
+			*	1st stage
+			
+				*	Mundlak, no individual FE
+				cap	drop	FSdummy_hat3
+				reghdfe	${endovar}	${IV}	SNAP_index_w_bar	${RHS}	${Mundlak_vars}	 ${reg_weight}	if reg_sample==1, vce(cluster x11101ll) 	//	1st stage
+				predict	FSdummy_hat3
+				
+				*	FE. Coeffcient and SE almost identical
+				reghdfe	${endovar}	${IV}	${RHS}	 ${reg_weight}	if reg_sample==1, absorb(x11101ll)	vce(cluster x11101ll) 
+				predict temp2
+				
 		
-			*	But coefficient is almost identical to automatic IV with 2-stage FE
-			ivreghdfe	PFS_ppml	${RHS} 	(${endovar} = SNAP_index_w)	${reg_weight} if reg_sample==1, absorb(x11101ll)	cluster (x11101ll)	
+			*	Manual 2nd stage
+				
+				*	Mundlak, No individual FE (predicte first stage from no-FE model above)
+				cap	drop	FSdummy_hat3_bar
+				bys	x11101ll:	egen	FSdummy_hat3_bar	=	mean(FSdummy_hat3) if reg_sample==1	//	Constructe time-average of the fitted value.
+				
+				reghdfe	${depvar}	FSdummy_hat3	FSdummy_hat3_bar	${RHS}		${Mundlak_vars}	 ${reg_weight}	if reg_sample==1, vce(cluster x11101ll) 	//	2nd stage
+				
+				*	Individual FE. COEFFICIENT VARIES A LOT.... BUT WHY?
+				*	But coefficient is almost identical to automatic IV with 2-stage FE
+				reghdfe	${depvar}	FSdummy_hat3	${RHS}	 ${reg_weight}	if reg_sample==1, absorb(x11101ll)	vce(cluster x11101ll) 
+			
+			*	Anutomatic 2nd stage
+			
+				*	CAN"T do automatic 2nd stage with Mundlak, since I need average of the predicted SNAP status, which can't be done in the first stage.)
+				
+				*	Individual FE
+				*	But coefficient is almost identical to automatic IV with 2-stage FE
+				ivreghdfe	PFS_ppml	${RHS} 	(${endovar} = SNAP_index_w)	${reg_weight} if reg_sample==1, absorb(x11101ll)	cluster (x11101ll)	
 	
+				
 	
+		*	First-difference regression
+				global	d_timevars	year_enum21-year_enum27
+		
+				*	Benchmark (no time FE, no individual FE, at all)
+				reg	d_PFS_ppml	${d_FSD_on_FS_X}	if reg_sample==1, 	cluster (x11101ll)	
+				
+				
+				
+				${d_timevars}
+			
+			
+					
+			
 	
+				reghdfe		PFS_ppml	temp2	${RHS}			${reg_weight} if reg_sample==1, absorb(x11101ll)	cluster (x11101ll)	
+				
+				
+				ivfprobit	PFS_ppml	${RHS}		(${endovar} = FSdummy_hat3)	${reg_weight} if reg_sample==1,	vce (cluster x11101ll)	
 	
 	
 	
