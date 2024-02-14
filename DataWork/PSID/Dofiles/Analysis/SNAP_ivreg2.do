@@ -484,7 +484,9 @@
 			*	IV
 				
 				*	IV = Non-linear predicted SNAP
-					
+				*	(2024-2-13) Disable by default, as I don't use it. I can enable it when needed
+				
+				{ /*
 					*	(1st stage): logit SNAP participation on index
 					cap	drop	${endovar}_hat_nl
 					*xtlogit	${endovar}	${IV}	${RHS}	 if reg_sample==1, fe
@@ -513,7 +515,9 @@
 					
 					*	Automatic 2nd stage
 					ivreghdfe	${depvar}	${RHS}	(${endovar} = ${endovar}_hat_nl)	${reg_weight} if reg_sample==1, absorb(x11101ll)	cluster(x11101ll) 	first savefirst savefprefix(${Zname})
-					
+					*/
+				}
+				
 				*	IV = SNAP index (conventional)
 					
 					*	Manual 1st stage (too see how many of obs have negative participation rate.)

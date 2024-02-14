@@ -35,16 +35,9 @@
 		cap	drop	d_`var'
 		gen	d_`var'	=	`var'	-	l2.`var'
 	
-		if	inlist(`var',PFS_ppml,SNAP_index_w,FSdummy)	{
-			
-		}
-		else	{
-			di	"`var' is inside loop"
-			global	d_FSD_on_FS_X	${d_FSD_on_FS_X}	d_`var'
-		}
-
 	}
-	
+	ds	d_rp_female-d_rp_col
+	global	d_FSD_on_FS_X	`r(varlist)'
 	
 	
 	*	2024-1-30
@@ -133,8 +126,14 @@
 		*	First-difference regression
 				global	d_timevars	year_enum21-year_enum27
 		
-				*	Benchmark (no time FE, no individual FE, at all)
-				reg	d_PFS_ppml	${d_FSD_on_FS_X}	if reg_sample==1, 	cluster (x11101ll)	
+				*	Bivariate
+				reg	d_PFS_ppml	d_FSdummy
+				
+				*	With controls
+				reg	d_PFS_ppml	d_FSdummy	${d_FSD_on_FS_X}	if reg_sample==1, 	cluster (x11101ll)	
+				
+				*	Time FE
+				reg	d_PFS_ppml	d_FSdummy	${d_FSD_on_FS_X}	${d_timevars}	if reg_sample==1, 	cluster (x11101ll)		
 				
 				
 				

@@ -289,7 +289,7 @@
 			 
 			 
 			 *	Threshold probability graph
-			 graph	
+			
 			
 		save	"${SNAP_dtInt}/SNAP_long_PFS_FI", replace	
 	

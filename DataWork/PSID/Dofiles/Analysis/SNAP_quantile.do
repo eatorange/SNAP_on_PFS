@@ -1,20 +1,26 @@
-*	(3) Control, time FE, no Mundlak
-		global	RHS	 ${FSD_on_FS_X}	${timevars}		${Mundlak_vars}
-		
-		
+*	Control, time FE, individual FE
+*	(2024-2-13) Main model updated (2-way FE)
+
+
+*	Within transformation
+ds	${depvar}	${RHS}	
+
+
+		global	RHS	 ${FSD_on_FS_X}	${timevars}	//	${Mundlak_vars}
 		global	depvar		PFS_ppml	//		FIG_indiv		
 		
-				
-		ivreghdfe	${depvar}	${RHS}		(${endovar} = ${endovar}_hat)	${reg_weight} if reg_sample==1, ///
-				/*absorb(x11101ll)*/	cluster (x11101ll)		first savefirst savefprefix(${Zname})
+		*	Running main model		
+		ivreghdfe	${depvar}	${RHS}		(${endovar} = SNAP_index_w)	${reg_weight} if reg_sample==1, ///
+				/*absorb(x11101ll)*/	cluster(x11101ll) absorb(x11101ll)		first savefirst savefprefix(${Zname})
 		
-
+		*	Manual 1st stage
 		cap	drop	SNAPhat
-		reg		${endovar}	${endovar}_hat	${RHS}	${reg_weight} if reg_sample==1,	cluster(x11101ll)
+		reghdfe		${endovar}	SNAP_index_w	${RHS}	${reg_weight} if reg_sample==1,	cluster(x11101ll) absorb(x11101ll)
 		predict	SNAPhat
 		
-		reg	${depvar}	SNAPhat	${RHS}	${reg_weight} if reg_sample==1,	cluster(x11101ll)
-		reg	FIG_indiv	SNAPhat	${RHS}	${reg_weight} if reg_sample==1,	cluster(x11101ll)
+		*	Manual 2nd stage
+		reghdfe	${depvar}	SNAPhat	${RHS}	${reg_weight} if reg_sample==1,	cluster(x11101ll)	absorb(x11101ll)	//	PFS
+		reg		FIG_indiv	SNAPhat	${RHS}	${reg_weight} if reg_sample==1,	cluster(x11101ll)	absorb(x11101ll)	//	FIG
 		
 		*	Quantile regressions		
 		*	"qrprocess": community-contribute program. Supports pweight and clustered standard error.
@@ -53,26 +59,30 @@
 				graph display SPI_on_SNAP_over_PFSqtile, ysize(4) xsize(9.0)
 				graph	export	"${SNAP_outRaw}/SPI_on_SNAP_over_PFSqtile.png", as(png) replace
 				
+				
 				*	Manually compute the first-stage to generate (iii)
 				cap	drop	SNAPhat
-				reg	${endovar}	${endovar}_hat		${RHS}	${reg_weight} if reg_sample==1, cluster (x11101ll)	
+				reg	${endovar}	SNAP_index_w		${RHS}	${reg_weight} if reg_sample==1, cluster(x11101ll)	absorb(x11101ll)
 				predict	SNAPhat
 				lab	var	SNAPhat	"Predicted SNAP status"
 				
+				/* (2024-2-13) Disabled.
 				*	"FSdummy_hat" and "SNAPhat" are almost identical. let's check the magnitude of the difference
 				cap	drop	diff_FShat_SNAPhat
 				gen	diff_FShat_SNAPhat	=	abs(FSdummy_hat-SNAPhat)
 				summ	diff_FShat_SNAPhat,d	//	Mean diference 0.008 (0.8ppt), median 0.006 (0.6ppt), std.dev is 0.007, max is 0.04 (4pct)
-			
+				*/
+				
+				
 				*	Compute average SNAP statuses for each quantile
 				preserve
 					keep	if	reg_sample==1
-					collapse (mean) PFS_ppml FSdummy FSdummy_hat	SNAPhat ${reg_weight}, by(PFS_pct) // reg_weight and sum_weight give the same mean
+					collapse (mean) PFS_ppml FSdummy /* FSdummy_hat */	SNAPhat ${reg_weight}, by(PFS_pct) // reg_weight and sum_weight give the same mean
 					
 					*	As we checked above, FSdummy_hat and SNAPhat are nearly identical. SO I will just compare FSdummy and SNAPhat
 					lab	var	PFS_ppml		"PFS"
 					lab	var	FSdummy			"Realized SNAP (binary)"
-					lab	var	FSdummy_hat		"Non-linearly predicted SNAP (fraction) - IV"
+					//lab	var	FSdummy_hat		"Non-linearly predicted SNAP (fraction) - IV"
 					lab	var	SNAPhat			"Predicted SNAP (fraction)"
 					
 					graph	twoway	(line PFS_ppml PFS_pct) (connected	FSdummy	PFS_pct) (line	SNAPhat	PFS_pct), ///
@@ -85,6 +95,10 @@
 			 
 			
 			*	Quantile regression
+			ivreghdfe	${depvar}	${RHS}		(${endovar} = SNAP_index_w)	${reg_weight} if reg_sample==1, cluster(x11101ll) absorb(x11101ll)
+				
+			xtrifreg	${depvar}	SNAPhat	${RHS}	${reg_weight} if reg_sample==1
+			
 			*qrprocess 	${depvar}		SNAPhat	${RHS}	${reg_weight} if reg_sample==1,	 vce(, cluster(x11101ll)) q(0.05(0.05)0.9)	// 5 percentile to 95 percentile (caution: takes time)
 			qrprocess 	${depvar}		SNAPhat	${RHS}	${reg_weight} if reg_sample==1,	 vce(, cluster(x11101ll)) q(0.05(0.05)0.2)	// 5 percentile to 20 percentile (caution: takes time)
 			est store qreg_PFS
