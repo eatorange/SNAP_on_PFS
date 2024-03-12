@@ -86,7 +86,8 @@
 
 	cap	drop	FSdummy_bar
 	bys	x11101ll:	egen	FSdummy_bar	=	mean(FSdummy) if reg_sample==1
-	
+	cap	drop	SNAP_index_w_bar
+	bys	x11101ll:	egen	SNAP_index_w_bar	=	mean(SNAP_index_w) if reg_sample==1
 	
 	
 	graph twoway (kdensity	PFS_ppml ${sum_weight} if income_ever_below_130_9713==1) (kdensity	PFS_ppml ${sum_weight}), xline(0.45)
@@ -149,7 +150,7 @@
 			estadd	scalar	mean_SNAP	=	 r(mean)
 			est	store	logit_SPI_biv		
 			
-		ivreghdfe	${depvar}	${RHS} 	(${endovar} = ${endovar}_hat)	${reg_weight} if reg_sample==1, ///
+		ivreghdfe	${depvar}	${RHS} 	(${endovar} = SNAP_index_w)	${reg_weight} if reg_sample==1, ///
 				/*absorb(x11101ll)*/	cluster (x11101ll)		first savefirst savefprefix(${Zname})
 			estadd	local	Controls	"N"
 			estadd	local	YearFE		"N"
@@ -186,9 +187,7 @@
 			estadd	scalar	mean_PFS	=	 r(mean)
 			est	store	${Zname}_FI_biv_2nd	
 			
-		
-		
-		
+
 		*	(2) Control, no time FE, no Mundlak
 		global	RHS	${FSD_on_FS_X}
 		
@@ -221,7 +220,7 @@
 				estadd	scalar	mean_SNAP	=	 r(mean)
 				est	store	logit_SPI_ctrl
 				
-			ivreghdfe	${depvar}	${RHS}	(${endovar} = ${endovar}_hat)	${reg_weight} if reg_sample==1, ///
+			ivreghdfe	${depvar}	${RHS}	(${endovar} = SNAP_index_w)	${reg_weight} if reg_sample==1, ///
 					/*absorb(x11101ll)*/	cluster (x11101ll)		first savefirst savefprefix(${Zname})
 				estadd	local	Controls	"Y"
 				estadd	local	YearFE		"N"
@@ -280,7 +279,7 @@
 				estadd	scalar	mean_SNAP	=	 r(mean)
 				est	store	logit_SPI_timeFE
 				
-			ivreghdfe	${depvar}	${RHS}		(${endovar} = ${endovar}_hat)	${reg_weight} if reg_sample==1, ///
+			ivreghdfe	${depvar}	${RHS}		(${endovar} = SNAP_index_w)	${reg_weight} if reg_sample==1, ///
 					/*absorb(x11101ll)*/	cluster (x11101ll)		first savefirst savefprefix(${Zname})
 				estadd	local	Controls	"Y"
 				estadd	local	YearFE		"Y"
@@ -308,6 +307,8 @@
 		
 		*	(4) Control, time FE, Mundlak
 		*	(2024-1-30) I found the previous Mundlak is misleading, since I did not include time-average of the first indiependent variable (like predicted FSdummy)
+		*	(2024-3-12) Let's try Mundlak, to see coefficient on SNAP_hat_dummy
+		
 		global	RHS	${FSD_on_FS_X}	${timevars}	${Mundlak_vars}
 		
 		
@@ -341,9 +342,16 @@
 			bys	x11101ll:	egen	SNAP_index_w_bar	=	mean(SNAP_index_w) if reg_sample==1	//	Time-average of ${endovar}_hat_bar
 				
 				*	IV = Non-linearly predicted SNAP (3-stage)
+				*	This step needs 6 regressions, 2 regressions per each
+					*	(1) Regress SNAP and SNAP_bar on SPI and SPI_bar, and get SNAP_hat_nl and SNAP_bar_hat_nl
+					*	(2)	Regress SNAP and SNAP_bar on SNAP_hat_nl and SNAP_bar_hat_nl, and ge SNAP_hat_l	and SNAP_bar_hat_l
+					*	(3) Regress PFS on	SNAP_hat_l and SNAP_bar_hat_l
+					*	(2024-3-12) The current version below does not do this 6 different regressions... so let's not think about this Heckman selection model.
+					
 				
 					*	1st stage - logit regression
 					cap	drop	${endovar}_hat_nl
+					
 					logit	${endovar}	${IV}	SNAP_index_w_bar	${RHS}	 ${reg_weight}	if reg_sample==1, vce(cluster x11101ll) 
 					predict	${endovar}_hat_nl
 					lab	var	${endovar}_hat_nl	"(Non-linearly) Predicted SNAP"		
@@ -383,24 +391,50 @@
 					
 				
 				*	IV = SNAP index (conventional 2nd-stage)
+					*	This step needs 4 regressions
+						*	(1) Regress SNAP on SNAP_bar on SPI and SPI_bar, and get SNAP_hat and SNAP_bar_hat
+						*	(2)	Regress PFS on SNAP_hat and SNAP_bar_hat
+						*	Questions
+							*	(1) How should I treat SNAP_bar? endogenous?
+								*	Dont think it's exogenous. SO I treat it as endogenous
+								*	But then the coefficient goves bizzaire.
+							*	(2) How should I "estimate" SNAP_bar? mechanically compute, or run another 1st stage?
+								*	Seems to be mechanical one.
+								*	But treating 
 				
-					*	1st stage (manual)
-					cap	drop	${endovar}_hat_l
-					reghdfe		${endovar}	SNAP_index_w	SNAP_index_w_bar	${RHS}	 ${reg_weight}	if reg_sample==1, vce(cluster x11101ll) 
-					predict		${endovar}_hat_l
+					*	Treating SNAP_bar as exogenous
+						
+						ivreghdfe	${depvar}	${RHS}	SNAP_index_w_bar	(${endovar} = SNAP_index_w)	${reg_weight} if reg_sample==1, ///
+							/*absorb(x11101ll)*/	cluster (x11101ll)		first savefirst savefprefix(${Zname})
 					
+					*	Treating SNAP_bar as endogenous
+					*	Then how should we estimate SNAP_bar_hat?
 					
-					*	2nd stage (manual)
-					cap	drop	${endovar}_hat_l_bar
-					bys	x11101ll:	egen	FSdummy_hat_l_bar	=	mean(${endovar}_hat_l) if reg_sample==1	//	Time-average of ${endovar}_hat_bar
+						*	(a) Another 1st stage for SNAP_bar
+						*	First stage goes bizzar, (coeffieint all near zero), since there's no variation in SNAP_bar within invidiuals. Thus it doesn't seem to be the case
+	
+						*cap	drop	${endovar}_bar_hat_l
+						*reghdfe		${endovar}_bar	SNAP_index_w	SNAP_index_w_bar	${RHS}	 ${reg_weight}	if reg_sample==1, vce(cluster x11101ll) 
+						*predict		${endovar}_bar_hat_l
+
+						*	(b) Mechenical average of predicted SNAP
+						
+							*	1st stage (manual)
+							cap	drop	${endovar}_hat_l
+							reghdfe		${endovar}	SNAP_index_w	SNAP_index_w_bar	${RHS}	 ${reg_weight}	if reg_sample==1, vce(cluster x11101ll) 
+							predict		${endovar}_hat_l
+							
+							*	Mechanical computation of SNAP_bar
+							cap	drop	${endovar}_hat_l_bar
+							bys	x11101ll:	egen	FSdummy_hat_l_bar	=	mean(${endovar}_hat_l) if reg_sample==1	//	Time-average of ${endovar}_hat_bar
+						
+							*	2nd stage (manual)
+							*	Coefficient on SNAP_bar_hat is very extreme (15.38236), thus we do not consider.
+							reghdfe	${depvar}	${endovar}_hat_l	${endovar}_hat_l_bar	${RHS}	 ${reg_weight}	if reg_sample==1, vce(cluster x11101ll) 
 					
-					reghdfe	${depvar}	${endovar}_hat_l	${endovar}_hat_l_bar	${RHS}	 ${reg_weight}	if reg_sample==1, vce(cluster x11101ll) 
+					*	Automatic 2SLS regression (if )
+						
 				
-					
-					*	Automatic 2SLS regression (wrong, but just to see the result)
-					ivreghdfe	${depvar}	${RHS}	SNAP_index_w_bar	(${endovar} = SNAP_index_w)	${reg_weight} if reg_sample==1, ///
-						/*absorb(x11101ll)*/	cluster (x11101ll)		first savefirst savefprefix(${Zname})
-					
 					/*		(2024-2-12) Disable as I no longer use Mundlak
 					estadd	local	Controls	"Y"
 					estadd	local	YearFE		"Y"
@@ -462,8 +496,8 @@
 			*	Sample determine 
 			cap drop xtlogit_sample
 			cap	drop	SNAPhat_xtlogit
-			xtlogit	${endovar}	${IV}	${RHS}	 if reg_sample==1, fe
-			*clogit	${endovar}	${IV}	${RHS}	 if reg_sample==1, group(x11101ll) cluster(x11101ll)	// https://www.statalist.org/forums/forum/general-stata-discussion/general/1453675-xtlogit-fe-vce-cluster
+			xtlogit	${endovar}	${IV}	${RHS}	 if reg_sample==1, fe	//	coefficient identical to clogit below, with slightly different CI.
+			clogit	${endovar}	${IV}	${RHS}	 if reg_sample==1, group(x11101ll) cluster(x11101ll)	// https://www.statalist.org/forums/forum/general-stata-discussion/general/1453675-xtlogit-fe-vce-cluster
 			gen xtlogit_sample=1 if e(sample)
 			predict SNAPhat_xtlogit
 			
@@ -485,8 +519,8 @@
 				
 				*	IV = Non-linear predicted SNAP
 				*	(2024-2-13) Disable by default, as I don't use it. I can enable it when needed
-				
-				{ /*
+				/*
+				{ 
 					*	(1st stage): logit SNAP participation on index
 					cap	drop	${endovar}_hat_nl
 					*xtlogit	${endovar}	${IV}	${RHS}	 if reg_sample==1, fe
@@ -515,9 +549,9 @@
 					
 					*	Automatic 2nd stage
 					ivreghdfe	${depvar}	${RHS}	(${endovar} = ${endovar}_hat_nl)	${reg_weight} if reg_sample==1, absorb(x11101ll)	cluster(x11101ll) 	first savefirst savefprefix(${Zname})
-					*/
+					
 				}
-				
+				*/
 				*	IV = SNAP index (conventional)
 					
 					*	Manual 1st stage (too see how many of obs have negative participation rate.)
@@ -527,7 +561,7 @@
 					summ	${endovar}_hat_l,d	//	Less than 5 %
 					
 					*	Manual 2nd stage
-					reghdfe	${endovar}	 ${endovar}_hat_l	${RHS}	${reg_weight} if reg_sample==1, absorb(x11101ll)	cluster(x11101ll) 
+					reghdfe	${depvar}	 ${endovar}_hat_l	${RHS}	${reg_weight} if reg_sample==1, absorb(x11101ll)	cluster(x11101ll) 
 					
 					*	Automatic
 					ivreghdfe	${depvar}	${RHS}	(${endovar} = SNAP_index_w)	${reg_weight} if reg_sample==1, absorb(x11101ll)	cluster(x11101ll) 	first savefirst savefprefix(${Zname})
@@ -563,15 +597,15 @@
 		
 		
 		*	1st stage
-		esttab	logit_SPI_biv	logit_SPI_ctrl	logit_SPI_timeFE	/* logit_SPI_mund */ logit_SPI_indFE	SPI_w_Dhat_biv_1st 	SPI_w_Dhat_ctrl_1st	SPI_w_Dhat_timeFE_1st	/* SPI_w_Dhat_mund_1st */	SPI_w_Dhat_indFE_1st using "${SNAP_outRaw}/PFS_1st.csv", ///
-					cells(b(star fmt(%8.3f)) se(fmt(2) par)) stats(N r2c mean_SNAP Controls YearFE IndFE	Fstat_CD	Fstat_KP, fmt(0 2) label("N" "R2" "Mean SNAP" "Controls" "Year FE" "Mundlak" "F-stat(CD)" "F-stat(KP)" )) ///
-					incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	keep(SNAP_index_w ${endovar}_hat)	///
+		esttab	/*  logit_SPI_biv	logit_SPI_ctrl	logit_SPI_timeFE	logit_SPI_mund logit_SPI_indFE */ 	SPI_w_Dhat_biv_1st 	SPI_w_Dhat_ctrl_1st	SPI_w_Dhat_timeFE_1st	/* SPI_w_Dhat_mund_1st */	SPI_w_Dhat_indFE_1st using "${SNAP_outRaw}/PFS_1st.csv", ///
+					cells(b(star fmt(%8.3f)) se(fmt(2) par)) stats(N r2c mean_SNAP Controls YearFE IndFE	Fstat_CD	Fstat_KP, fmt(0 2) label("N" "R2" "Mean SNAP" "Controls" "Year FE" "Individual FE" "F-stat(CD)" "F-stat(KP)" )) ///
+					incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	keep(SNAP_index_w /* ${endovar}_hat */)	///
 					title(PFS on FS dummy)		replace	
 					
-		esttab	logit_SPI_biv		/* logit_SPI_ctrl */		logit_SPI_timeFE		/* logit_SPI_mund */	logit_SPI_indFE	///
+		esttab	/* logit_SPI_biv */		/* logit_SPI_ctrl */		/* logit_SPI_timeFE	 */	/* logit_SPI_mund */	logit_SPI_indFE	///
 				SPI_w_Dhat_biv_1st 	/* SPI_w_Dhat_ctrl_1st */	SPI_w_Dhat_timeFE_1st	/* SPI_w_Dhat_mund_1st */	SPI_w_Dhat_indFE_1st			using "${SNAP_outRaw}/PFS_1st.tex", ///
-				cells(b(star fmt(%8.3f)) se(fmt(2) par)) stats(N mean_SNAP Controls YearFE IndFE	Fstat_KP, fmt(0 2) label("N" "Mean SNAP" "Controls" "Year FE" "Mundlak"  "F-stat(KP)" )) ///
-				incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	keep(SNAP_index_w ${endovar}_hat /*age_ind       ind_col*/)	///
+				cells(b(star fmt(%8.3f)) se(fmt(2) par)) stats(N mean_SNAP Controls YearFE IndFE	Fstat_KP, fmt(0 2) label("N" "Mean SNAP" "Controls" "Year FE" "Individual FE"  "F-stat(KP)" )) ///
+				incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	keep(SNAP_index_w /* ${endovar}_hat */ /*age_ind       ind_col*/)	///
 				title(SNAP on SPI)	note(Controls include RP’s characteristics (gender, age, age squared race, marital status, disability and college degree). Mundlak includes time-average of controls and year fixed effects. Estimates are adjusted with longitudinal individual survey weight provided in the PSID. Standard errors are clustered at individual-level.)	replace	
 
 				
