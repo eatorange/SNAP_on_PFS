@@ -10,17 +10,23 @@ ds	${depvar}	${RHS}
 		global	depvar		PFS_ppml	//		FIG_indiv		
 		
 		*	Running main model		
-		ivreghdfe	${depvar}	${RHS}		(${endovar} = SNAP_index_w)	${reg_weight} if reg_sample==1, ///
-				/*absorb(x11101ll)*/	cluster(x11101ll) absorb(x11101ll)		first savefirst savefprefix(${Zname})
+		ivreghdfe	${depvar}		${RHS}			(${endovar} = SNAP_index_w)			${reg_weight} if reg_sample==1, cluster(x11101ll) absorb(x11101ll)		first savefirst savefprefix(${Zname})	//	built-in FE
+		ivreghdfe	${depvar}_dm	${RHS_dm}		(${endovar}_dm = SNAP_index_w_dm)	${reg_weight} if reg_sample==1, cluster(x11101ll) 	first savefirst savefprefix(${Zname})	//	Within-transformation. Slightly differnt
 		
 		*	Manual 1st stage
 		cap	drop	SNAPhat
-		reghdfe		${endovar}	SNAP_index_w	${RHS}	${reg_weight} if reg_sample==1,	cluster(x11101ll) absorb(x11101ll)
-		predict	SNAPhat
+		reghdfe		${endovar}		SNAP_index_w	${RHS}		${reg_weight} if reg_sample==1,	cluster(x11101ll) absorb(x11101ll)	//	built-in FE
+		predict		SNAPhat
+		cap	drop	SNAPhat_dm
+		reg			${endovar}_dm	SNAP_index_w_dm	${RHS_dm}	${reg_weight} if reg_sample==1,	cluster(x11101ll)	//	within. Almost identical.
+		predict		SNAPhat_dm
 		
+	
 		*	Manual 2nd stage
-		reghdfe	${depvar}	SNAPhat	${RHS}	${reg_weight} if reg_sample==1,	cluster(x11101ll)	absorb(x11101ll)	//	PFS
-		reg		FIG_indiv	SNAPhat	${RHS}	${reg_weight} if reg_sample==1,	cluster(x11101ll)	absorb(x11101ll)	//	FIG
+		reghdfe	${depvar}		SNAPhat			${RHS}		${reg_weight} if reg_sample==1,	cluster(x11101ll)	absorb(x11101ll)	//	built-in FE
+		reg		${depvar}_dm	SNAPhat_dm	${RHS_dm}	${reg_weight} if reg_sample==1,	cluster(x11101ll)		//	Within, slightly different.
+		
+		*reg		FIG_indiv	SNAPhat	${RHS}	${reg_weight} if reg_sample==1,	cluster(x11101ll)	absorb(x11101ll)	//	FIG
 		
 		*	Quantile regressions		
 		*	"qrprocess": community-contribute program. Supports pweight and clustered standard error.
@@ -95,17 +101,17 @@ ds	${depvar}	${RHS}
 			 
 			
 			*	Quantile regression
-			ivreghdfe	${depvar}	${RHS}		(${endovar} = SNAP_index_w)	${reg_weight} if reg_sample==1, cluster(x11101ll) absorb(x11101ll)
-				
-			xtrifreg	${depvar}	SNAPhat	${RHS}	${reg_weight} if reg_sample==1
+						
+			qrprocess 	${depvar}_dm		SNAPhat_dm	${RHS_dm}	${reg_weight} if reg_sample==1,	 vce(, cluster(x11101ll)) 	q(0.05(0.05)0.9)	//	 5 percentile to 95 percentile (caution: takes time)
+			
 			
 			*qrprocess 	${depvar}		SNAPhat	${RHS}	${reg_weight} if reg_sample==1,	 vce(, cluster(x11101ll)) q(0.05(0.05)0.9)	// 5 percentile to 95 percentile (caution: takes time)
-			qrprocess 	${depvar}		SNAPhat	${RHS}	${reg_weight} if reg_sample==1,	 vce(, cluster(x11101ll)) q(0.05(0.05)0.2)	// 5 percentile to 20 percentile (caution: takes time)
+			*qrprocess 	${depvar}		SNAPhat	${RHS}	${reg_weight} if reg_sample==1,	 vce(, cluster(x11101ll)) q(0.05(0.05)0.2)	// 5 percentile to 20 percentile (caution: takes time)
 			est store qreg_PFS
 
 			esttab	  using "${SNAP_outRaw}/PFS_qreg.csv", ///
 			cells(b(star fmt(%8.3f)) se(fmt(2) par)) stats(N, fmt(0 2) label("N" )) ///
-			incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	keep(q*:SNAPhat)	///
+			incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	keep(q*:SNAPhat_dm)	///
 			title(PFS on FS dummy)		replace	
 			
 			*	Coefficient plot
@@ -114,13 +120,13 @@ ds	${depvar}	${RHS}
 				forval	i=1/18		{
 					loc	j=`i'*5
 					
-					global	coeflabel	${coeflabel}	q`i':SNAPhat = q`j'
+					global	coeflabel	${coeflabel}	q`i':SNAPhat_dm = q`j'
 					
 				}
 				di "${coeflabel}"
 			
 			//coefplot	qreg_PFS, keep(q1:SNAPhat q2:SNAPhat) vertical    noeqlabels /* nolabels */ 	coeflabels(${coeflabel}) title(SNAP effects by PFS percentile - 5 to 90 percentile)
-			coefplot	qreg_PFS, keep(q*:SNAPhat) vertical    noeqlabels /* nolabels */ 	coeflabels(${coeflabel}) title(SNAP effects by PFS percentile - 5 to 90 percentile)	///
+			coefplot	qreg_PFS, keep(q*:SNAPhat_dm) vertical    noeqlabels /* nolabels */ 	coeflabels(${coeflabel}) title(SNAP effects by PFS percentile - 5 to 90 percentile)	///
 				bgcolor(white)	graphregion(color(white)) 	name(PFS_qtile, replace)	
 			graph display PFS_qtile, ysize(4) xsize(9.0)
 			graph	export	"${SNAP_outRaw}/PFS_qtile_lowinc.png", as(png) replace
