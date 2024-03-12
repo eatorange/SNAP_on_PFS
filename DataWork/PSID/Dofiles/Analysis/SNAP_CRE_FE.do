@@ -14,17 +14,25 @@
 	
 	*	Time-average of controls and time dummies
 	global	Mundlak_vars	//	clear global
-	ds	${FSD_on_FS_X} ${timevars}
+	global	FSD_on_FS_X_dm	//	clear global
+	
+	ds	PFS_ppml	FSdummy	SNAP_index_w	${FSD_on_FS_X} ${timevars}
 	foreach	var	in	`r(varlist)'	{
 		cap	drop	`var'_bar
 		bys	x11101ll:	egen	`var'_bar	=	mean(`var') if reg_sample==1
 		global	Mundlak_vars	${Mundlak_vars}	`var'_bar
+		
+		cap	drop	`var'_dm
+		gen	`var'_dm	=	`var'	-	`var'_bar
+		
 	}
 	di	"${Mundlak_vars}"
 	cap	drop	SNAP_index_w_bar
 	bys	x11101ll:	egen	SNAP_index_w_bar	=	mean(SNAP_index_w) if reg_sample==1	//	Time-average of ${endovar}_hat_bar
 				
-	
+	global	FSD_on_FS_X_dm	rp_female_dm rp_age_dm rp_age_sq_dm rp_nonWhte_dm rp_married_dm rp_disabled_dm rp_col_dm
+	global	timevars_dm		year_enum20_dm year_enum21_dm year_enum22_dm year_enum23_dm year_enum24_dm year_enum25_dm year_enum26_dm year_enum27_dm	
+	global	RHS_dm			${FSD_on_FS_X_dm}	${timevars_dm}
 	
 	*	First-difference estimator
 	global	d_FSD_on_FS_X
@@ -126,6 +134,8 @@
 		*	First-difference regression
 				global	d_timevars	year_enum21-year_enum27
 		
+			*	OLS
+		
 				*	Bivariate
 				reg	d_PFS_ppml	d_FSdummy
 				
@@ -135,20 +145,36 @@
 				*	Time FE
 				reg	d_PFS_ppml	d_FSdummy	${d_FSD_on_FS_X}	${d_timevars}	if reg_sample==1, 	cluster (x11101ll)		
 				
+				*	Weight
+				reg	d_PFS_ppml	d_FSdummy	${d_FSD_on_FS_X}	${d_timevars}	${reg_weight} 	if reg_sample==1, 	cluster (x11101ll)		
 				
 				
-				${d_timevars}
+			*	IV
+				
+				*	Manual first stage
+				reg	d_FSdummy	d_SNAP_index_w	${d_FSD_on_FS_X}	${d_timevars}	if reg_sample==1, 	cluster(x11101ll)		
+				
+				
+				*	IV regression
+				ivreg	d_PFS_ppml	${d_FSD_on_FS_X}	${d_timevars}	(d_FSdummy = d_SNAP_index_w)	if reg_sample==1, 	cluster (x11101ll)		
+				
+		
+		*	Within-transformation
+		
+				*	Show that it is almost identical to fixed effects (theoretically the same)				
+				reghdfe	PFS_ppml	FSdummy		${RHS}		${reg_weight} 	if reg_sample==1, absorb(x11101ll)
+				reg		PFS_ppml_dm	FSdummy_dm	${RHS_dm}	${reg_weight}	if reg_sample==1
+
+				
+				*	Manual 1st-stage (mostly the same)
+				reghdfe	FSdummy		SNAP_index_w	${RHS}		${reg_weight}	if reg_sample==1, absorb(x11101ll) cluster(x11101ll)
+				reg		FSdummy_dm	SNAP_index_w_dm	${RHS_dm}	${reg_weight}	if reg_sample==1, cluster(x11101ll)
 			
-			
-					
-			
-	
-				reghdfe		PFS_ppml	temp2	${RHS}			${reg_weight} if reg_sample==1, absorb(x11101ll)	cluster (x11101ll)	
 				
-				
-				ivfprobit	PFS_ppml	${RHS}		(${endovar} = FSdummy_hat3)	${reg_weight} if reg_sample==1,	vce (cluster x11101ll)	
-	
-	
+				*	IV
+				ivreghdfe	PFS_ppml	${RHS} 		(FSdummy = SNAP_index_w)	${reg_weight} if reg_sample==1, 	absorb(x11101ll)	cluster (x11101ll)	first	
+				ivreg2		PFS_ppml_dm	${RHS_dm} 	(FSdummy_dm = SNAP_index_w_dm)	${reg_weight} if reg_sample==1, 	first cluster (x11101ll)	
+		
 	
 	
 	
