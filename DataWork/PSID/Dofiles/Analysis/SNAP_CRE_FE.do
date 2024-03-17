@@ -105,6 +105,7 @@
 				predict	FSdummy_hat3
 				
 				*	FE. Coeffcient and SE almost identical
+				cap	drop	temp2
 				reghdfe	${endovar}	${IV}	${RHS}	 ${reg_weight}	if reg_sample==1, absorb(x11101ll)	vce(cluster x11101ll) 
 				predict temp2
 				
@@ -177,7 +178,13 @@
 		
 	
 	
-	
+				*	IVfprobit
+					
+					*	Without individual FE
+					ivfprobit	PFS_ppml	${RHS} 	(FSdummy = SNAP_index_w)	${reg_weight} if reg_sample==1, 	first	vce(cluster x11101ll)	//	without individual FE
+					
+					*	With individual FE (doesn't work, as many observations have their de-meaned outcome variables outside [0,1], so can't be executed)
+					ivfprobit	PFS_ppml_dm	${RHS_dm} 	(FSdummy_dm = SNAP_index_w_dm)	${reg_weight} if reg_sample==1, 	first	vce(cluster x11101ll)	
 	
 	
 	
