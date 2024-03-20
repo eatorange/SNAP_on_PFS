@@ -51,7 +51,7 @@
 	global	Zname	${IVname}_Dhat
 	
 	*	Specification for sample
-	local	income_below130=0
+	local	income_below130=1
 	
 	if	`income_below130'==1	{
 		
@@ -856,6 +856,26 @@
 			*	Heterogeneous effects
 			global	RHS	${FSD_on_FS_X}	${timevars}	//${Mundlak_vars}
 			
+				*	Set quantile
+				cap	drop	PFS_pct
+				xtile PFS_pct = PFS_ppml	${reg_weight} if reg_sample==1, nq(10)
+				replace	PFS_pct = PFS_pct * 10
+				forval	i=1/10	{
+					
+					local	j=`i'*10
+					local	k=(`i'-1)*10
+					di "i is `i', j is `j', k is `k'"
+					*lab	define	PFS_pct	`j'	"`k'th to `j'th", add modify
+					lab	define	PFS_pct	`j'	"q`j'", add modify
+					
+				}
+				lab	list PFS_pct
+				lab	val	PFS_pct	PFS_pct
+				lab	var	PFS_pct	"PFS percentile"
+				
+				
+				
+			
 				*	Has a child
 				loc	var	rp_haschild
 				cap	drop	`var'
@@ -912,9 +932,31 @@
 				lab	var	SPI_haschild	"SPI x Has Child (RP)"
 				
 		
+		
+		
+		
+		
 				*	Run regression for each heterogenous category
 					
-					*	Female	
+					*	First stage only
+					reghdfe	FSdummy	SNAP_index_w	c.SNAP_index_w#ib50.PFS_pct	${RHS}		${reg_weight}	if reg_sample==1,		absorb(x11101ll)	cluster(x11101ll)
+					est	store	stage1_qt
+					
+					*	Coefficient plot
+						*	Coef lable
+						global	coeflabel	//	Nul
+						forval	i=1/10		{
+							loc	j=`i'*10
+							
+							global	coeflabel	${coeflabel}	`j'.PFS_pct#c.SNAP_index_w = q`j'
+							
+						}
+					di "${coeflabel}"
+					
+					coefplot	stage1_qt, keep(*.PFS_pct#c.SNAP_index_w) vertical    noeqlabels  /*nolabels*/ 	coeflabels(${coeflabel}) title(SNAP on SPI by PFS percentile - 10 to 90 percentile)	///
+					bgcolor(white)	graphregion(color(white)) 	name(stage1_qt, replace) note("50th percentile (q50) is omitted as a base category")
+				
+				*	Female	
 					/*cap drop	SNAPhat_f
 					
 					cap	drop	SPI_f
@@ -940,7 +982,20 @@
 						estadd	local	Fstat_KP	=	`Fstat_KP'
 						summ	PFS_ppml	${sum_weight} if reg_sample==1
 						estadd	scalar	mean_PFS	=	 r(mean)
-						est	store	hetero_2nd_female
+						est	store	hetero_2nd_female_${samplename}
+						
+							*	1st stage (Y is FSdummy)
+							est	restore	femaleFSdummy
+							estadd	local	Controls	"Y"
+							estadd	local	YearFE		"Y"
+							estadd	local	Mundlak		"N"
+							estadd	local	IndFE		"Y"
+							estadd	scalar	Fstat_CD	=	Fstat_CD_${Zname}, replace
+							estadd	scalar	Fstat_KP	=	Fstat_KP_${Zname}, replace
+							*summ	${endovar}	${sum_weight}	if	e(sample)==1	//	Somehow this is not working here....
+							*estadd	scalar	mean_SNAP	=	 `mean_SNAP'
+							est	store	hetero_1st_female_${samplename}
+							*est	drop	${Zname}${endovar}
 						
 	
 					*	NoHS	
@@ -953,7 +1008,19 @@
 						estadd	local	Fstat_KP	=	`Fstat_KP'
 						summ	PFS_ppml	${sum_weight}	if reg_sample==1
 						estadd	scalar	mean_PFS	=	 r(mean)
-						est	store	hetero_2nd_NoHS
+						est	store	hetero_2nd_NoHS_${samplename}
+						
+							*	1st stage (Y is FSdummy)
+							est	restore	NoHSFSdummy
+							estadd	local	Controls	"Y"
+							estadd	local	YearFE		"Y"
+							estadd	local	Mundlak		"N"
+							estadd	local	IndFE		"Y"
+							estadd	scalar	Fstat_CD	=	Fstat_CD_${Zname}, replace
+							estadd	scalar	Fstat_KP	=	Fstat_KP_${Zname}, replace
+							*summ	${endovar}	${sum_weight}	if	e(sample)==1	//	Somehow this is not working here....
+							*estadd	scalar	mean_SNAP	=	 `mean_SNAP'
+							est	store	hetero_1st_NoHS_${samplename}
 					
 					*	NonWhte	
 						ivreghdfe	PFS_ppml	${RHS}	 	(FSdummy SNAP_nonWhte	= SNAP_index_w	SPI_nonWhte)	${reg_weight} 	if reg_sample==1, ///
@@ -965,8 +1032,21 @@
 						estadd	local	Fstat_KP	=	`Fstat_KP'
 						summ	PFS_ppml	${sum_weight} if reg_sample==1
 						estadd	scalar	mean_PFS	=	 r(mean)
-						est	store	hetero_2nd_nonWhte
+						est	store	hetero_2nd_nonWhte_${samplename}
 						
+							*	1st stage (Y is FSdummy)
+							est	restore	nonWhteFSdummy
+							estadd	local	Controls	"Y"
+							estadd	local	YearFE		"Y"
+							estadd	local	Mundlak		"N"
+							estadd	local	IndFE		"Y"
+							estadd	scalar	Fstat_CD	=	Fstat_CD_${Zname}, replace
+							estadd	scalar	Fstat_KP	=	Fstat_KP_${Zname}, replace
+							*summ	${endovar}	${sum_weight}	if	e(sample)==1	//	Somehow this is not working here....
+							*estadd	scalar	mean_SNAP	=	 `mean_SNAP'
+							est	store	hetero_1st_nonWhte_${samplename}
+					
+					/*
 					*	Disabled	
 						ivreghdfe	PFS_ppml	${RHS}	 	(FSdummy SNAP_disabled	= SNAP_index_w	SPI_disabled)	${reg_weight} 	if reg_sample==1, ///
 							absorb(x11101ll)	cluster(x11101ll)	first savefirst savefprefix(disab)	// partial(*_bar9713)
@@ -990,18 +1070,35 @@
 						summ	PFS_ppml	${sum_weight} if reg_sample==1
 						estadd	scalar	mean_PFS	=	 r(mean)
 						est	store	hetero_2nd_haschild
-						
-					*	Export
-					esttab	hetero_2nd_female 	hetero_2nd_NoHS  	hetero_2nd_nonWhte	hetero_2nd_disab	hetero_2nd_haschild	using "${SNAP_outRaw}/PFS_on_SNAP_hetero.csv", ///
-					cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2c mean_PFS /* Controls YearFE Mundlak*/ Fstat_KP , fmt(0 2) label("N" "R$^2$" "Mean PFS" /* "Controls" "Year FE" "Mundlak" */ "F-stat(KP)"))	///
-					incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	keep(FSdummy SNAP_female	SNAP_NoHS	SNAP_nonWhte	SNAP_disabled SNAP_haschild) ///
-					title(PFS on FS dummy hetero)		replace	
+					*/
 					
-					esttab	hetero_2nd_female 	hetero_2nd_NoHS  	hetero_2nd_nonWhte	hetero_2nd_disab		using "${SNAP_outRaw}/PFS_on_SNAP_hetero.tex", ///
-					cells(b(star fmt(%8.3f)) se(fmt(2) par)) stats(N r2c mean_PFS /* Controls YearFE Mundlak  */ Fstat_KP, fmt(0 2) label("N" "R$^2$" "Mean PFS" /* "Controls" "Year FE" "Mundlak" */ "F-stat(KP)"))	///
-					incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	keep(FSdummy SNAP_female	SNAP_NoHS	SNAP_nonWhte	SNAP_disabled) ///
-					title(PFS on SNAP - heterogeneous effects)	note(Note: Controls (RP's gender, age, age squared race, marital status, disability college degree), year FE and Mundlak controls are included in all specifications. Estimates are adjusted with longitudinal individual survey weight provided in the PSID. Standard errors are clustered at individual-level.)	replace	
-			
+					
+					*	Export
+						
+						*	1st stage
+						esttab	hetero_1st_female_full 	hetero_1st_NoHS_full  	hetero_1st_nonWhte_full	hetero_1st_female_lnc 	hetero_1st_NoHS_lnc  	hetero_1st_nonWhte_lnc	using "${SNAP_outRaw}/SNAP_on_SPI_hetero.csv", ///
+						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2c mean_PFS /* Controls YearFE Mundlak*/ Fstat_KP , fmt(0 2) label("N" "R$^2$" "Mean PFS" /* "Controls" "Year FE" "Mundlak" */ "F-stat(KP)"))	///
+						incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	keep(SNAP_index_w SPI_female	SPI_NoHS	SPI_nonWhte	) ///
+						title(SNAP on  SPI hetero)		replace	
+						
+						
+						esttab	hetero_1st_female_full 	hetero_1st_NoHS_full  	hetero_1st_nonWhte_full	hetero_1st_female_lnc 	hetero_1st_NoHS_lnc  	hetero_1st_nonWhte_lnc		using "${SNAP_outRaw}/SNAP_on_SPI_hetero.tex", ///
+						cells(b(star fmt(%8.3f)) se(fmt(2) par)) stats(N  /*r2c mean_PFS Controls YearFE Mundlak  Fstat_KP */, fmt(0 2) label("N" "R$^2$" "Mean PFS" /* "Controls" "Year FE" "Mundlak" */ "F-stat(KP)"))	///
+						incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	keep(SNAP_index_w SPI_female	SPI_NoHS	SPI_nonWhte	) ///
+						title(PFS on SNAP - heterogeneous effects)	note(Note: Controls (RP's gender, age, age squared race, marital status, disability college degree), year FE and individual FE are included in all specifications. Estimates are adjusted with longitudinal individual survey weight provided in the PSID. Standard errors are clustered at individual-level.)	replace	
+				
+						
+						*	2nd stage
+						esttab	hetero_2nd_female 	hetero_2nd_NoHS  	hetero_2nd_nonWhte	/*hetero_2nd_disab	hetero_2nd_haschild*/	using "${SNAP_outRaw}/PFS_on_SNAP_hetero.csv", ///
+						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2c mean_PFS /* Controls YearFE Mundlak*/ Fstat_KP , fmt(0 2) label("N" "R$^2$" "Mean PFS" /* "Controls" "Year FE" "Mundlak" */ "F-stat(KP)"))	///
+						incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	keep(FSdummy SNAP_female	SNAP_NoHS	SNAP_nonWhte	) ///
+						title(PFS on FS dummy hetero)		replace	
+						
+						esttab	hetero_2nd_female 	hetero_2nd_NoHS  	hetero_2nd_nonWhte	/*hetero_2nd_disab	hetero_2nd_haschild*/		using "${SNAP_outRaw}/PFS_on_SNAP_hetero.tex", ///
+						cells(b(star fmt(%8.3f)) se(fmt(2) par)) stats(N r2c mean_PFS /* Controls YearFE Mundlak  */ Fstat_KP, fmt(0 2) label("N" "R$^2$" "Mean PFS" /* "Controls" "Year FE" "Mundlak" */ "F-stat(KP)"))	///
+						incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	keep(FSdummy SNAP_female	SNAP_NoHS	SNAP_nonWhte	) ///
+						title(PFS on SNAP - heterogeneous effects)	note(Note: Controls (RP's gender, age, age squared race, marital status, disability college degree), year FE and Mundlak controls are included in all specifications. Estimates are adjusted with longitudinal individual survey weight provided in the PSID. Standard errors are clustered at individual-level.)	replace	
+				
 			
 			
 		*	Dynamics
