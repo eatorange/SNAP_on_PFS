@@ -345,7 +345,7 @@
 		*	(2023-1-18) This one needs to be re-visited, considering what regression method we will use (svy prefix, weight, fixed effects, etc.)
 		*	(2023-8-20) Re-visited. Make sure to do this regression on the final sapmle (non-missing PFS, income ever below 200, balaned b/w 9713, etc). I set the default counter as zero to run manually, until it is moved to other dofile.
 		*use    "${SNAP_dtInt}/SNAP_long_PFS",	clear	
-		local	run_PFS_reg=0
+		local	run_PFS_reg=1
 		if	`run_PFS_reg'==1	{
 			
 			
@@ -353,7 +353,7 @@
 			*	No SNAP status, state and year FE, all sapmle
 			local	depvar	PFS_ppml_noCOLI
 			svy, subpop(if !mi(`depvar')):	///
-				reg	`depvar'	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	${regionvars}	${timevars}
+				reg	`depvar'	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	${regionvars}	${timevars} 
 			est	store	PFS_noSNAP_all	
 			estadd	local	state_year_FE	"Y"
 			svy, subpop(if !mi(`depvar')):	mean	PFS_ppml		//	Need to think about how to add this usign "estadd"....
@@ -361,12 +361,19 @@
 			*	reg	`depvar'	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars} [aweight=wgt_long_fam_adj]	//	Coefficients are sampe, but different Sterror.
 			
 			*	SNAP status, state and year FE, all sapmle
+			local	depvar	PFS_ppml_noCOLI
 			svy, subpop(if !mi(PFS_ppml_noCOLI)):	///
-				reg	`depvar'	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	${regionvars}	${timevars}	FS_rec_wth	
+				reg	`depvar'	${demovars}	${econvars}	${empvars}	${healthvars}	${familyvars}	${eduvars}	${regionvars}	${timevars} FS_rec_wth	
 			est	store	PFS_SNAP_all	
 			estadd	local	state_year_FE	"Y"
 			svy, subpop(if !mi(`depvar')):	mean	PFS_ppml	//	Need to think about how to add this usign "estadd"....
 			
+			
+			*	(2024-3-12) If you are looking for regression of PFS on X, go to "SNAP_ivreg.do" and find "Regression of PFS on Hh characteristics.", around line 240...
+			
+			
+			
+			* (2024-3-21) I am not getting the
 			/*
 			*	No SNAP status, state and year FE, 97-13 balanced sample
 			svy, subpop(if !mi(PFS_ppml)	&	balanced_9713==1):	///

@@ -330,6 +330,17 @@
 				est	store PFS_X_inc130_wgt_iFE
 			
 			
+			*	Weighted
+			esttab	PFS_X_all_wgt_noiFE		PFS_X_all_wgt_iFE	PFS_X_inc130_wgt_noiFE		PFS_X_inc130_wgt_iFE	using "${SNAP_outRaw}/Tab_3_PFS_association_w.csv", ///
+					cells(b(star fmt(3)) se(fmt(2) par)) stats(N r2 meanPFS ind_FE wgt, label("N" "R$^2$" "Mean PFS" "Individual FE" "Weighted")) label legend nobaselevels star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state*	year_enum*)*/	///
+					title(PFS and household covariates) replace
+	
+			esttab	PFS_X_all_wgt_noiFE		PFS_X_all_wgt_iFE	PFS_X_inc130_wgt_noiFE		PFS_X_inc130_wgt_iFE	using "${SNAP_outRaw}/Tab_3_PFS_association_w.tex", ///
+					cells(b(star fmt(3)) se(fmt(2) par)) stats(N r2 meanPFS ind_FE wgt, fmt(%8.0fc %8.2fc) label("N" "R$^2$" "Mean PFS" "Individual FE" "Weighted")) ///
+					incelldelimiter() label legend nobaselevels star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state*	year_enum*)*/	replace		
+				
+			
+			
 			*	Unweighted
 			esttab	PFS_X_all_nowgt_noiFE		PFS_X_all_nowgt_iFE	PFS_X_inc130_nowgt_noiFE		PFS_X_inc130_nowgt_iFE	using "${SNAP_outRaw}/Tab_3_PFS_association_uw.csv", ///
 					cells(b(star fmt(3)) se(fmt(2) par)) stats(N r2 meanPFS ind_FE wgt, label("N" "R$^2$" "Mean PFS" "Individual FE" "Weighted")) label legend nobaselevels star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state*	year_enum*)*/	///
@@ -1972,15 +1983,15 @@
 			*	Density Estimate of Food Security Indicator (Figure A1)
 				
 				*	ALL households
-				graph twoway 		(kdensity HFSM_rescale	[aw=wgt_long_fam_adj]	if	!mi(HFSM_rescale)	&	!mi(PFS_ppml) & inrange(year,1977,2015))	///
-									(kdensity PFS_ppml		[aw=wgt_long_fam_adj]	if	!mi(HFSM_rescale)	&	!mi(PFS_ppml) & inrange(year,1977,2015)),	///
+				graph twoway 		(kdensity FSSS_rescale	[aw=wgt_long_fam_adj]	if	!mi(FSSS_rescale)	&	!mi(PFS_ppml) & inrange(year,1977,2015))	///
+									(kdensity PFS_ppml		[aw=wgt_long_fam_adj]	if	!mi(FSSS_rescale)	&	!mi(PFS_ppml) & inrange(year,1977,2015)),	///
 									/*title (Density Estimates of the USDA scale and the PFS)*/	xtitle(Scale) ytitle(Density)	 ylabel(0(3)21)	///
 									name(FSSS_PFS, replace) graphregion(color(white)) bgcolor(white) title(All)		///
 									legend(lab (1 "FSSS (rescaled)") lab(2 "PFS") rows(1))					
 					
 				*	Income below 200% & until 2015 (study sample)
-				graph twoway 		(kdensity HFSM_rescale	[aw=wgt_long_fam_adj]	if	!mi(HFSM_rescale)	&	!mi(PFS_ppml) & income_below_200==1 & inrange(year,1977,2015))	///
-									(kdensity PFS_ppml		[aw=wgt_long_fam_adj]	if	!mi(HFSM_rescale)	&	!mi(PFS_ppml) & income_below_200==1 & inrange(year,1977,2015)),	///
+				graph twoway 		(kdensity FSSS_rescale	[aw=wgt_long_fam_adj]	if	!mi(FSSS_rescale)	&	!mi(PFS_ppml) & income_below_200==1 & inrange(year,1977,2015))	///
+									(kdensity PFS_ppml		[aw=wgt_long_fam_adj]	if	!mi(FSSS_rescale)	&	!mi(PFS_ppml) & income_below_200==1 & inrange(year,1977,2015)),	///
 									/*title (Density Estimates of the USDA scale and the PFS)*/	xtitle(Scale) ytitle(Density)  ylabel(0(3)21)		///
 									name(FSSS_PFS_below200, replace) graphregion(color(white)) bgcolor(white) title(Income below 200%)		///
 									legend(lab (1 "FSSS (rescaled)") lab(2 "PFS") rows(1))	
@@ -1994,7 +2005,7 @@
 								(kdensity PFS_ppml	[aw=wgt_long_fam_adj]	if	!mi(PFS_ppml) & inrange(year,1977,2015) & income_below_200==1 & ind_female==1, bwidth(0.05) ),	///
 								/*title (Density Estimates of the USDA scale and the PFS)*/	xtitle(PFS) ytitle(Density)		///
 								name(PFS_ind_gender, replace) graphregion(color(white)) bgcolor(white)	title(by Gender)	///
-								legend(lab (1 "Male") lab(2 "Female") rows(1))	
+								legend(lab (1 "Male") lab(2 "Female") rows(1) pos(6))	
 								
 								
 			*	PFS by race
@@ -2002,7 +2013,7 @@
 								(kdensity PFS_ppml	[aw=wgt_long_fam_adj]	if	inrange(year,1977,2015) & rp_nonWhte==1, bwidth(0.05) ),	///
 								/*title (Density Estimates of the USDA scale and the PFS)*/	xtitle(PFS) ytitle(Density)		///
 								name(PFS_rp_race, replace) graphregion(color(white)) bgcolor(white) title(by Race)		///
-								legend(lab (1 "White") lab(2 "non-White") rows(1))	
+								legend(lab (1 "White") lab(2 "non-White") rows(1) pos(6))	
 			
 			graph	combine	PFS_ind_gender	PFS_rp_race, graphregion(color(white) fcolor(white)) 
 			graph	export	"${SNAP_outRaw}/PFS_kdensities.png", replace
@@ -2135,7 +2146,7 @@
 				label var	`var'_uniq	"# of cumulative FS used"
 				
 				*	Reason for non-participation (1977,1980,1981,1987)
-				svy, subpop(if !mi(PFS_ppml)):	tab reason_no_FSP
+				*svy, subpop(if !mi(PFS_ppml)):	tab reason_no_FSP
 				
 				*	Create temporary variable for summary table (will be integrated into "clean" part)
 				cap	drop	fam_income_month_pc_real
@@ -2161,31 +2172,31 @@
 				local	rpvars	rp_female	rp_age	rp_White	rp_married	rp_NoHS rp_HS rp_somecol rp_col		rp_employed rp_disabled
 				local	famvars	famnum	ratio_child		fam_income_month_pc_real	foodexp_tot_inclFS_pc_real		
 				local	FSvars	FS_rec_wth	FS_rec_amt_real
-				local	IVs		SNAP_index_w	citi6016	inst6017_nom
-				local	FSDvars	PFS_ppml	//SL_5	TFI_HCR	CFI_HCR	TFI_FIG	CFI_FIG	TFI_SFIG	CFI_SFIG	
+				local	IVs		SNAP_index_uw	SNAP_index_w // citi6016	inst6017_nom
+				local	FSDvars	PFS_ppml PFS_FI_ppml	//SL_5	TFI_HCR	CFI_HCR	TFI_FIG	CFI_FIG	TFI_SFIG	CFI_SFIG	
 				
 				//estpost summ	`indvars'	[aw=wgt_long_fam_adj]	if	!mi(PFS_ppml)	//	all sample
 				//estpost summ	`indvars'	[aw=wgt_long_fam_adj]	if	!mi(PFS_ppml)	&	balanced_9713==1	&	income_ever_below_200_9713==1	/*  num_waves_in_FU_uniq>=2	 &*/	  // Temporary condition. Need to think proper condition.
 				
 				local	summvars	/*`indvars'*/	`rpvars'	`famvars'	`FSvars'	`IVs'	`FSDvars'
 	
-				estpost tabstat	`summvars'	 if	!mi(PFS_ppml)	[aw=wgt_long_fam_adj],	statistics(count	mean	sd	min	max) columns(statistics)		// save
+				estpost tabstat	`summvars'	 if	!mi(PFS_ppml)	[aw=wgt_long_ind],	statistics(count	mean	sd	min	max) columns(statistics)		// save
 				est	store	sumstat_all
-				estpost tabstat	`summvars' 	if	!mi(PFS_ppml)	&	/* balanced_9713==1	& */	income_ever_below_200_9713==1	[aw=wgt_long_fam_adj],	statistics(count	mean	sd	min	max) columns(statistics)	// save
-				est	store	sumstat_9713
+				estpost tabstat	`summvars' 	if	!mi(PFS_ppml)	&	/* balanced_9713==1	& */	income_ever_below_130_9713==1	[aw=wgt_long_ind],	statistics(count	mean	sd	min	max) columns(statistics)	// save
+				est	store	sumstat_lowinc
 				
 					*	FS amount per capita in real dollars (only those used)
 					estpost tabstat	 FS_rec_amt_capita	if in_sample==1	&	!mi(PFS_ppml)	&	income_below_200==1	& FS_rec_wth==1 [aw=wgt_long_fam_adj],	statistics(mean	sd	min	max) columns(statistics)	// save
 				
 			
 				
-				esttab	sumstat_all	sumstat_9713	using	"${SNAP_outRaw}/Tab_1_Sumstats.csv",  ///
+				esttab	sumstat_all	sumstat_lowinc	using	"${SNAP_outRaw}/Tab_1_Sumstats.csv",  ///
 					cells("count(fmt(%12.0f)) mean(fmt(%12.2f)) sd(fmt(%12.2f)) min(fmt(%12.2f)) max(fmt(%12.2f))") label	title("Summary Statistics") noobs 	  replace
 									
-				esttab	sumstat_all	sumstat_9713	using	"${SNAP_outRaw}/Tab_1_Sumstats.tex",  ///
+				esttab	sumstat_all	sumstat_lowinc	using	"${SNAP_outRaw}/Tab_1_Sumstats.tex",  ///
 					cells("count(fmt(%12.0f)) mean(fmt(%12.2f)) sd(fmt(%12.2f))") label	title("Summary Statistics") noobs 	  replace
 					
-				esttab	sumstat_9713	using	"${SNAP_outRaw}/Tab_1_Sumstats_lowinc.tex",  ///
+				esttab	sumstat_lowinc	using	"${SNAP_outRaw}/Tab_1_Sumstats_lowinc.tex",  ///
 					cells("mean(fmt(%12.2f)) sd(fmt(%12.2f)) min(fmt(%12.2f)) max(fmt(%12.2f))") label	title("Summary Statistics") noobs 	  replace	
 					
 				

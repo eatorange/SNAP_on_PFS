@@ -51,7 +51,7 @@
 	global	Zname	${IVname}_Dhat
 	
 	*	Specification for sample
-	local	income_below130=1
+	local	income_below130=0
 	
 	if	`income_below130'==1	{
 		
@@ -634,8 +634,8 @@
 					cap	drop ${endovar}_hat_l
 					reghdfe	${endovar}	 SNAP_index_w	${RHS}	${reg_weight} if reg_sample==1, absorb(x11101ll)	cluster(x11101ll) 
 					predict ${endovar}_hat_l	
-					
-					
+				
+						
 					summ	${endovar}_hat_l	${sum_weight}	if reg_sample==1, d
 					loc	var	SNAPhat_no0to1
 					cap	drop	`var'
@@ -644,6 +644,18 @@
 					tab	`var' ${sum_weight}	//	About 6% for total sample, 3\% of low-income population.
 					
 					drop	`var'
+					
+						*	Plotting predicted value of SNAP-hat of (1) non-linear logit (i) Linear.
+						graph	twoway	(kdensity	FSdummy_hat_l)	(kdensity	FSdummy_hat_nl)
+						
+						twoway	(kdensity FSdummy_hat_l, lc(green) lp(solid) lwidth(medium) graphregion(fcolor(white)) legend(label(1 "OLS")))	///
+								(kdensity FSdummy_hat_nl, lc(purple) lp(dash) lwidth(medium) graphregion(fcolor(white)) legend(label(2 "MLE (logit)") row(1) size(small) keygap(0.1) pos(6) symxsize(5))),	///
+								title("Predicted SNAP Participation",	color(black) size(medium)) ytitle("Density") xtitle("Probability") name(SNAP_hat_ols_MLE, replace)
+						
+						graph	export	"${SNAP_outRaw}/SNAP_hat_ols_MLE.png", as(png) replace
+						graph	close
+						
+						
 					
 					*	Manual 2nd stage
 					reghdfe	${depvar}	 ${endovar}_hat_l	${RHS}	${reg_weight} if reg_sample==1, absorb(x11101ll)	cluster(x11101ll) 
@@ -955,7 +967,9 @@
 					
 					coefplot	stage1_qt, keep(*.PFS_pct#c.SNAP_index_w) vertical    noeqlabels  /*nolabels*/ 	coeflabels(${coeflabel}) title(SNAP on SPI by PFS percentile - 10 to 90 percentile)	///
 					bgcolor(white)	graphregion(color(white)) 	name(stage1_qt, replace) note("50th percentile (q50) is omitted as a base category")
-				
+					
+					graph	export	 "${SNAP_outRaw}/SNAP_by_qtile.png", as(png) replace
+					
 				*	Female	
 					/*cap drop	SNAPhat_f
 					
@@ -978,7 +992,7 @@
 						estadd	local	Controls	"Y"
 						estadd	local	YearFE		"Y"
 						estadd	local	Mundlak		"Y"
-						local	Fstat_KP: di % 9.2f e(widstat)
+						local	Fstat_KP: di % 9.2f e(rkf)
 						estadd	local	Fstat_KP	=	`Fstat_KP'
 						summ	PFS_ppml	${sum_weight} if reg_sample==1
 						estadd	scalar	mean_PFS	=	 r(mean)
@@ -991,7 +1005,7 @@
 							estadd	local	Mundlak		"N"
 							estadd	local	IndFE		"Y"
 							estadd	scalar	Fstat_CD	=	Fstat_CD_${Zname}, replace
-							estadd	scalar	Fstat_KP	=	Fstat_KP_${Zname}, replace
+							estadd	scalar	Fstat_KP	=	`Fstat_KP', replace
 							*summ	${endovar}	${sum_weight}	if	e(sample)==1	//	Somehow this is not working here....
 							*estadd	scalar	mean_SNAP	=	 `mean_SNAP'
 							est	store	hetero_1st_female_${samplename}
@@ -1004,7 +1018,7 @@
 						estadd	local	Controls	"Y"
 						estadd	local	YearFE		"Y"
 						estadd	local	Mundlak		"Y"
-						local	Fstat_KP: di % 9.2f e(widstat)
+						local	Fstat_KP: di % 9.2f e(rkf)
 						estadd	local	Fstat_KP	=	`Fstat_KP'
 						summ	PFS_ppml	${sum_weight}	if reg_sample==1
 						estadd	scalar	mean_PFS	=	 r(mean)
@@ -1017,7 +1031,7 @@
 							estadd	local	Mundlak		"N"
 							estadd	local	IndFE		"Y"
 							estadd	scalar	Fstat_CD	=	Fstat_CD_${Zname}, replace
-							estadd	scalar	Fstat_KP	=	Fstat_KP_${Zname}, replace
+							estadd	scalar	Fstat_KP	=	`Fstat_KP', replace
 							*summ	${endovar}	${sum_weight}	if	e(sample)==1	//	Somehow this is not working here....
 							*estadd	scalar	mean_SNAP	=	 `mean_SNAP'
 							est	store	hetero_1st_NoHS_${samplename}
@@ -1028,7 +1042,7 @@
 						estadd	local	Controls	"Y"
 						estadd	local	YearFE		"Y"
 						estadd	local	Mundlak		"Y"
-						local	Fstat_KP: di % 9.2f e(widstat)
+						local	Fstat_KP: di % 9.2f e(rkf)
 						estadd	local	Fstat_KP	=	`Fstat_KP'
 						summ	PFS_ppml	${sum_weight} if reg_sample==1
 						estadd	scalar	mean_PFS	=	 r(mean)
@@ -1041,7 +1055,7 @@
 							estadd	local	Mundlak		"N"
 							estadd	local	IndFE		"Y"
 							estadd	scalar	Fstat_CD	=	Fstat_CD_${Zname}, replace
-							estadd	scalar	Fstat_KP	=	Fstat_KP_${Zname}, replace
+							estadd	scalar	Fstat_KP	=	`Fstat_KP', replace
 							*summ	${endovar}	${sum_weight}	if	e(sample)==1	//	Somehow this is not working here....
 							*estadd	scalar	mean_SNAP	=	 `mean_SNAP'
 							est	store	hetero_1st_nonWhte_${samplename}
@@ -1083,7 +1097,7 @@
 						
 						
 						esttab	hetero_1st_female_full 	hetero_1st_NoHS_full  	hetero_1st_nonWhte_full	hetero_1st_female_lnc 	hetero_1st_NoHS_lnc  	hetero_1st_nonWhte_lnc		using "${SNAP_outRaw}/SNAP_on_SPI_hetero.tex", ///
-						cells(b(star fmt(%8.3f)) se(fmt(2) par)) stats(N  /*r2c mean_PFS Controls YearFE Mundlak  Fstat_KP */, fmt(0 2) label("N" "R$^2$" "Mean PFS" /* "Controls" "Year FE" "Mundlak" */ "F-stat(KP)"))	///
+						cells(b(star fmt(%8.3f)) se(fmt(2) par)) stats(N Fstat_KP  /*r2c mean_PFS Controls YearFE Mundlak*/  , fmt(0 2) label("N"  "F-stat(KP)" "R$^2$" "Mean PFS" /* "Controls" "Year FE" "Mundlak" */))	///
 						incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	keep(SNAP_index_w SPI_female	SPI_NoHS	SPI_nonWhte	) ///
 						title(PFS on SNAP - heterogeneous effects)	note(Note: Controls (RP's gender, age, age squared race, marital status, disability college degree), year FE and individual FE are included in all specifications. Estimates are adjusted with longitudinal individual survey weight provided in the PSID. Standard errors are clustered at individual-level.)	replace	
 				
