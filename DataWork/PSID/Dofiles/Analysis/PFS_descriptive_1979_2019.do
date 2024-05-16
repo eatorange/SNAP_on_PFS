@@ -1278,8 +1278,11 @@
 					*	OLS
 					esttab	PFS_ysFE_noind	PFS_ysFE_ind	PFS_ysiFE_noind		PFS_ysiFE_ind	using "${SNAP_outRaw}/PFS_on_HH X.csv", ///
 							cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
-							title(`depvar' on HH Characteristics)		replace	
-				
+							title(PFS on HH Characteristics)		replace	
+					
+					esttab	PFS_ysFE_noind	PFS_ysFE_ind	PFS_ysiFE_noind		PFS_ysiFE_ind	using "${SNAP_outRaw}/PFS_on_HH X.tex", ///
+							cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+							title(PFS on HH Characteristics)		replace	
 			
 	/****************************************************************
 		SECTION 4: Dynamics analyses

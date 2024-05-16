@@ -97,7 +97,7 @@ ds	${depvar}	${RHS}
 					graph	export	"${SNAP_outRaw}/SNAP_over_PFSqtile_lowinc.png", as(png) replace
 				restore
 				
-			 
+			 reg	${depvar}_dm	SNAPhat_dm	${RHS_dm}	${reg_weight} if reg_sample==1, cluster(x11101ll)
 			
 			*	Quantile regression
 			*ivreghdfe	${depvar}		${RHS}			(${endovar} = SNAP_index_w)			${reg_weight} if reg_sample==1, cluster(x11101ll) absorb(x11101ll)		first savefirst savefprefix(${Zname})	//	built-in FE
@@ -108,14 +108,14 @@ ds	${depvar}	${RHS}
 				*est store qreg_SNAP
 				
 				*	2nd stage
-				qrprocess 	${depvar}_dm	${RHS_dm}	${reg_weight} if reg_sample==1,	 vce(, cluster(x11101ll)) 	q(0.10(0.1)0.9)	//	 10 percentile to 95 percentile (caution: takes time)
-				
+				qrprocess 	${depvar}_dm	SNAPhat_dm	${RHS_dm}	${reg_weight} if reg_sample==1 ,	 vce(, cluster(x11101ll)) 	q(0.1(0.1)0.9)	//	 10 percentile to 95 percentile (caution: takes time)
+				est	store	 qreg_PFS
 			
 			*qrprocess 	${depvar}		SNAPhat	${RHS}	${reg_weight} if reg_sample==1,	 vce(, cluster(x11101ll)) q(0.1(0.1)0.9)	// 10 percentile to 95 percentile (caution: takes time)
 			*qrprocess 	${depvar}		SNAPhat	${RHS}	${reg_weight} if reg_sample==1,	 vce(, cluster(x11101ll)) q(0.1(0.1)0.2)	// 10 percentile to 20 percentile (caution: takes time)
 			
 
-			esttab	  using "${SNAP_outRaw}/PFS_qreg_lowinc.csv", ///
+			esttab	 qreg_PFS using "${SNAP_outRaw}/PFS_qreg_full.csv", ///
 			cells(b(star fmt(%8.3f)) se(fmt(2) par)) stats(N, fmt(0 2) label("N" )) ///
 			incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	keep(q*:SNAPhat_dm)	///
 			title(PFS on FS dummy)		replace	
@@ -135,10 +135,12 @@ ds	${depvar}	${RHS}
 			
 			
 			*	2nd stage
-			coefplot	qreg_PFS, keep(q*:SNAPhat_dm) vertical    noeqlabels /* nolabels */ 	coeflabels(${coeflabel}) title(SNAP Effects by PFS percentile - 10 to 90 percentile)	///
-				bgcolor(white)	graphregion(color(white)) 	name(PFS_qtile, replace)	
+			coefplot	qreg_PFS, keep(q*:SNAPhat_dm) vertical    noeqlabels /* nolabels */ 	coeflabels(${coeflabel}) title(Estimated Effects of SNAP by PFS percentile)	///
+				bgcolor(white)	graphregion(color(white)) 	name(PFS_qtile, replace)	yline(0)
 			graph display PFS_qtile, ysize(4) xsize(9.0)
-			graph	export	"${SNAP_outRaw}/PFS_qtile_lnc.png", as(png) replace
+			graph	export	"${SNAP_outRaw}/PFS_qtile_full_uw.png", as(png) replace
+				
+				
 				
 		
 		
@@ -362,7 +364,7 @@ ds	${depvar}	${RHS}
 			
 					
 			//coefplot	qreg_PFS, keep(q1:SNAPhat q2:SNAPhat) vertical    noeqlabels /* nolabels */ 	coeflabels(${coeflabel}) title(SNAP effects by PFS percentile - 5 to 90 percentile)
-			coefplot	qreg_FIG, keep(q*:SNAPhat) vertical    noeqlabels /* nolabels */ 	coeflabels(${coeflabel}) title(SNAP effects by PFS percentile - 5 to 90 percentile)	///
+			coefplot	qreg_FIG, keep(q*:SNAPhat) vertical    noeqlabels /* nolabels */ 	coeflabels(${coeflabel}) title(Estiamted Effects of SNAP by PFS percentile)	///
 				bgcolor(white)	graphregion(color(white)) 	name(FIG_qtile, replace)	
 			graph display FIG_qtile, ysize(4) xsize(9.0)
 			graph	export	"${SNAP_outRaw}/FIG_qtile_lowinc.png", as(png) replace

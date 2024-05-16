@@ -235,8 +235,30 @@
 					cells("count(fmt(%12.0fc)) mean(fmt(%12.2fc)) sd(fmt(%12.2f))") label	title("Summary Statistics - weighted") noobs 	  replace	
 				
 			
+		*	(2024-4-22)	 Share of SNAP benefit in income/food exp, among SNAP participants.
+		*	We see huge mean value, due to an extremely large outliers in upper tail.
+		
+			loc	var		share_SNAP_income
+			cap	drop	`var'
+			gen		`var'	=	FS_rec_amt_real	/	(fam_income_month_pc_real_K * famnum * 1000)
+				
+				*	Full sample
+				summ	`var'	[aw=wgt_long_ind]	 if	!mi(PFS_ppml)
+				summ	`var'	[aw=wgt_long_ind],d
+				
+				*	Low-income population
+				summ	`var'	[aw=wgt_long_ind]	 if	!mi(PFS_ppml) & income_ever_below_130_9713==1
+				summ	`var'	[aw=wgt_long_ind]	 if	!mi(PFS_ppml) & income_ever_below_130_9713==1,d
 			
-		*	Regression of PFS on Hh characteristics.
+			loc	var	share_SNAP_foodexp
+			cap	drop	`var'
+			gen	`var'	=	FS_rec_amt_real	/	foodexp_tot_inclFS_real
+			
+			summ	`var'	[aw=wgt_long_ind]	 if	!mi(PFS_ppml)
+			summ	`var'	[aw=wgt_long_ind],d
+			
+			
+		*	Regression of PFS on HH characteristics.
 			*	Note: aweight and pweight gives the same regression coefficient, but sterror differ.
 		{	
 			*	Set Xs
@@ -275,6 +297,9 @@
 				estadd	scalar	meanPFS	=	r(mean), replace
 				est	store PFS_X_all_nowgt_iFE
 				
+					*	semi-elasticity (1% of increase in income in increase in PFS)
+					margins, dyex(fam_income_month_pc_real_K)
+				
 				*	inc130%, no individual FE
 				reghdfe		`depvar'	`indvars'	`HHvars'	`famvars'	`SNAPvars'	if	income_ever_below_130_9713==1, absorb(year rp_state)
 				estadd	local	wgt			"N", replace
@@ -290,6 +315,10 @@
 				summ	`depvar'	if	income_ever_below_130_9713==1
 				estadd	scalar	meanPFS	=	r(mean), replace
 				est	store PFS_X_inc130_nowgt_iFE
+				
+					*	semi-elasticity (1% of increase in income in increase in PFS)
+					margins, dyex(fam_income_month_pc_real_K)
+				
 				
 			
 			
@@ -313,6 +342,10 @@
 				estadd	scalar	meanPFS	=	r(mean), replace
 				est	store PFS_X_all_wgt_iFE
 				
+					*	semi-elasticity (1% of increase in income in increase in PFS)
+					margins, dyex(fam_income_month_pc_real_K)
+				
+				
 				*	inc130%, no individual FE
 				reghdfe		`depvar'	`indvars'	`HHvars'	`famvars'	`SNAPvars'	[pw=wgt_long_ind]	if	income_ever_below_130_9713==1, absorb(year rp_state)
 				estadd	local	wgt			"N", replace
@@ -328,6 +361,10 @@
 				summ	`depvar'	[aw=wgt_long_ind]	if	income_ever_below_130_9713==1
 				estadd	scalar	meanPFS	=	r(mean), replace
 				est	store PFS_X_inc130_wgt_iFE
+				
+					*	semi-elasticity (1% of increase in income in increase in PFS)
+					margins, dyex(fam_income_month_pc_real_K)
+				
 			
 			
 			*	Weighted
@@ -515,7 +552,8 @@
 				reg	PFS_ppml	${FSD_on_FS_X}	${timevars}	year_SNAP_std_l8 year_SNAP_std_l4 year_SNAP_std_l2 year_SNAP_std_l0	[aw=wgt_long_ind]	if	event_study_sample==1	&	SNAP_cum_fre_1st==3	//	all event study sample 
 				est	store	SNAP_thrice_control
 			
-				coefplot SNAP_once_control SNAP_twice_control	SNAP_thrice_control, keep(year_SNAP_std_l8	year_SNAP_std_l4	year_SNAP_std_l2	year_SNAP_std_l0) xline(0) vertical title(PFS after the first SNAP participation)
+				coefplot SNAP_once_control SNAP_twice_control	SNAP_thrice_control, keep(year_SNAP_std_l8	year_SNAP_std_l4	year_SNAP_std_l2	year_SNAP_std_l0) xline(0)	///
+					vertical title(PFS after the first SNAP participation) legend(pos(6) row(1)) plotlabels("SNAP once" "SNAP twice" "SNAP thee times")
 				graph	export	"${SNAP_outRaw}/Cumul_SNAP_redemp_1st_ctrl.png", replace
 				
 

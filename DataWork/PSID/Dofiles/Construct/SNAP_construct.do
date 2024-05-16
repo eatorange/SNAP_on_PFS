@@ -185,11 +185,11 @@
 		**	If we want to diplay star, renable "star" option inside "cells" and "star(* 0.10 ** 0.05 *** 0.01)"
 		
 			esttab	ppml_step1	ppml_step2	using "${SNAP_outRaw}/ppml_pooled.csv", ///
-					cells(b(star fmt(%8.2f)) se(fmt(2) par)) stats(N_sub /*r2*/) label legend nobaselevels star(* 0.10 ** 0.05 *** 0.01)	///
+					cells(b(star fmt(%8.2f)) se(fmt(2) par)) stats(N /*r2*/) label legend nobaselevels star(* 0.10 ** 0.05 *** 0.01)	///
 					title(Conditional Mean and Variance of Food Expenditure per capita) 	replace
 					
 			esttab	ppml_step1	ppml_step2	using "${SNAP_outRaw}/ppml_pooled.tex", ///
-					cells(b(nostar fmt(%8.3f)) & se(fmt(2) par)) stats(N_sub, fmt(%8.0fc)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(_cons)*/	///
+					cells(b(nostar fmt(%8.3f)) & se(fmt(2) par)) stats(N, fmt(%8.0fc)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(_cons)*/	///
 					title(Conditional Mean and Variance of Food Expenditure per capita)		replace		
 			
 		

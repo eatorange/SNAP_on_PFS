@@ -32,9 +32,21 @@
 
 					
 	*	Benchmark specification: weight-adjusted, clustered at individual-level
-	global	reg_weight		 [pw=wgt_long_ind]
-	global	sum_weight		[aw=wgt_long_ind]
+	local	weight=0
+	if	`weight'==1	{
 	
+		global	reg_weight	[pw=wgt_long_ind]
+		global	sum_weight	[aw=wgt_long_ind]
+	
+	}
+	else	{
+		
+		global	reg_weight		
+		global	sum_weight	
+	
+	}
+	
+	di	"${reg_weight}"
 	*global	xtlogit_weight	[iw=wgt_long_ind]
 	
 	
@@ -168,7 +180,7 @@
 			 
 			 
 			 *	SPI (linear)
-			ivreghdfe	${depvar}	${RHS} 	(${endovar} = SNAP_index_w)	${reg_weight} if reg_sample==1, ///
+			ivreghdfe	${depvar}	${RHS} 	(${endovar} = SNAP_index_uw)	${reg_weight} if reg_sample==1, ///
 				/*absorb(x11101ll)*/	cluster (x11101ll)		first savefirst savefprefix(${Zname})
 			
 			estadd	local	Controls	"N"
@@ -318,7 +330,7 @@
 				
 				
 				*	Linear
-				ivreghdfe	${depvar}	${RHS}		(${endovar} = SNAP_index_w)	${reg_weight} if reg_sample==1, ///
+				ivreghdfe	${depvar}	${RHS}		(${endovar} = SNAP_index_uw)	${reg_weight} if reg_sample==1, ///
 					/*absorb(x11101ll)*/	cluster (x11101ll)		first savefirst savefprefix(${Zname})
 				estadd	local	Controls	"Y"
 				estadd	local	YearFE		"Y"
@@ -627,6 +639,20 @@
 						est	store	Dhat_indFE_2nd_${samplename}
 					
 				
+					*	Automatic 2nd stage, binary indicator
+					ivreghdfe	PFS_FI_ppml	${RHS}	(${endovar} = ${endovar}_hat_nl)	///
+						${reg_weight} if reg_sample==1, absorb(x11101ll)	cluster(x11101ll) 	first savefirst savefprefix(${Zname})
+						
+						estadd	local	Controls	"Y"
+						estadd	local	YearFE		"Y"
+						estadd	local	Mundlak		"N"
+						estadd	local	IndFE		"Y"
+						scalar	Fstat_CD_${Zname}	=	 e(cdf)
+						scalar	Fstat_KP_${Zname}	=	e(widstat)
+						summ	PFS_FI_ppml	${sum_weight}	if	e(sample)==1
+						estadd	scalar	mean_Y	=	 r(mean)
+						est	store	Dhat_FI_FE_2nd_${samplename}
+			
 				
 				*	IV = SNAP index (conventional)
 					
@@ -645,6 +671,8 @@
 					
 					drop	`var'
 					
+					
+					
 						*	Plotting predicted value of SNAP-hat of (1) non-linear logit (i) Linear.
 						graph	twoway	(kdensity	FSdummy_hat_l)	(kdensity	FSdummy_hat_nl)
 						
@@ -655,7 +683,13 @@
 						graph	export	"${SNAP_outRaw}/SNAP_hat_ols_MLE.png", as(png) replace
 						graph	close
 						
+						summ	FSdummy_hat_l,d
+						summ	FSdummy_hat_nl,d
 						
+						*	Plot those only with very high non-linearly predicted probabiltiy
+						twoway	(kdensity FSdummy_hat_l if FSdummy_hat_nl<0.19, lc(green) lp(solid) lwidth(medium) graphregion(fcolor(white)) legend(label(1 "Non-linear SNAP<0.19")))	///
+								(kdensity FSdummy_hat_l if FSdummy_hat_nl>=0.19, lc(purple) lp(dash) lwidth(medium) graphregion(fcolor(white)) legend(label(2 "Non-linear SNAP>=0.19") row(1) size(small) keygap(0.1) pos(6) symxsize(5))),	///
+								title("Predicted SNAP Participation - by non-linear SNAP status",	color(black) size(medium)) ytitle("Density") xtitle("Probability") name(SNAP_hat_ols_MLE_high, replace)
 					
 					*	Manual 2nd stage
 					reghdfe	${depvar}	 ${endovar}_hat_l	${RHS}	${reg_weight} if reg_sample==1, absorb(x11101ll)	cluster(x11101ll) 
@@ -694,7 +728,7 @@
 					
 					
 					*	Automatic using binary indicator
-					ivreghdfe	PFS_FI_ppml	${RHS}	(${endovar} = SNAP_index_w)	${reg_weight} if reg_sample==1, ///
+					ivreghdfe	PFS_FI_ppml	${RHS}	(${endovar} = SNAP_index_uw)	${reg_weight} if reg_sample==1, ///
 						absorb(x11101ll)	cluster(x11101ll) 	first savefirst savefprefix(${Zname})
 					
 						*	Somehow mean_SNAP is not properly working in individual FE model. I run it here.
@@ -719,14 +753,14 @@
 		esttab	SPI_w_Dhat_biv_1st_full 	SPI_w_Dhat_timeFE_1st_full	SPI_w_Dhat_indFE_1st_full ///
 				SPI_w_Dhat_biv_1st_lnc		SPI_w_Dhat_timeFE_1st_lnc	SPI_w_Dhat_indFE_1st_lnc	using "${SNAP_outRaw}/PFS_1st.csv", ///
 				cells(b(star fmt(%8.3f)) se(fmt(2) par)) stats(N r2c mean_SNAP Controls YearFE IndFE	Fstat_CD	Fstat_KP, fmt(0 2) label("N" "R2" "Mean SNAP" "Controls" "Year FE" "Individual FE" "F-stat(CD)" "F-stat(KP)" )) ///
-					incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	keep(SNAP_index_w)	///
+					incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	keep(SNAP_index_uw)	///
 					title(PFS on FS dummy)		replace	
 					
 						
 		esttab	SPI_w_Dhat_biv_1st_full 	SPI_w_Dhat_timeFE_1st_full	SPI_w_Dhat_indFE_1st_full ///
 				SPI_w_Dhat_biv_1st_lnc		SPI_w_Dhat_timeFE_1st_lnc	SPI_w_Dhat_indFE_1st_lnc			using "${SNAP_outRaw}/PFS_1st.tex", ///
 				cells(b(star fmt(%8.3f)) se(fmt(2) par)) stats(N mean_SNAP Controls YearFE IndFE	Fstat_KP, fmt(0 2) label("N" "Mean SNAP" "Controls" "Year FE" "Individual FE"  "F-stat(KP)" )) ///
-				incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	keep(SNAP_index_w /* ${endovar}_hat */ /*age_ind       ind_col*/)	///
+				incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	keep(SNAP_index_uw /* ${endovar}_hat */ /*age_ind       ind_col*/)	///
 				title(SNAP on SPI)	note(Controls include RP's characteristics (gender, age, age squared race, marital status, disability and college degree). Mundlak includes time-average of controls and year fixed effects. Estimates are adjusted with longitudinal individual survey weight provided in the PSID. Standard errors are clustered at individual-level.)	replace	
 
 				
@@ -816,7 +850,7 @@
 							
 					
 					
-		*	Comparing SPI and non-linaerly predicted SNAP	
+		*	Comparing SPI and non-linaerly predicted SNAP
 		esttab	SPI_w_Dhat_biv_2nd_full Dhat_biv_2nd_full	SPI_w_Dhat_timeFE_2nd_full Dhat_timeFE_2nd_full	SPI_w_Dhat_indFE_2nd_full Dhat_indFE_2nd_full using "${SNAP_outRaw}/PFS_2nd_nonlin.csv", ///
 				mgroups("SPI" "SNAPhat" "SPI" "SNAPhat" "SPI" "SNAPhat", pattern(1 1 1 1 1 1))	///
 				cells(b(star fmt(%8.3f)) se(fmt(2) par)) stats(N r2c mean_PFS Controls YearFE IndFE, fmt(0 2) label("N" "R$^2$" "Mean PFS" "Controls" "Year FE" "Ind FE" )) ///
@@ -831,9 +865,20 @@
 				title(PFS on SNAP)	note(Controls include RP's characteristics (gender, age, age squared race, marital status, disability and college degree). Mundlak includes time-average of controls and year fixed effects. Estimates are adjusted with longitudinal individual survey weight provided in the PSID. Standard errors are clustered at individual-level.)	replace		
 				
 				
+		*	SNAP effects using non-linear predicted SNAP, individual FE only
+		esttab	Dhat_indFE_2nd_full	Dhat_indFE_2nd_lnc	Dhat_FI_FE_2nd_lnc	Dhat_FI_FE_2nd_full	 using "${SNAP_outRaw}/PFS_2nd_indFE_nonlin.csv", ///
+				mgroups("SPI" "SNAPhat" "SPI" "SNAPhat" "SPI" "SNAPhat", pattern(1 1 1 1 1 1))	///
+				cells(b(star fmt(%8.3f)) se(fmt(2) par)) stats(N r2c mean_PFS Controls YearFE IndFE, fmt(0 2) label("N" "R$^2$" "Mean PFS" "Controls" "Year FE" "Ind FE" )) ///
+				incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	keep(${endovar})	///
+				title(PFS on FS dummy)		replace			
 				
 				
-				
+		*	Tex file (drop ind FE model as it cannot be compared)	
+		esttab	Dhat_indFE_2nd_full	Dhat_indFE_2nd_lnc	Dhat_FI_FE_2nd_lnc	Dhat_FI_FE_2nd_full using "${SNAP_outRaw}/PFS_2nd_indFE_nonlin.tex", ///
+				/*mgroups("PFS" "PFS" "Food insecure" "Food insecure" "SPI" "SNAPhat", pattern(1 1 1 1 /*1 1*/))*/	///
+				cells(b(star fmt(%8.3f)) se(fmt(2) par)) stats(N mean_SNAP Controls YearFE IndFE	Fstat_KP, fmt(0 2) label("N" "Mean SNAP" "Controls" "Year FE" "Individual FE"  "F-stat(KP)" )) ///
+				incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	keep(FSdummy /* ${endovar}_hat */ /*age_ind       ind_col*/)	///
+				title(PFS on SNAP)	note(Controls include RP's characteristics (gender, age, age squared race, marital status, disability and college degree). Mundlak includes time-average of controls and year fixed effects. Estimates are adjusted with longitudinal individual survey weight provided in the PSID. Standard errors are clustered at individual-level.)	replace				
 				
 				
 					
@@ -965,8 +1010,8 @@
 						}
 					di "${coeflabel}"
 					
-					coefplot	stage1_qt, keep(*.PFS_pct#c.SNAP_index_w) vertical    noeqlabels  /*nolabels*/ 	coeflabels(${coeflabel}) title(SNAP on SPI by PFS percentile - 10 to 90 percentile)	///
-					bgcolor(white)	graphregion(color(white)) 	name(stage1_qt, replace) note("50th percentile (q50) is omitted as a base category")
+					coefplot	stage1_qt, keep(*.PFS_pct#c.SNAP_index_w) vertical    noeqlabels  /*nolabels*/ 	coeflabels(${coeflabel}) title(Estimated Effect of SPI on SNAP Participation by PFS percentile)	///
+					bgcolor(white) yline(0)	graphregion(color(white)) 	name(stage1_qt, replace) note("50th percentile (q50) is omitted as a base category")
 					
 					graph	export	 "${SNAP_outRaw}/SNAP_by_qtile.png", as(png) replace
 					
@@ -1103,13 +1148,13 @@
 				
 						
 						*	2nd stage
-						esttab	hetero_2nd_female 	hetero_2nd_NoHS  	hetero_2nd_nonWhte	/*hetero_2nd_disab	hetero_2nd_haschild*/	using "${SNAP_outRaw}/PFS_on_SNAP_hetero.csv", ///
+						esttab	hetero_2nd_female_full 	hetero_2nd_NoHS_full  	hetero_2nd_nonWhte_full	hetero_2nd_female_lnc 	hetero_2nd_NoHS_lnc  	hetero_2nd_nonWhte_lnc	using "${SNAP_outRaw}/PFS_on_SNAP_hetero.csv", ///
 						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2c mean_PFS /* Controls YearFE Mundlak*/ Fstat_KP , fmt(0 2) label("N" "R$^2$" "Mean PFS" /* "Controls" "Year FE" "Mundlak" */ "F-stat(KP)"))	///
 						incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	keep(FSdummy SNAP_female	SNAP_NoHS	SNAP_nonWhte	) ///
 						title(PFS on FS dummy hetero)		replace	
 						
-						esttab	hetero_2nd_female 	hetero_2nd_NoHS  	hetero_2nd_nonWhte	/*hetero_2nd_disab	hetero_2nd_haschild*/		using "${SNAP_outRaw}/PFS_on_SNAP_hetero.tex", ///
-						cells(b(star fmt(%8.3f)) se(fmt(2) par)) stats(N r2c mean_PFS /* Controls YearFE Mundlak  */ Fstat_KP, fmt(0 2) label("N" "R$^2$" "Mean PFS" /* "Controls" "Year FE" "Mundlak" */ "F-stat(KP)"))	///
+						esttab	hetero_2nd_female_full 	hetero_2nd_NoHS_full  	hetero_2nd_nonWhte_full	hetero_2nd_female_lnc 	hetero_2nd_NoHS_lnc  	hetero_2nd_nonWhte_lnc		using "${SNAP_outRaw}/PFS_on_SNAP_hetero.tex", ///
+						cells(b(star fmt(%8.3f)) se(fmt(2) par)) stats(N /* r2c */ mean_PFS /* Controls YearFE Mundlak  */ Fstat_KP, fmt(0 2) label("N" /*"R$^2$"*/ "Mean PFS" /* "Controls" "Year FE" "Mundlak" */ "F-stat(KP)"))	///
 						incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	keep(FSdummy SNAP_female	SNAP_NoHS	SNAP_nonWhte	) ///
 						title(PFS on SNAP - heterogeneous effects)	note(Note: Controls (RP's gender, age, age squared race, marital status, disability college degree), year FE and Mundlak controls are included in all specifications. Estimates are adjusted with longitudinal individual survey weight provided in the PSID. Standard errors are clustered at individual-level.)	replace	
 				
