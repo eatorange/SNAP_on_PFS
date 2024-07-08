@@ -73,12 +73,12 @@
 
    if "`c(username)'"== "Seungmin Lee" {	//	Min, office PC
        global	projectfolder	"E:/GitHub/SNAP_on_FS"		//	Github location
-	   global	clouldfolder	"E:/Box/SNAP"	// Clouldfolder location (where rawdata is stored)
+	   global	clouldfolder	"E:/Dropbox/Cornell Backups/Box Backup/SNAP"	// Clouldfolder location (where rawdata is stored)
    }
 
    if "`c(username)'"== "ftac2" {	//	Min, personal laptop
        global	projectfolder	"E:/GitHub/SNAP_on_FS"
-	   global	clouldfolder	"E:/Box/SNAP"
+	   global	clouldfolder	"E:/Dropbox/Cornell Backups/Box Backup/SNAP"
    }
    
    if "`c(username)'"== "xxx" {	//	
