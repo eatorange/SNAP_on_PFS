@@ -845,7 +845,10 @@
 			recode		`var'	(1=0)	(0=1)	if	!mi(PFS_ppml_noCOLI)	&	inrange(year,1979,1994)
 	
 			
-			
+		*	Save
+		save	"${SNAP_dtInt}/SNAP_descdta_1979_2019", replace	//	Inermediate descriptive data for 1979-2019
+
+			*	Preparing data to be shared with Senan
 	
 			*	(2024-7-8)	Additional cleaning
 			
@@ -855,20 +858,32 @@
 				lab	var	FSSS_cat	"FSSS (category)"
 				lab	define	FSSS_cat	1	"High Food Security"	2	"Marginal Food Security"	3	"Low Food Security"	4	"Very Low Food Security"
 				lab	val	FSSS_cat	FSSS_cat
+				
+				*	Drop suffix in PFS variables
+				rename	(PFS_ppml_noCOLI PFS_FS_ppml_noCOLI PFS_FI_ppml_noCOLI)	(PFS_7919	PFS_FS_7919	PFS_FI_7919)
+				lab	var	PFS_7919		"PFS (1979-2019)"
+				lab	var	PFS_FS_7919		"=1 if food secure by PFS (1979-2019)"
+				lab	var	PFS_FI_7919		"=1 if food insecure by PFS (1979-2019)"
+				
+				*	Re-label variables
 			
 			
 			*	keeping necessary variables only for sharing with Senan
 			local	IDvars		x11101ll pn	year
-			local	Samplevars	surveyid seqnum sampstr sampcls wgt_long_ind wgt_long_fam sample_source	in_sample
+			local	samplevars	surveyid seqnum sampstr sampcls wgt_long_ind wgt_long_fam sample_source
 			local	rpvars		rp_age rp_female rp_state rp_married rp_White rp_employed rp_edu_cat rp_disabled
 			local	indvars		ind_female ind_race ind_White ind_employed_dummy ind_edu_cat
 			local	FSSSvars	FSSS_cat FSSS_raw FSSS_FI
-			local	PFSvars		
-		
-		*	Save
-		save	"${SNAP_dtInt}/SNAP_descdta_1979_2019", replace	//	Inermediate descriptive data for 1979-2019
+			local	PFSvars		PFS_7919 PFS_FS_7919 PFS_FI_7919
+			
+			order	`IDvars'	`samplevars'	`rpvars'	`indvars'	`FSSSvars'	`PFSvars'
+			keep	`IDvars'	`samplevars'	`rpvars'	`indvars'	`FSSSvars'	`PFSvars'
+			
+			*	Save
+			compress
+			save	"${SNAP_dtInt}/PFS_7919", replace	//	Inermediate descriptive data for 1979-2019
 
-		
+	
 	/****************************************************************
 		SECTION 2: Summary and Descriptive stats
 	****************************************************************/		 
