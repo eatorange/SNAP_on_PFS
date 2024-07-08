@@ -65,16 +65,16 @@
 	
 	*	Codes to be executed
 		*	SECTION 1: Import individual- and family-level PSID variables
-		local	ind_agg			0	//	Aggregate individual-level variables across waves
-		local	fam_agg			0	//	Aggregate family-level variables across waves
+		local	ind_agg			1	//	Aggregate individual-level variables across waves
+		local	fam_agg			1	//	Aggregate family-level variables across waves
 		
 		*	SECTION 2: Prepare external data
-		local	ext_data		0	//	Prepare external data (CPI, TFP, etc.)
+		local	ext_data		1	//	Prepare external data (CPI, TFP, etc.)
 		
 		*	SECTION 3: Construct PSID panel data and import external data
-		local	cr_panel		0	//	Create panel structure from ID variable
+		local	cr_panel		1	//	Create panel structure from ID variable
 			local	panel_view	0	//	Create an excel file showing the change of certain clan over time (for internal data-check only)
-		local	merge_data		0	//	Merge ind- and family- variables and import it into ID variable
+		local	merge_data		1	//	Merge ind- and family- variables and import it into ID variable
 			local	raw_reshape	1		//	Merge raw variables and reshape into long data (takes time)
 			local	add_clean	1		//	Do additional cleaning and import external data (CPI, TFP)
 			local	import_dta	1		//	Import aggregated variables and external data into ID data. 
@@ -943,6 +943,60 @@
 	*	Prepare external data
 	if	`ext_data'==1	{
 		
+			
+		*	Unemployment Rate (BLS)
+			
+			*	Nationwide (for program summary)
+			import excel "${clouldfolder}/DataWork/BLS/Unemp_rate_nation_month.xlsx", sheet("BLS Data Series") cellrange(A12)  firstrow clear
+			
+			rename	(Year Annual) (year unemp_rate)
+			keep	year	unemp_rate
+			
+			label	var	unemp_rate "Unemployment Rate (%)"
+			
+			save	"${SNAP_dtInt}/Unemployment Rate_nation",	replace
+			
+			*	Statewide
+			
+				*	Annual
+				import excel "${clouldfolder}/DataWork/BLS/Unemp_rate_state_annual.xlsx", sheet("BLS Data Series")  firstrow clear	cellrange(B4)
+				rename	State state
+				drop	if	mi(state)
+				replace	state="Washington D.C." if state=="District of Columbia"
+								
+				reshape	long	Annual, i(state) j(year)
+				rename	Annual	unemp_rate
+				lab	var	unemp_rate "Unemployment Rate"
+			
+				merge	m:1	state using "${SNAP_dtRaw}/Statecode.dta", assert(3) nogen	//	Merge statecode
+				rename	statecode rp_state
+				
+				save	"${SNAP_dtInt}/Unemployment Rate_state_annual",	replace
+				
+				*	Monthly
+				import excel "${clouldfolder}/DataWork/BLS/Unemp_rate_state_month.xlsx", sheet("BLS Data Series")  firstrow clear	cellrange(B4)
+				rename State state
+				replace	state="Washington D.C." if state=="District of Columbia"
+				
+				reshape	long	Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec, i(state) j(year)
+				
+				rename	(Jan-Dec) unemp_rate#, addnumber
+				reshape	long	unemp_rate, i(state year) j(month)
+				
+				lab	var	unemp_rate	"Unemployment Rate"
+			
+				merge	m:1	state using "${SNAP_dtRaw}/Statecode.dta", assert(3) nogen	//	Merge statecode
+				rename	statecode rp_state
+				
+				*	Create year-month variable to be merged with main data
+				gen	yearmonth	=	year*100+month
+				gen	prev_yrmonth	=	yearmonth	//	This variable will be used to match main data
+				
+				save	"${SNAP_dtInt}/Unemployment Rate_state_month",	replace		
+		
+		
+		
+		
 		*	State data with unique PSID code
 		*	This data will be merged with other data which has state name
 		
@@ -1011,7 +1065,7 @@
 				*	Correlation by specific PSID wave
 					
 					*	2015
-					use "E:\Box\US Food Security Dynamics\DataWork\PSID\DataSets\Raw\Main\fam2015er.dta", clear
+					use "E:/Dropbox/Cornell Backups/Box Backup\US Food Security Dynamics\DataWork\PSID\DataSets\Raw\Main\fam2015er.dta", clear
 					gen	year=2015
 					rename	ER60003 rp_state
 					rename	ER60735	FS_rec_wth
@@ -2337,57 +2391,7 @@
 			summ	all	if	major_control_mix==1	&	year==2019
 			
 		save	"${SNAP_dtInt}/State_participation_rates",	replace	
-		
-		*	Unemployment Rate (BLS)
-			
-			*	Nationwide (for program summary)
-			import excel "${clouldfolder}/DataWork/BLS/Unemp_rate_nation_month.xlsx", sheet("BLS Data Series") cellrange(A12)  firstrow clear
-			
-			rename	(Year Annual) (year unemp_rate)
-			keep	year	unemp_rate
-			
-			label	var	unemp_rate "Unemployment Rate (%)"
-			
-			save	"${SNAP_dtInt}/Unemployment Rate_nation",	replace
-			
-			*	Statewide
-			
-				*	Annual
-				import excel "${clouldfolder}/DataWork/BLS/Unemp_rate_state_annual.xlsx", sheet("BLS Data Series")  firstrow clear	cellrange(B4)
-				rename	State state
-				drop	if	mi(state)
-				replace	state="Washington D.C." if state=="District of Columbia"
-								
-				reshape	long	Annual, i(state) j(year)
-				rename	Annual	unemp_rate
-				lab	var	unemp_rate "Unemployment Rate"
-			
-				merge	m:1	state using "${SNAP_dtRaw}/Statecode.dta", assert(3) nogen	//	Merge statecode
-				rename	statecode rp_state
-				
-				save	"${SNAP_dtInt}/Unemployment Rate_state_annual",	replace
-				
-				*	Monthly
-				import excel "${clouldfolder}/DataWork/BLS/Unemp_rate_state_month.xlsx", sheet("BLS Data Series")  firstrow clear	cellrange(B4)
-				rename State state
-				replace	state="Washington D.C." if state=="District of Columbia"
-				
-				reshape	long	Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec, i(state) j(year)
-				
-				rename	(Jan-Dec) unemp_rate#, addnumber
-				reshape	long	unemp_rate, i(state year) j(month)
-				
-				lab	var	unemp_rate	"Unemployment Rate"
-			
-				merge	m:1	state using "${SNAP_dtRaw}/Statecode.dta", assert(3) nogen	//	Merge statecode
-				rename	statecode rp_state
-				
-				*	Create year-month variable to be merged with main data
-				gen	yearmonth	=	year*100+month
-				gen	prev_yrmonth	=	yearmonth	//	This variable will be used to match main data
-				
-				save	"${SNAP_dtInt}/Unemployment Rate_state_month",	replace		
-		
+	
 		*	Poverty Guildeline (which determines SNAP income eligibility)
 			import excel "${clouldfolder}/DataWork/ASPE/historical-poverty-guidelines.xlsx", sheet("48_Contiguous States--Nonfarm") cellrange(A4:N61) firstrow clear
 
