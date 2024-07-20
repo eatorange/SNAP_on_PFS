@@ -6,6 +6,87 @@
 	****************************************************************/		 
 	
 		
+		*	(2024-6-25)	Import GDP growth rate (Source: BEA)
+		import excel "${clouldfolder}/DataWork/BEA/change_in_GDP.xlsx", clear
+		
+			keep	(A-C)
+			rename	(A-C)	(year GDP_growth_nominal GDP_growth_real)
+			drop	in	1/8
+			drop	if	mi(year)
+			destring	*, replace 
+			lab	var	GDP_growth_nominal	"Annual GDP growth rate (percent) - nominal"
+			lab	var	GDP_growth_real		"Annual GDP growth rate (percent) - 2017 dollars"
+			
+			tempfile	GDP_growth
+			save		`GDP_growth'
+			
+		
+			*	(2024-6-26) Import GDP per capita growh rate
+			*	Source: World Bank: https://data.worldbank.org/indicator/NY.GDP.PCAP.KD.ZG
+			import excel "${clouldfolder}\DataWork\World Bank\GDP_per_capita_growh_rate.xls", sheet("Data") clear
+			
+				rename	(F-BO)	GDP_pc_growth#, addnumber(1961)
+				keep	if	A=="United States"
+				reshape	long	GDP_pc_growth, i(A) j(year)
+				keep	year	GDP_pc_growth
+				destring		GDP_pc_growth, replace
+				lab	var			GDP_pc_growth	"Annual GDP per capita growth rate (percent)"
+			
+			
+			*	Merge two different GDP data
+			merge	1:1	year	using	`GDP_growth', nogen assert(2 3) keep(3)
+			
+			*	Save
+			save	"${SNAP_dtInt}/GDP_growth_1961_2023", replace
+		
+		
+		*	Public social spending (Source: OECD)
+			import excel "${clouldfolder}\DataWork\OECD\public_social_spending.xlsx", sheet("Sheet1") clear
+			
+				rename	(B-AR)	social_spending#, addnumber(1980)
+				keep	if	A=="United States"
+				reshape	long	social_spending, i(A) j(year)
+				keep	year	social_spending
+				drop	if		mi(social_spending)
+				destring		social_spending, replace
+				lab	var			social_spending	"Social spending (public) as a share of GDP"
+			
+				*	Save
+				save	"${SNAP_dtInt}/social_spending", replace
+				
+		*	Disposable personal income per capita (2017 dollars)
+		*	Source: FRED
+			import excel "${clouldfolder}\DataWork\BEA\real_disposable_income_pc.xls", sheet("FRED Graph") clear
+			drop	in	1/11
+			gen	year = _n + 1958
+			keep	if	inrange(year,1959,2023)
+			drop	A
+			rename	B	dis_per_inc_pc
+			destring	dis_per_inc_pc,	replace
+			gen			ln_dis_per_inc_pc	=	ln(dis_per_inc_pc)
+			lab	var		year	"Year"
+			lab	var		dis_per_inc_pc		"Disposable personal income per capita - 2017 dollars"
+			lab	var		ln_dis_per_inc_pc	"ln(disposable personal income per capita - 2017 dollars)"
+			order	year	dis_per_inc_pc	ln_dis_per_inc_pc
+			
+			*	Save
+			save	"${SNAP_dtInt}/dis_per_inc_pc", replace
+			
+		*	Gini Index (Source: World Bank)
+		import excel "${clouldfolder}\DataWork\World Bank\Gini_index.xls", sheet("Data") clear
+		
+			rename	(E-BP)	Gini_index#, addnumber(1960)
+			keep	if	A=="United States"
+			reshape	long	Gini_index, i(A) j(year)
+			keep	year	Gini_index
+			destring		Gini_index, replace
+			drop	if		mi(Gini_index)
+			lab	var			Gini_index	"Gini index"
+			
+			*	Save
+			save	"${SNAP_dtInt}/Gini_index", replace
+				
+		
 		*	CPI and TFP cost
 		use		"${SNAP_dtInt}/TFP cost/TFP_costs_all", clear
 		keep	if	age_ind==25
@@ -226,9 +307,16 @@
 				
 			 }	//	qui
 	
-	compress
-	save	"${SNAP_dtInt}/SNAP_long_PFS_cat", replace	//	Save for now, as the code above takes too much time
+		*	Keep relevant study sample only
+		keep	if	!mi(PFS_ppml_noCOLI)
+	
+		save	"${SNAP_dtInt}/SNAP_long_PFS_cat", replace	
 		
+		
+	
+	
+	
+	
 	
 	
 	*	Categorize food security status based on annual food security prevalence rate (pre-1995)
@@ -351,7 +439,79 @@
 		lab	var	`var'	"Food insecure (PFS < 0.5)"
 		*/
 		
+		
+			
+		*	(2024-6-27) Classifying FS/FI using PFS
+		
+			*	For post-1995, we have annual USDA FI prevalnce rate, which we can use it as a reference.
+			*	For pre-1995, we do not have annual USDA FI prevalence to refer.
+			*	Thus, methods could differ b/w pre-1995 and post-1995
+			
+			*	For post-1995, there are two ways to do it based on official prevalence rate.
+				*	(1) Categorize the equal share of households as FI based on PFS (like Lee et al. 2023)
+					*	For example, if 10% is food insecure by CPS in a given year, categorize bottom 10th percentile of PFS as FI.
+				*	(2) For a subsample where PSID collected FSSS, we can re-classify FSSS-based FI using the Rasch score.
+					*	For example, if 10% is food insecure by CPS in a given year, classify the 10% highest Rasch scores as food insecure.
+					*	This method can be used to further investigate mismatch b/w PSID and CPS, it cannot be used for the years when PSID didn't collect RFSSS.
+					*	This method "re-classifies" FSSS_FI.
+			*	For pre-1995, there are two ways to to do it.
+				*	(1) Use a fixed PFS probability as a cut-off (like, 0.5)
+				*	(2) Use a predicted cut-off from the model using post-1995 data
+					*	Model estimating the association of PFS cut-off with macroeconomic indicators.
+			
+			*	1st method of post-1995 is done above.
+			
+		*	2nd method of post-1995
+			
+			*	Distribution of Rasch scores (FSSS) measured by PSID
+			loc	var	FSSS_FI_cps_base
+			cap	drop	`var'
+			gen	`var'=.
+			lab	var	`var'	"Food insecure (FSSS - matched to official prevalence)"
+			
+				*	1999: 10.1% are FI
+				loc	year=1999
+				tab	HFSM_raw	[aw=wgt_long_ind] if year==`year'	//	About 10% of households have the score 2 or higher
+				replace	`var'=0	if	inrange(HFSM_raw,0,1)	&	year==`year'
+				replace	`var'=1	if	inrange(HFSM_raw,2,18)	&	year==`year'
+				
+				*	2001:	10.7% are FI
+				loc	year=2001
+				tab	HFSM_raw	[aw=wgt_long_ind] if year==`year'	//	About 12% of households have the score 1 or higher, 8% have 2 or higher
+				replace	`var'=0	if	inrange(HFSM_raw,0,0)	&	year==`year'
+				replace	`var'=1	if	inrange(HFSM_raw,1,18)	&	year==`year'
+				
+				*	2003:	11.2% are FI
+				loc	year=2003
+				tab	HFSM_raw	[aw=wgt_long_ind] if year==`year'	//	About 13% of households have the score 1 or higher, 9% have 2 or higher
+				replace	`var'=0	if	inrange(HFSM_raw,0,0)	&	year==`year'
+				replace	`var'=1	if	inrange(HFSM_raw,1,18)	&	year==`year'
+				
+				*	2015:	12.7% are FI
+				loc	year=2015
+				tab	HFSM_raw	[aw=wgt_long_ind] if year==`year'	//	About 14.6% of households have the score 2 or higher, 11% have 3 or higher
+				replace	`var'=0	if	inrange(HFSM_raw,0,2)	&	year==`year'
+				replace	`var'=1	if	inrange(HFSM_raw,3,18)	&	year==`year'
+				
+				*	2017:	11.8% are FI
+				loc	year=2017
+				tab	HFSM_raw	[aw=wgt_long_ind] if year==`year'	//	About 12.9% of households have the score 2 or higher, 9.6% have 3 or higher
+				replace	`var'=0	if	inrange(HFSM_raw,0,1)	&	year==`year'
+				replace	`var'=1	if	inrange(HFSM_raw,2,18)	&	year==`year'
+				
+				*	2019:	10.5% are FI
+				loc	year=2019
+				tab	HFSM_raw	[aw=wgt_long_ind] if year==`year'	//	About 11.3% of households have the score 2 or higher, 9% have 3 or higher
+				replace	`var'=0	if	inrange(HFSM_raw,0,1)	&	year==`year'
+				replace	`var'=1	if	inrange(HFSM_raw,2,18)	&	year==`year'
+				
+			*	FS indicator - opposite of FI indicator
+			cap	drop	FSSS_FS_cps_base
+			recode		FSSS_FI_cps_base	(0=1)	(1=0), gen(FSSS_FS_cps_base)
+			lab	var		FSSS_FS_cps_base	"Food secure (FSSS - matched to official prevalence)"
 	
+		
+		/*
 		*	Generate FS variable (the opposite of FI)
 		foreach	var	in	ppml_noCOLI	{
 			
@@ -364,7 +524,7 @@
 		*lab	var	PFS_FS_ppml			"HH is food secure (PFS)"
 		lab	var	PFS_FS_ppml_noCOLI	"HH is food secure (PFS w/o COLI)"
 		
-		
+		*/
 		
 				
 		*	Generate lagged PFS variable
@@ -480,7 +640,6 @@
 			lab	define	rp_disabled	0	"NOT disabled"	1	"Disabled", replace
 			lab	val	rp_disabled	rp_disabled
 			
-			
 	
 		*	(2024-2-26) Individual-level race
 		*	Race is not observed in every period for individuals. It is observed only when (i) RP (ii) Spouse (after 1985)
@@ -575,9 +734,275 @@
 			
 			lab	var	`var'	"4-year college degree (RP)"
 			*/
+		
+		
+			*	Temporarily save, to import cut-off later
+		tempfile	SNAP_long_PFS_before_cutoff
+		save		`SNAP_long_PFS_before_cutoff', replace
+	
+		
+		
+		*	Variables to be collapsed
+		local	collapse_vars	foodexp_tot_exclFS_pc	foodexp_tot_inclFS_pc	foodexp_tot_exclFS_pc_real	foodexp_tot_inclFS_pc_real	foodexp_W_TFP_pc foodexp_W_TFP_pc_real	///	//	Food expenditure and TFP cost per capita (nominal and real)
+								rp_age	rp_age_below30 rp_age_over65	rp_female	rp_nonWhte	rp_HS	rp_somecol	rp_col	rp_disabled	famnum	FS_rec_wth	FS_rec_amt_capita	FS_rec_amt_capita_real	part_num	///	//	Gender, race, education, FS participation rate, FS amount
+								PFS_ppml_noCOLI	NME	PFS_FI_ppml_noCOLI	NME_below_1	FSSS_FI	FSSS_FI_v2	PFS_threshold_ppml_noCOLI	//	Outcome variables	
+		
+		*	All population
+			collapse (mean) `collapse_vars' (median)	rp_age_med=rp_age	[pw=wgt_long_ind], by(year)
+			
+			lab	var	rp_female	"Female (RP)"
+			lab	var	rp_nonWhte	"Non-White (RP)"
+			*lab	var	rp_HS_GED	"HS or GED (RP)"
+			lab	var	rp_col		"College degree (RP)"
+			*lab	var	rp_col_4yr	"4-year College degree (RP)"
+			lab	var	rp_disabled	"Disabled (RP)"
+			lab	var	FS_rec_wth	"FS received"
+			lab	var	PFS_ppml_noCOLI		"PFS"
+			lab	var	NME			"NME"
+			lab	var	PFS_FI_ppml_noCOLI	"PFS < 0.5"
+			lab	var	NME_below_1	"NME < 1"
+			lab	var	foodexp_W_TFP_pc		"Monthly TFP cost per capita"
+			lab	var	foodexp_W_TFP_pc_real	"Monthly TFP cost per capita (Jan 2019 dollars)"
+			lab	var	foodexp_tot_exclFS_pc		"Monthly Food exp per capita (w/o FS)"
+			lab	var	foodexp_tot_inclFS_pc		"Monthly Food exp per capita (with FS)"
+			lab	var	foodexp_tot_exclFS_pc_real	"Monthly Food exp per capita (w/o FS)	(Jan 2019 dollars) "
+			lab	var	foodexp_tot_inclFS_pc_real	"Monthly Food exp per capita (with FS)	(Jan 2019 dollars) "
+			lab	var	FS_rec_amt_capita			"Monthly FS amount per capita"
+			lab	var	FS_rec_amt_capita_real		"Monthly FS amount per capita (Jan 2019 dollars)"
+		
+			
+		*	Import Census data
+		merge	1:1	year	using	"${SNAP_dtInt}/HH_census_1979_2019.dta", nogen assert(2 3) // Missing years in the PSID data will be imported
+					
+		*	Import unemploymen rate (national)
+		merge	1:1	year	using	"${SNAP_dtInt}/Unemployment Rate_nation.dta", nogen assert(2 3) keep(3) // keep only study period.
+		
+		*	Import other macroeconomic indicators
+		merge	m:1	year	using	"${SNAP_dtInt}/GDP_growth_1961_2023", nogen assert(2 3) keep(3)	//	GDP growth
+		merge	m:1	year	using	"${SNAP_dtInt}/dis_per_inc_pc", nogen assert(2 3) keep(3)	//	Disposable income
+		merge	m:1	year	using	"${SNAP_dtInt}/Gini_index", nogen assert(2 3) keep(3)	//	Gini index
+		merge	m:1	year	using	"${SNAP_dtInt}/social_spending", nogen keep(1 3) //	Social spending
+		
+	
+	
+		*	Fraction of population in SNAP
+		**	NOTE: This is NOT the same as the official SNAP participation rate issued by the USDA
+		loc	var	frac_SNAP_person
+		gen	`var'	=	(part_num*1000000)/US_est_pop
+		lab	var	`var'	"\% of ppl in US in SNAP"
+		
+		*	Additional cleaning
+		replace	pov_rate_national	=	pov_rate_national/100	//	re-scale poverty rate to vary from 0 to 1
+	
+	
+		*	Manually plug in FI prevalence rate from the USDA report
+		loc	var	FSSS_FI_official
+		cap	drop	`var'
+		gen		`var'=.
+		replace	`var'=0.101	if	year==1999	// 1999: 10.1% are food insecure (7.1% are low food secure, 3.0% are very low food secure)
+		replace	`var'=0.107	if	year==2001	// 2001: 10.7% are food insecure (7.4% are low food secure, 3.3% are very low food secure)
+		replace	`var'=0.112	if	year==2003	// 2003: 11.2% are food insecure (7.7% are low food secure, 3.5% are very low food secure)
+		replace	`var'=0.110	if	year==2005	// 2005: 11.0% are food insecure (7.1% are low food secure, 3.9% are very low food secure)
+		replace	`var'=0.111	if	year==2007	// 2007: 11.1% are food insecure (7.0% are low food secure, 4.1% are very low food secure)
+		replace	`var'=0.147	if	year==2009	// 2009: 14.7% are food insecure (9.0% are low food secure, 5.7% are very low food secure)
+		replace	`var'=0.149	if	year==2011	// 2011: 14.9% are food insecure (9.2% are low food secure, 5.7% are very low food secure)
+		replace	`var'=0.143	if	year==2013	// 2013: 14.3% are food insecure (8.7% are low food secure, 5.6% are very low food secure)
+		replace	`var'=0.127	if	year==2015	// 2015: 12.7% are food insecure (7.7% are low food secure, 5.0% are very low food secure)
+		replace	`var'=0.118	if	year==2017	// 2017: 11.8% are food insecure (7.3% are low food secure, 4.5% are very low food secure)
+		replace	`var'=0.105	if	year==2019	// 2019: 10.5% are food insecure (6.6% are low food secure, 3.9% are very low food secure)
+		lab	var	`var'	"Official FI Prevalence"
+		
+		sort	year
+		
+				
+		*	Model of PFS cutoff on macroeconomic indicators
+
+			lab	var	PFS_threshold_ppml_noCOLI	"Cut-off PFS"
+			local	macrovars	PFS_threshold_ppml_noCOLI Gini_index ln_dis_per_inc_pc GDP_growth_real GDP_pc_growth unemp_rate pov_rate_national pct_col_Census pct_rp_nonWhite_Census	social_spending
+			
+			*	Recale variables, from 0-1 to 0-100
+			foreach	var	in	pov_rate_national pct_col_Census pct_rp_nonWhite_Census	pct_rp_White_Census	{
+				
+				replace	`var'	=	`var'	*	100
+				
+			}
+			
+			*	Summary stats
+			estpost tabstat	`macrovars',	statistics(count	mean	sd	min	  max	/*sd	min	 median	p95 max*/	) columns(statistics) 	// save
+			est	store	summstats_annual
+
+		
+			esttab	summstats_annual	using	"${SNAP_outRaw}/summstats_annual.csv",  ///
+				cells("count(fmt(%12.0f)) mean(fmt(%12.2f)) sd(fmt(%12.2f)) min(fmt(%12.2f)) max(fmt(%12.2f))") label	title("Summary Statistics - Annual (1979-2019)") noobs 	  replace
+		
+
+			*dtable	`macrovars'	, continuous(	`macrovars'	, stat(count mean sd min max)) nformat(%7.2f mean sd min max) title(Summary stats) export(summstat.html, replace)
+			
+			*	Correlation
+			asdoc pwcorr	`macrovars'	if	!mi(PFS_threshold_ppml_noCOLI), label star(all) replace
+			
+			*	Regression
+			
+				*	Correlation matrix above show that some variables are highly correlated with one another (i.e. Gini index and disposable income)
+				*	Thus, I use only one of those variables to avoid multicolinearity and overfitting.
+				*	I use the following four variables
+					*	ln(disposable personal income per capita)
+					*	share of RP that are non-White
+					*	GDP per capita growth rate
+					*	Poverty rate
+					
+				*	Bivariate regression of 4 variables above
+				cap	drop	PFS_cutoff_income_hat
+				cap	drop	PFS_cutoff_income_e
+				cap	drop	PFS_cutoff_income_e2
+				
+				reg	PFS_threshold_ppml_noCOLI ln_dis_per_inc_pc	if	!mi(PFS_threshold_ppml_noCOLI), robust	//	ln(disposable income per capita)
+				predict	PFS_cutoff_income_hat
+				predict	PFS_cutoff_income_e, resid
+				gen		PFS_cutoff_income_e2	=	(PFS_cutoff_income_e)^2
+				est	store	PFS_cutoff_income
+				
+				cap	drop	PFS_cutoff_nonWhite_hat
+				cap	drop	PFS_cutoff_nonWhite_e
+				cap	drop	PFS_cutoff_nonWhite_e2
+				
+				reg	PFS_threshold_ppml_noCOLI pct_rp_nonWhite_Census	if	!mi(PFS_threshold_ppml_noCOLI), robust	//	% of non-White RP
+				predict	PFS_cutoff_nonWhite_hat
+				predict	PFS_cutoff_nonWhite_e, resid
+				gen		PFS_cutoff_nonWhite_e2	=	(PFS_cutoff_nonWhite_e)^2
+				est	store	PFS_cutoff_nonWhite
+				
+				reg	PFS_threshold_ppml_noCOLI GDP_pc_growth	if	!mi(PFS_threshold_ppml_noCOLI), robust	//	GDP per capita growth rate
+				est	store	PFS_cutoff_GDPgrowth
+				
+				cap	drop	PFS_cutoff_pov_hat
+				cap	drop	PFS_cutoff_pov_e
+				cap	drop	PFS_cutoff_pov_e2
+				
+				reg	PFS_threshold_ppml_noCOLI pov_rate_national	if	!mi(PFS_threshold_ppml_noCOLI), robust	//	Poverty rate
+				predict	PFS_cutoff_pov_hat
+				predict	PFS_cutoff_pov_e, resid
+				gen		PFS_cutoff_pov_e2	=	(PFS_cutoff_pov_e)^2
+				est	store	PFS_cutoff_povrate
+				
+				*	Multivariate regressions
+				reg	PFS_threshold_ppml_noCOLI ln_dis_per_inc_pc	pct_rp_nonWhite_Census	if	!mi(PFS_threshold_ppml_noCOLI), robust	//	income and non-White population
+				est	store	PFS_cutoff_inc_nonWhite
+				
+				*	Full regression (This is the model I use to construct pre-1995 threshold, after discussing with Chris)
+				cap	drop	PFS_cutoff_full_hat
+				cap	drop	PFS_cutoff_full_e
+				cap	drop	PFS_cutoff_full_e2
+				
+				reg	PFS_threshold_ppml_noCOLI ln_dis_per_inc_pc	pct_rp_nonWhite_Census	GDP_pc_growth		pov_rate_national	if	!mi(PFS_threshold_ppml_noCOLI), robust
+				predict	PFS_cutoff_full_hat
+				predict	PFS_cutoff_full_e, resid
+				gen		PFS_cutoff_full_e2	=	(PFS_cutoff_full_e)^2
+				est	store	PFS_cutoff_full
+				
+				
+				
+				esttab	PFS_cutoff_income	PFS_cutoff_nonWhite	PFS_cutoff_GDPgrowth		PFS_cutoff_povrate	PFS_cutoff_inc_nonWhite	PFS_cutoff_full	using "${SNAP_outRaw}/PFS_cutoff_on_X.csv", ///
+							cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2 r2_a, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+							title(PFS cutoff on economic indicators)		replace	
+					
+				
+				
+				*	Comparing the first and the second model (second model is slightly better)
+				summ PFS_threshold_ppml_noCOLI PFS_cutoff_income_hat PFS_cutoff_nonWhite_hat	PFS_cutoff_income_e2	PFS_cutoff_nonWhite_e2
+				
+				
+				*	Graph actual PFS cut-off(1995-2019) and predicted PFS cut-off
+				graph	twoway	///
+					(line PFS_threshold_ppml_noCOLI year, lpattern(dash) xaxis(1 2) yaxis(1) legend(label(1 "Realized")))	///
+					(line PFS_cutoff_pov_hat		year, lpattern(dot)	lc(gray)  lwidth(medium) graphregion(fcolor(white)) legend(label(2 "Predicted (poverty rate)")))	///
+					(line PFS_cutoff_full_hat		year, lpattern(dash_dot) xaxis(1 2) yaxis(1)  legend(label(3 "Predicted  (full)") row(1) size(small) keygap(0.1) pos(6) symxsize(5))),	///
+								/*xline(1980 1993 1999 2007, axis(1) lpattern(dot))*/ xlabel(/*1980 "No payment" 1993 "xxx" 2009 "ARRA" 2020 "COVID"*/, axis(2))	///
+								xtitle(Year)	ytitle("Probability")	///
+								title(PFS Thresholds)	bgcolor(white)	graphregion(color(white)) /*note(Source: USDA & BLS)*/	name(PFS_cutoff, replace)
+							
+							
+												/*(line PFS_cutoff_income_hat		year, lpattern(dot) xaxis(1 2) yaxis(1) legend(label(2 "Predicted (disposable income)")))	///
+					(line PFS_cutoff_nonWhite_hat	year, lpattern(shortdash)	lc(gray)  lwidth(medium) graphregion(fcolor(white)) legend(label(3 "Predicted (non-White)")))	/// */
+			
+				graph	export	"${SNAP_outRaw}/PFS_thresholds.png", replace	
+				graph	close	
+		
+		
+		*	Save year-level data
+		compress
+		save	"${SNAP_dtInt}/SNAP_1979_2019_census_annual", replace
+		
+		
+		*	Load previously saved data and import pre-1995 cutoff
+		use	`SNAP_long_PFS_before_cutoff', clear
+		merge	m:1	year using	"${SNAP_dtInt}/SNAP_1979_2019_census_annual", keepusing(PFS_cutoff_full_hat) assert(2 3) keep(3) nogen
+		
+			*	Construct a cut-off variable covering full study period
+			loc	var	PFS_threshold_7919
+			cap	drop	var
+			gen	double	`var'=.
+			replace	`var'	=	PFS_threshold_ppml_noCOLI	if	inrange(year,1995,2019)	//	Realized cut-off using USDA FI prevalence rate
+			replace	`var'	=	PFS_cutoff_full_hat			if	inrange(year,1979,1994)	//	Predicted cut-off from macroindicators
+			lab	var	`var'	"PFS FI threshold (1979-2019)"
+			
+			
+			*	Update PFS-based food security based on updated pre-1995 cutoff
+			******	IMPORTANT: PREVIOUSLY, I RE-CLASSIFED ALL HOUSEHOLDS, INCLUDING POST-1995! I THINK IT IS AN ERROR, OR AN OLD METHOD OF SNAP PAPER.
+			******	MUST RE-DO THE ANALYSIS.
+			loc	var	PFS_FI_ppml_noCOLI
+			*cap	drop	`var'
+			*gen		`var'=.
+			replace	`var'=1	if	!mi(PFS_ppml_noCOLI)	&	inrange(year,1979,1994)	&	PFS_ppml_noCOLI<PFS_threshold_7919	//	less than cut-off
+			replace	`var'=0	if	!mi(PFS_ppml_noCOLI)	&	inrange(year,1979,1994)	&	PFS_ppml_noCOLI>=PFS_threshold_7919	//	greater than cut-off
+			*lab	var	`var'	"Food insecure (PFS < 0.5)"
+			
+			
+			*	Update FS  FOR PRE-1995 PERIODS
+			loc	var		PFS_FS_ppml_noCOLI
+			recode		`var'	(1=0)	(0=1)	if	!mi(PFS_ppml_noCOLI)	&	inrange(year,1979,1994)
+	
 			
 		*	Save
 		save	"${SNAP_dtInt}/SNAP_descdta_1979_2019", replace	//	Inermediate descriptive data for 1979-2019
+		
+		
+		
+		*	Preparing data to be shared with Senan
+	
+			*	(2024-7-8)	Additional cleaning
+			
+				*	Rename HFSM to FSSS
+				rename	(HFSM_raw HFSM_cat)	(FSSS_raw	FSSS_cat)
+				lab	var	FSSS_raw	"FSSS (raw score)"
+				lab	var	FSSS_cat	"FSSS (category)"
+				lab	define	FSSS_cat	1	"High Food Security"	2	"Marginal Food Security"	3	"Low Food Security"	4	"Very Low Food Security"
+				lab	val	FSSS_cat	FSSS_cat
+				
+				*	Drop suffix in PFS variables
+				rename	(PFS_ppml_noCOLI PFS_FS_ppml_noCOLI PFS_FI_ppml_noCOLI)	(PFS_7919	PFS_FS_7919	PFS_FI_7919)
+				lab	var	PFS_7919		"PFS (1979-2019)"
+				lab	var	PFS_FS_7919		"=1 if food secure by PFS (1979-2019)"
+				lab	var	PFS_FI_7919		"=1 if food insecure by PFS (1979-2019)"
+				
+				*	Re-label variables
+			
+			
+			*	keeping necessary variables only for sharing with Senan
+			local	IDvars		x11101ll pn	year
+			local	samplevars	surveyid seqnum sampstr sampcls wgt_long_ind wgt_long_fam sample_source
+			local	rpvars		rp_age rp_female rp_state rp_married rp_White rp_employed rp_edu_cat rp_disabled
+			local	indvars		ind_female ind_race ind_White ind_employed_dummy ind_edu_cat
+			local	FSSSvars	FSSS_cat FSSS_raw FSSS_FI
+			local	PFSvars		PFS_7919 PFS_FS_7919 PFS_FI_7919
+			
+			order	`IDvars'	`samplevars'	`rpvars'	`indvars'	`FSSSvars'	`PFSvars'
+			keep	`IDvars'	`samplevars'	`rpvars'	`indvars'	`FSSSvars'	`PFSvars'
+			
+			*	Save
+			compress
+			save	"${SNAP_dtInt}/PFS_7919", replace	//	Inermediate descriptive data for 1979-2019
+		
 
 
 		
@@ -708,79 +1133,6 @@
 	
 
 	
-	*	Annual trend
-
-				
-		*	Variablest to be collapsed
-		local	collapse_vars	foodexp_tot_exclFS_pc	foodexp_tot_inclFS_pc	foodexp_tot_exclFS_pc_real	foodexp_tot_inclFS_pc_real	foodexp_W_TFP_pc foodexp_W_TFP_pc_real	///	//	Food expenditure and TFP cost per capita (nominal and real)
-								rp_age	rp_age_below30 rp_age_over65	rp_female	rp_nonWhte	rp_HS	rp_somecol	rp_col	rp_disabled	famnum	FS_rec_wth	FS_rec_amt_capita	FS_rec_amt_capita_real	part_num	///	//	Gender, race, education, FS participation rate, FS amount
-								PFS_ppml_noCOLI	NME	PFS_FI_ppml_noCOLI	NME_below_1	FSSS_FI	FSSS_FI_v2	//	Outcome variables	
-		
-		*	All population
-			collapse (mean) `collapse_vars' (median)	rp_age_med=rp_age	[pw=wgt_long_ind], by(year)
-			
-			lab	var	rp_female	"Female (RP)"
-			lab	var	rp_nonWhte	"Non-White (RP)"
-			*lab	var	rp_HS_GED	"HS or GED (RP)"
-			lab	var	rp_col		"College degree (RP)"
-			*lab	var	rp_col_4yr	"4-year College degree (RP)"
-			lab	var	rp_disabled	"Disabled (RP)"
-			lab	var	FS_rec_wth	"FS received"
-			lab	var	PFS_ppml_noCOLI		"PFS"
-			lab	var	NME			"NME"
-			lab	var	PFS_FI_ppml_noCOLI	"PFS < 0.5"
-			lab	var	NME_below_1	"NME < 1"
-			lab	var	foodexp_W_TFP_pc		"Monthly TFP cost per capita"
-			lab	var	foodexp_W_TFP_pc_real	"Monthly TFP cost per capita (Jan 2019 dollars)"
-			lab	var	foodexp_tot_exclFS_pc		"Monthly Food exp per capita (w/o FS)"
-			lab	var	foodexp_tot_inclFS_pc		"Monthly Food exp per capita (with FS)"
-			lab	var	foodexp_tot_exclFS_pc_real	"Monthly Food exp per capita (w/o FS)	(Jan 2019 dollars) "
-			lab	var	foodexp_tot_inclFS_pc_real	"Monthly Food exp per capita (with FS)	(Jan 2019 dollars) "
-			lab	var	FS_rec_amt_capita			"Monthly FS amount per capita"
-			lab	var	FS_rec_amt_capita_real		"Monthly FS amount per capita (Jan 2019 dollars)"
-		
-			
-		*	Import Census data
-		merge	1:1	year	using	"${SNAP_dtInt}/HH_census_1979_2019.dta", nogen assert(2 3) // Missing years in the PSID data will be imported
-					
-		*	Import unemploymen rate (national)
-		merge	1:1	year	using	"${SNAP_dtInt}/Unemployment Rate_nation.dta", nogen assert(2 3) keep(3) // keep only study period.
-		
-				
-		*	Fraction of population in SNAP
-		**	NOTE: This is NOT the same as the official SNAP participation rate issued by the USDA
-		loc	var	frac_SNAP_person
-		gen	`var'	=	(part_num*1000000)/US_est_pop
-		lab	var	`var'	"\% of ppl in US in SNAP"
-		
-		*	Additional cleaning
-		replace	pov_rate_national	=	pov_rate_national/100	//	re-scale poverty rate to vary from 0 to 1
-	
-	
-		*	Manually plug in FI prevalence rate from the USDA report
-		loc	var	FSSS_FI_official
-		cap	drop	`var'
-		gen		`var'=.
-		replace	`var'=0.101	if	year==1999	// 1999: 10.1% are food insecure (7.1% are low food secure, 3.0% are very low food secure)
-		replace	`var'=0.107	if	year==2001	// 2001: 10.7% are food insecure (7.4% are low food secure, 3.3% are very low food secure)
-		replace	`var'=0.112	if	year==2003	// 2003: 11.2% are food insecure (7.7% are low food secure, 3.5% are very low food secure)
-		replace	`var'=0.110	if	year==2005	// 2005: 11.0% are food insecure (7.1% are low food secure, 3.9% are very low food secure)
-		replace	`var'=0.111	if	year==2007	// 2007: 11.1% are food insecure (7.0% are low food secure, 4.1% are very low food secure)
-		replace	`var'=0.147	if	year==2009	// 2009: 14.7% are food insecure (9.0% are low food secure, 5.7% are very low food secure)
-		replace	`var'=0.149	if	year==2011	// 2011: 14.9% are food insecure (9.2% are low food secure, 5.7% are very low food secure)
-		replace	`var'=0.143	if	year==2013	// 2013: 14.3% are food insecure (8.7% are low food secure, 5.6% are very low food secure)
-		replace	`var'=0.127	if	year==2015	// 2015: 12.7% are food insecure (7.7% are low food secure, 5.0% are very low food secure)
-		replace	`var'=0.118	if	year==2017	// 2017: 11.8% are food insecure (7.3% are low food secure, 4.5% are very low food secure)
-		replace	`var'=0.105	if	year==2019	// 2019: 10.5% are food insecure (6.6% are low food secure, 3.9% are very low food secure)
-		lab	var	`var'	"Official FI Prevalence"
-		
-		sort	year
-		
-		*	Save	
-		compress
-		save	"${SNAP_dtInt}/SNAP_1979_2019_census_annual", replace
-		
-
 
 		*	Annual plots
 		use	"${SNAP_dtInt}/SNAP_1979_2019_census_annual", clear
@@ -963,7 +1315,7 @@
 		
 			*	Rank correlation b/w PFS and FSSS
 				
-							*	PFS by RP's gender and race and education
+				*	PFS by RP's gender and race and education
 			
 				*	Median PFS for selected group
 				summ	PFS_ppml_noCOLI	[aw=wgt_long_ind]	if	ind_female==1	&	ind_edu_cat==1	&	ind_nonWhite==1, d	//	Non-white, women, less than HS
@@ -1306,6 +1658,45 @@
 		
 			
 			
+			
+			
+			*	Summary stats based on FS status
+			loc	summvars	rp_female	rp_age	rp_nonWhte	rp_married	rp_disabled	rp_col		///
+							famnum	ln_fam_income_pc_real	foodexp_tot_inclFS_pc_1_real	PFS_ppml_noCOLI HFSM_raw	
+			
+			*	Full sample
+			estpost tabstat	`summvars' 	if	!mi(PFS_ppml_noCOLI)	&	!mi(PFS_FS_FSSS_FI)	[aw=wgt_long_ind],	///
+				statistics(count	mean	sd	min	max) columns(statistics)	// save
+			est	store	PFS_FSSS_full
+			
+			*	FS(PFS)/FS(FSSS) individuals
+			estpost tabstat	`summvars' 	if	!mi(PFS_ppml_noCOLI)	&	PFS_FS_FSSS_FS==1	[aw=wgt_long_ind],	///
+				statistics(count	mean	sd	min	max) columns(statistics)	// save
+			est	store	PFS_FS_FSSS_FS
+			
+			*	FS(PFS)/FI(FSSS) individuals
+			estpost tabstat	`summvars' 	if	!mi(PFS_ppml_noCOLI)	&	PFS_FS_FSSS_FI==1	[aw=wgt_long_ind],	///
+				statistics(count	mean	sd	min	max) columns(statistics)	// save
+			est	store	PFS_FS_FSSS_FI
+			
+			*	FI(PFS)/FS(FSSS) individuals
+			estpost tabstat	`summvars' 	if	!mi(PFS_ppml_noCOLI)	&	PFS_FI_FSSS_FS==1	[aw=wgt_long_ind],	///
+				statistics(count	mean	sd	min	max) columns(statistics)	// save
+			est	store	PFS_FI_FSSS_FS
+			
+			*	FI(PFS)/FI(FSSS) individuals
+			estpost tabstat	`summvars' 	if	!mi(PFS_ppml_noCOLI)	&	PFS_FI_FSSS_FI==1	[aw=wgt_long_ind],	///
+				statistics(count	mean	sd	min	max) columns(statistics)	// save
+			est	store	PFS_FI_FSSS_FI
+			
+			
+			
+			esttab	PFS_FSSS_full	PFS_FS_FSSS_FS	PFS_FS_FSSS_FI	PFS_FI_FSSS_FS	PFS_FI_FSSS_FI	using	"${SNAP_outRaw}/summstat_by_status.csv",  ///
+				cells("count(fmt(%12.0f)) mean(fmt(%12.2f)) sd(fmt(%12.2f)) min(fmt(%12.2f)) max(fmt(%12.2f))") label	title("Summary Statistics - FS(PFS) and FI(FSSS)") noobs 	  replace
+		
+			
+			
+			
 /*
 			estpost tabstat	PFS_FS_FSSS_FS	PFS_FI_FSSS_FI	PFS_FI_FSSS_FS	PFS_FS_FSSS_FI	[aw=wgt_long_ind],	statistics(count	mean		/*sd	min	 median	p95 max*/	) columns(statistics)  by(year)		// save
 			est	store	PFS_FSSS_FI_by_year
@@ -1467,7 +1858,8 @@
 					*	OLS
 					esttab	PFS_ysFE_noind	PFS_ysFE_ind	PFS_ysiFE_noind		PFS_ysiFE_ind	using "${SNAP_outRaw}/PFS_on_HH X.csv", ///
 							cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
-							title(`depvar' on HH Characteristics)		replace	
+							title(PFS on HH Characteristics)		replace	
+					
 				
 			
 	/****************************************************************
