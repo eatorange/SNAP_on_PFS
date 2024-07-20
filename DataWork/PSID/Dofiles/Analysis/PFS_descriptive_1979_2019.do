@@ -659,8 +659,6 @@
 		merge	1:1	year	using	"${SNAP_dtInt}/Unemployment Rate_nation.dta", nogen assert(2 3) keep(3) // keep only study period.
 		
 		*	Import other macroeconomic indicators
-		
-		*	Import other macroeconomic indicators
 		merge	m:1	year	using	"${SNAP_dtInt}/GDP_growth_1961_2023", nogen assert(2 3) keep(3)	//	GDP growth
 		merge	m:1	year	using	"${SNAP_dtInt}/dis_per_inc_pc", nogen assert(2 3) keep(3)	//	Disposable income
 		merge	m:1	year	using	"${SNAP_dtInt}/Gini_index", nogen assert(2 3) keep(3)	//	Gini index
@@ -798,16 +796,17 @@
 				*	Graph actual PFS cut-off(1995-2019) and predicted PFS cut-off
 				graph	twoway	///
 					(line PFS_threshold_ppml_noCOLI year, lpattern(dash) xaxis(1 2) yaxis(1) legend(label(1 "Realized")))	///
-					(line PFS_cutoff_income_hat		year, lpattern(dot) xaxis(1 2) yaxis(1) legend(label(2 "Predicted (disposable income)")))	///
-					(line PFS_cutoff_nonWhite_hat	year, lpattern(shortdash)	lc(gray)  lwidth(medium) graphregion(fcolor(white)) legend(label(3 "Predicted (non-White)")))	///
-					(line PFS_cutoff_pov_hat		year, lpattern(longdash)	lc(gray)  lwidth(medium) graphregion(fcolor(white)) legend(label(4 "Predicted (poverty rate)")))	///
-					(line PFS_cutoff_full_hat		year, lpattern(dash_dot) xaxis(1 2) yaxis(1)  legend(label(5 "Predicted  (full)") row(2) size(small) keygap(0.1) pos(6) symxsize(5))),	///
+					(line PFS_cutoff_pov_hat		year, lpattern(dot)	lc(gray)  lwidth(medium) graphregion(fcolor(white)) legend(label(2 "Predicted (poverty rate)")))	///
+					(line PFS_cutoff_full_hat		year, lpattern(dash_dot) xaxis(1 2) yaxis(1)  legend(label(3 "Predicted  (full)") row(1) size(small) keygap(0.1) pos(6) symxsize(5))),	///
 								/*xline(1980 1993 1999 2007, axis(1) lpattern(dot))*/ xlabel(/*1980 "No payment" 1993 "xxx" 2009 "ARRA" 2020 "COVID"*/, axis(2))	///
 								xtitle(Year)	ytitle("Probability")	///
-								title(PFS cut-off)	bgcolor(white)	graphregion(color(white)) /*note(Source: USDA & BLS)*/	name(PFS_cutoff, replace)
+								title(PFS Thresholds)	bgcolor(white)	graphregion(color(white)) /*note(Source: USDA & BLS)*/	name(PFS_cutoff, replace)
 							
+							
+												/*(line PFS_cutoff_income_hat		year, lpattern(dot) xaxis(1 2) yaxis(1) legend(label(2 "Predicted (disposable income)")))	///
+					(line PFS_cutoff_nonWhite_hat	year, lpattern(shortdash)	lc(gray)  lwidth(medium) graphregion(fcolor(white)) legend(label(3 "Predicted (non-White)")))	/// */
 			
-				graph	export	"${SNAP_outRaw}/PFS_cutoff.png", replace	
+				graph	export	"${SNAP_outRaw}/PFS_thresholds.png", replace	
 				graph	close	
 		
 		
@@ -1408,7 +1407,8 @@
 				*	Temporarily replace "inapp(education)" as missing
 				recode	ind_edu_cat	(0=.)	
 				
-			graph	box	PFS_ppml_noCOLI		[aw=wgt_long_ind], over(ind_female, sort(1)) over(ind_nonWhite, sort(1))	over(ind_edu_cat, sort(1)) nooutsides name(outcome_subgroup_ind, replace) title(Food Security by Subgroup) note("")
+			graph	box	PFS_ppml_noCOLI		[aw=wgt_long_ind], over(ind_female, sort(1)) over(ind_nonWhite, sort(1))	over(ind_edu_cat, sort(1)) ///
+				nooutsides name(outcome_subgroup_ind, replace) title(Estimated Food Security by Subgroup) note("")
 			
 			graph display outcome_subgroup_ind, ysize(4) xsize(9.0)
 			graph	export	"${SNAP_outRaw}/PFS_by_ind_subgroup.png", replace	
@@ -1519,7 +1519,7 @@
 				summ	PFS_ppml_noCOLI	[aw=wgt_long_ind] if year==1997
 				svy, subpop(if year==1997): mean PFS_ppml_noCOLI
 				
-				lgraph PFS_ppml_noCOLI year [aw=wgt_long_ind], errortype(iqr) separate(0.01) title(PFS) note(25th and 75th percentile)
+				lgraph PFS_ppml_noCOLI year [aw=wgt_long_ind], errortype(iqr) separate(0.01) title(PFS (1979-2019)) note(25th and 75th percentile)
 				graph	export	"${SNAP_outRaw}/PFS_annual.png", replace
 				graph	close
 				
