@@ -339,11 +339,12 @@
 
 	
 	*	Based on the stats and figure above, I set average threshold by 0.5
+	*	(2024-8-6) don't do this, as we decided to set thresholds based on macroeconomic indicators.
 		
 	use	"${SNAP_dtInt}/SNAP_long_PFS_cat", clear	
 		
 		replace	PFS_FI_ppml_noCOLI=1			if	inrange(PFS_ppml_noCOLI,0,0.5)	&	inrange(year,1979,1994)
-		replace	PFS_threshold_ppml_noCOLI=0.5	if	inrange(year,1979,1994)
+		// replace	PFS_threshold_ppml_noCOLI=0.5	if	inrange(year,1979,1994)
 	
 		*	FI trends (both PFS and FSSS)
 		preserve
@@ -914,8 +915,8 @@
 				
 				*	Graph actual PFS cut-off(1995-2019) and predicted PFS cut-off
 				graph	twoway	///
-					(line PFS_threshold_ppml_noCOLI year, lpattern(dash) xaxis(1 2) yaxis(1) legend(label(1 "Realized")))	///
-					(line PFS_cutoff_pov_hat		year, lpattern(dot)	lc(gray)  lwidth(medium) graphregion(fcolor(white)) legend(label(2 "Predicted (poverty rate)")))	///
+					(line PFS_threshold_ppml_noCOLI year, lpattern(solid) xaxis(1 2) yaxis(1) legend(label(1 "Realized")))	///
+					(line PFS_cutoff_pov_hat		year, lpattern(dash)	lc(gray)  lwidth(medium) graphregion(fcolor(white)) legend(label(2 "Predicted (poverty rate)")))	///
 					(line PFS_cutoff_full_hat		year, lpattern(dash_dot) xaxis(1 2) yaxis(1)  legend(label(3 "Predicted  (full)") row(1) size(small) keygap(0.1) pos(6) symxsize(5))),	///
 								/*xline(1980 1993 1999 2007, axis(1) lpattern(dot))*/ xlabel(/*1980 "No payment" 1993 "xxx" 2009 "ARRA" 2020 "COVID"*/, axis(2))	///
 								xtitle(Year)	ytitle("Probability")	///
