@@ -942,6 +942,21 @@
 	
 	*	Prepare external data
 	if	`ext_data'==1	{
+										
+				
+		*	Unemployment Rate (BLS)
+			
+			*	Nationwide (for program summary)
+			import excel "${clouldfolder}/DataWork/BLS/Unemp_rate_nation_month.xlsx", sheet("BLS Data Series") cellrange(A12)  firstrow clear
+			
+			rename	(Year Annual) (year unemp_rate)
+			keep	year	unemp_rate
+			
+			label	var	unemp_rate "Unemployment Rate (%)"
+			
+			save	"${SNAP_dtInt}/Unemployment Rate_nation",	replace
+	
+		
 		
 		*	State data with unique PSID code
 		*	This data will be merged with other data which has state name
@@ -976,7 +991,11 @@
 			lab	var	inst6017_nom	"State government ideology"	
 
 			save	"${SNAP_dtInt}/citizen_government_ideology",	replace
-			
+	
+	
+	
+	
+	
 			*	Descriptive stats/figures
 
 				
@@ -1011,7 +1030,7 @@
 				*	Correlation by specific PSID wave
 					
 					*	2015
-					use "E:\Box\US Food Security Dynamics\DataWork\PSID\DataSets\Raw\Main\fam2015er.dta", clear
+					use "${SNAP_dtRaw}/Unpacked/fam2015er.dta", clear
 					gen	year=2015
 					rename	ER60003 rp_state
 					rename	ER60735	FS_rec_wth
@@ -1030,6 +1049,8 @@
 					reg FS_rec_wth citi6016, robust
 					reg	FS_rec_wth	inst6017_nom, robust
 			
+
+				
 				
 		
 		*	State GDP
@@ -1105,6 +1126,7 @@
 			compress
 			save	"${SNAP_dtInt}/GDP_1975_2019",	replace
 			
+
 		
 		*	Finance information (1977-2019)
 			*	Original U.S. Census data do not have state govt data pre-1977 (except 1972)
@@ -1890,7 +1912,7 @@
 		}
 		*/
 		
-		
+
 		*	SNAP policy index data file (1997-2014)
 		*	(2023-05-22) This file includes the indices matching to the working paper, but different from manually computed index.
 		*	(2023-06-12) We found an issue with the manually imported data, so we use the official data
@@ -2337,19 +2359,7 @@
 			summ	all	if	major_control_mix==1	&	year==2019
 			
 		save	"${SNAP_dtInt}/State_participation_rates",	replace	
-		
-		*	Unemployment Rate (BLS)
-			
-			*	Nationwide (for program summary)
-			import excel "${clouldfolder}/DataWork/BLS/Unemp_rate_nation_month.xlsx", sheet("BLS Data Series") cellrange(A12)  firstrow clear
-			
-			rename	(Year Annual) (year unemp_rate)
-			keep	year	unemp_rate
-			
-			label	var	unemp_rate "Unemployment Rate (%)"
-			
-			save	"${SNAP_dtInt}/Unemployment Rate_nation",	replace
-			
+
 			*	Statewide
 			
 				*	Annual
