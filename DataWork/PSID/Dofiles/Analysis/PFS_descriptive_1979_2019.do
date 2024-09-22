@@ -914,7 +914,7 @@
 				cap	drop	PFS_cutoff_full_e2
 				
 				*	Without Unemployment rate (2024-08 version)
-				reg	PFS_threshold_ppml_noCOLI ln_dis_per_inc_pc	pct_rp_nonWhite_Census	GDP_pc_growth		pov_rate_national	if	!mi(PFS_threshold_ppml_noCOLI), robust
+				reg	PFS_threshold_ppml_noCOLI ln_dis_per_inc_pc	pct_rp_nonWhite_Census	GDP_pc_growth	pov_rate_national	if	!mi(PFS_threshold_ppml_noCOLI), robust
 				predict	PFS_cutoff_full_hat
 				predict	PFS_cutoff_full_e, resid
 				gen		PFS_cutoff_full_e2	=	(PFS_cutoff_full_e)^2
@@ -928,13 +928,13 @@
 					
 					*	With unemployment rate (supplementary)
 					cap	drop	PFS_cutoff_full2_hat	PFS_cutoff_full2_e	PFS_cutoff_full2_e2	
-					reg	PFS_threshold_ppml_noCOLI ln_dis_per_inc_pc	pct_rp_nonWhite_Census	GDP_pc_growth		pov_rate_national	unemp_rate	if	!mi(PFS_threshold_ppml_noCOLI), robust
+					reg	PFS_threshold_ppml_noCOLI ln_dis_per_inc_pc	pct_rp_nonWhite_Census	GDP_pc_growth	pov_rate_national	unemp_rate	if	!mi(PFS_threshold_ppml_noCOLI), robust
 					predict	PFS_cutoff_full2_hat
 					predict	PFS_cutoff_full2_e, resid
 					gen		PFS_cutoff_full2_e2	=	(PFS_cutoff_full2_e)^2
 					est	store	PFS_cutoff_full2
 					
-					esttab	PFS_cutoff_income	PFS_cutoff_nonWhite	PFS_cutoff_GDPgrowth		PFS_cutoff_povrate	PFS_cutoff_inc_nonWhite	PFS_cutoff_full	PFS_cutoff_full2	using "${SNAP_outRaw}/PFS_cutoff_on_X2.csv", ///
+					esttab	PFS_cutoff_income	PFS_cutoff_nonWhite	PFS_cutoff_GDPgrowth	PFS_cutoff_povrate	PFS_cutoff_unemprate	PFS_cutoff_full	PFS_cutoff_full2	using "${SNAP_outRaw}/PFS_cutoff_on_X2.csv", ///
 							cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2 r2_a, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
 							title(PFS cutoff on economic indicators)		replace	
 				
