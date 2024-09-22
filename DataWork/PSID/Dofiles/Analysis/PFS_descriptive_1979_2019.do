@@ -857,6 +857,7 @@
 				cap	drop	PFS_cutoff_income_e
 				cap	drop	PFS_cutoff_income_e2
 				
+				*	Disposable income
 				reg	PFS_threshold_ppml_noCOLI ln_dis_per_inc_pc	if	!mi(PFS_threshold_ppml_noCOLI), robust	//	ln(disposable income per capita)
 				predict	PFS_cutoff_income_hat
 				predict	PFS_cutoff_income_e, resid
@@ -867,12 +868,15 @@
 				cap	drop	PFS_cutoff_nonWhite_e
 				cap	drop	PFS_cutoff_nonWhite_e2
 				
+				*	% of non-White population
 				reg	PFS_threshold_ppml_noCOLI pct_rp_nonWhite_Census	if	!mi(PFS_threshold_ppml_noCOLI), robust	//	% of non-White RP
 				predict	PFS_cutoff_nonWhite_hat
 				predict	PFS_cutoff_nonWhite_e, resid
 				gen		PFS_cutoff_nonWhite_e2	=	(PFS_cutoff_nonWhite_e)^2
 				est	store	PFS_cutoff_nonWhite
 				
+				
+				*	GDP growth per capita
 				reg	PFS_threshold_ppml_noCOLI GDP_pc_growth	if	!mi(PFS_threshold_ppml_noCOLI), robust	//	GDP per capita growth rate
 				est	store	PFS_cutoff_GDPgrowth
 				
@@ -880,11 +884,25 @@
 				cap	drop	PFS_cutoff_pov_e
 				cap	drop	PFS_cutoff_pov_e2
 				
+				*	National poverty rate
 				reg	PFS_threshold_ppml_noCOLI pov_rate_national	if	!mi(PFS_threshold_ppml_noCOLI), robust	//	Poverty rate
 				predict	PFS_cutoff_pov_hat
 				predict	PFS_cutoff_pov_e, resid
 				gen		PFS_cutoff_pov_e2	=	(PFS_cutoff_pov_e)^2
 				est	store	PFS_cutoff_povrate
+				
+					*	Unemployment rate (suggested by Gundersen)
+					reg	PFS_threshold_ppml_noCOLI unemp_rate	if	!mi(PFS_threshold_ppml_noCOLI), robust	//	Poverty rate
+					predict	PFS_cutoff_unemp_hat
+					predict	PFS_cutoff_unemp_e, resid
+					gen		PFS_cutoff_unemp_e2	=	(PFS_cutoff_unemp_e)^2
+					est	store	PFS_cutoff_unemprate
+					
+					*	Graphing poverty rate and unemployment rate
+					graph twoway 	(connected unemp_rate year) ///
+									(connected pov_rate_national year, legend(label(3 "Predicted  (full)") row(1) size(small) keygap(0.1) pos(6) symxsize(5))), ytitle(Percentage (%))
+				
+				
 				
 				*	Multivariate regressions
 				reg	PFS_threshold_ppml_noCOLI ln_dis_per_inc_pc	pct_rp_nonWhite_Census	if	!mi(PFS_threshold_ppml_noCOLI), robust	//	income and non-White population
@@ -895,6 +913,7 @@
 				cap	drop	PFS_cutoff_full_e
 				cap	drop	PFS_cutoff_full_e2
 				
+				*	Without Unemployment rate (2024-08 version)
 				reg	PFS_threshold_ppml_noCOLI ln_dis_per_inc_pc	pct_rp_nonWhite_Census	GDP_pc_growth		pov_rate_national	if	!mi(PFS_threshold_ppml_noCOLI), robust
 				predict	PFS_cutoff_full_hat
 				predict	PFS_cutoff_full_e, resid
@@ -902,11 +921,23 @@
 				est	store	PFS_cutoff_full
 				
 				
-				
 				esttab	PFS_cutoff_income	PFS_cutoff_nonWhite	PFS_cutoff_GDPgrowth		PFS_cutoff_povrate	PFS_cutoff_inc_nonWhite	PFS_cutoff_full	using "${SNAP_outRaw}/PFS_cutoff_on_X.csv", ///
 							cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2 r2_a, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
 							title(PFS cutoff on economic indicators)		replace	
+				
 					
+					*	With unemployment rate (supplementary)
+					cap	drop	PFS_cutoff_full2_hat	PFS_cutoff_full2_e	PFS_cutoff_full2_e2	
+					reg	PFS_threshold_ppml_noCOLI ln_dis_per_inc_pc	pct_rp_nonWhite_Census	GDP_pc_growth		pov_rate_national	unemp_rate	if	!mi(PFS_threshold_ppml_noCOLI), robust
+					predict	PFS_cutoff_full2_hat
+					predict	PFS_cutoff_full2_e, resid
+					gen		PFS_cutoff_full2_e2	=	(PFS_cutoff_full2_e)^2
+					est	store	PFS_cutoff_full2
+					
+					esttab	PFS_cutoff_income	PFS_cutoff_nonWhite	PFS_cutoff_GDPgrowth		PFS_cutoff_povrate	PFS_cutoff_inc_nonWhite	PFS_cutoff_full	PFS_cutoff_full2	using "${SNAP_outRaw}/PFS_cutoff_on_X2.csv", ///
+							cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2 r2_a, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+							title(PFS cutoff on economic indicators)		replace	
+				
 				
 				
 				*	Comparing the first and the second model (second model is slightly better)
@@ -963,6 +994,10 @@
 			loc	var		PFS_FS_ppml_noCOLI
 			replace	`var'=1	if	PFS_FI_ppml_noCOLI==0	&	!mi(PFS_ppml_noCOLI)	&	inrange(year,1979,1994)
 			replace	`var'=0	if	PFS_FI_ppml_noCOLI==1	&	!mi(PFS_ppml_noCOLI)	&	inrange(year,1979,1994)
+			
+			loc	var		l2_PFS_FS_ppml_noCOLI
+			replace	`var'=1	if	l2_PFS_FI_ppml_noCOLI==0	&	!mi(l2_PFS_ppml_noCOLI)	&	inrange(year,1979,1994)
+			replace	`var'=0	if	l2_PFS_FI_ppml_noCOLI==1	&	!mi(l2_PFS_ppml_noCOLI)	&	inrange(year,1979,1994)
 			
 		
 		*	Save
@@ -2109,7 +2144,8 @@
 		
 		foreach	cat	of	local	categories	{
 			
-		
+			di	"cat is `cat'"
+			
 			*	Joint
 			tab		l2_PFS_FS_ppml_noCOLI	PFS_FS_ppml_noCOLI	[aw=wgt_long_ind]		if	``cat'_cond'	& inrange(year,1981,2019), cell matcell(trans_2by2_joint_`cat')
 			scalar	samplesize_`cat'	=	trans_2by2_joint_`cat'[1,1] + trans_2by2_joint_`cat'[1,2] + trans_2by2_joint_`cat'[2,1] + trans_2by2_joint_`cat'[2,2]	//	calculate sample size by adding up all
