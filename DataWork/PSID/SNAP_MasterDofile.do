@@ -47,7 +47,15 @@
    *ssc install ietoolkit, replace
    ieboilstart, version(14.1) maxvar(32767) matsize(11000)        //Set the version number to the oldest version used by anyone in the project team
    `r(version)'                        //This line is needed to actually set the version from the command above
-
+	
+	*	User written commands used
+	*	This is just to make a note. For best replication, copy the current version of ado files rather than installing it.
+	*	ssc	install	ppmlhdfe
+	*	ssc install reghdfe
+	*	ssc install asdoc
+	*	net	install	grc1leg 
+	*	ssc	install	lgraph
+	
 *iefolder*1*FolderGlobals*******************************************************
 *iefolder will not work properly if the line above is edited
 
