@@ -131,6 +131,7 @@
 	use	"${SNAP_dtInt}/SNAP_long_PFS", clear
 	lab	var	PFS_ppml_noCOLI		"PFS"
 	
+
 	sort	year	x11101ll
 	
 		*	Import USDA FI prevalnce rate (person)
@@ -527,90 +528,7 @@
 		
 		*/
 		
-				
-		*	Generate lagged PFS variable
-		sort	x11101ll	year
-		foreach	var	in		PFS_FI_ppml_noCOLI	PFS_FS_ppml_noCOLI	{
-			
-			cap	drop	l2_`var'
-			local	label:	variable	label	`var'
-			di	"`label'"
-			gen	l2_`var'	=	l2.`var'
-			lab	var	l2_`var'	"Lagged `label'"
-			
-		}
-
 	
-		*	Keep relevant study sample only
-	keep	if	!mi(PFS_ppml_noCOLI)
-	
-	*	Construct spell length
-		**	IMPORANT NOTE: Since the PFS data has (1) gap period b/w 1988-1991 and (2) changed frequency since 1997, it is not clear how to define "spell"
-		**	Based on 2023-7-25 discussion, we decide to define spell as "the number of consecutive 'OBSERVATIONS' experiencing food insecurity", regardless of gap period and updated frequency
-			**	We can do robustness check with the updated spell (i) splitting pre-gap period and post-gap period, and (ii) Multiplying spell by 2 for post-1997		
-		cap drop	_seq	_spell	_end
-		tsspell, cond(year>=1979 & PFS_FI_ppml_noCOLI==1)
-
-	*	Create additional indicators
-	
-		
-		*	Create "unique" variable that has only one value for individual (need to generate individual-level summary stats)
-			
-			*	Gender
-			local	var	ind_female
-			cap	drop	`var'_uniq
-			bys x11101ll	live_in_FU:	gen `var'_uniq=`var' if _n==1	&	live_in_FU==1	
-			summ `var'_uniq	
-			label	var	`var'_uniq "Gender (ind)"
-			
-			*	Number of waves living in FU
-			loc	var	num_waves_in_FU
-			cap	drop	`var'
-			cap	drop	`var'_temp
-			cap	drop	`var'_uniq
-			bys	x11101ll:	egen	`var'=total(live_in_FU)	if	live_in_FU==1 // Only counts the period when individual was living in FU. NOT including it will result in counting invalid periods (ex. before born)
-			bys x11101ll:	egen	`var'_temp	=	max(`var')
-			bys x11101ll:	gen 	`var'_uniq	=	`var'_temp if _n==1
-			drop	`var'
-			rename	`var'_temp	`var'
-			summ	`var'_uniq,d
-			label	var	`var'_uniq "\# of waves surveyed"
-			
-			*	Ever-used FS over stuy period
-			loc	var	FS_ever_used
-			cap	drop	`var'
-			cap	drop	`var'_uniq
-			cap	drop	`var'_temp
-			bys	x11101ll:	egen	`var'=	max(FS_rec_wth)	if live_in_FU==1 // Only counts the period when individual was living in FU. NOT including it will result in counting invalid periods (ex. before born)
-			bys x11101ll:	egen	`var'_temp	=	max(`var')
-			bys x11101ll:	gen 	`var'_uniq	=	`var'_temp if _n==1
-			drop	`var'
-			rename	`var'_temp	`var'
-			summ	`var'_uniq ,d
-			label var	`var'		"FS ever used throughouth the period"
-			label var	`var'_uniq	"FS ever used throughouth the period"
-			
-			*	# of waves FS redeemed	(if ever used)
-			loc	var	total_FS_used
-			cap	drop	`var'
-			cap	drop	`var'_temp
-			cap	drop	`var'_uniq
-			bys	x11101ll:	egen	`var'=	total(FS_rec_wth)	if	live_in_FU==1 // Only counts the period when individual was living in FU. NOT including it will result in counting invalid periods (ex. before born)
-			bys x11101ll:	egen	`var'_temp	=	max(`var')
-			bys x11101ll:	gen 	`var'_uniq	=	`var'_temp if _n==1
-			summ	`var'_uniq if `var'_uniq>=1,d
-			label var	`var'		"Total FS used throughouth the period"
-			label var	`var'_uniq	"Total FS used throughouth the period"
-			
-			*	% of FS redeemed (# FS redeemed/# surveyed)		
-			loc	var	share_FS_used
-			cap	drop	`var'
-			cap	drop	`var'_uniq
-			gen	`var'	=	total_FS_used_uniq	/	num_waves_in_FU_uniq
-			bys x11101ll:	gen 	`var'_uniq	=	`var' if _n==1
-			label var	`var'		"\% of FS used throughouth the period"
-			label var	`var'_uniq	"\% of FS used throughouth the period"
-			
 	*	Re-scale annual income per capita
 		replace	fam_income_pc_real	=	fam_income_pc_real / 1000
 		lab	var	fam_income_pc_real		"Annual family income per capita (K) (Jan 2019 dollars)"
@@ -995,10 +913,100 @@
 			replace	`var'=1	if	PFS_FI_ppml_noCOLI==0	&	!mi(PFS_ppml_noCOLI)	&	inrange(year,1979,1994)
 			replace	`var'=0	if	PFS_FI_ppml_noCOLI==1	&	!mi(PFS_ppml_noCOLI)	&	inrange(year,1979,1994)
 			
+/*
 			loc	var		l2_PFS_FS_ppml_noCOLI
 			replace	`var'=1	if	l2_PFS_FI_ppml_noCOLI==0	&	!mi(l2_PFS_ppml_noCOLI)	&	inrange(year,1979,1994)
 			replace	`var'=0	if	l2_PFS_FI_ppml_noCOLI==1	&	!mi(l2_PFS_ppml_noCOLI)	&	inrange(year,1979,1994)
 			
+*/
+				
+		*	Keep relevant study sample only
+		keep	if	!mi(PFS_ppml_noCOLI)
+		
+		
+					
+		*	Generate lagged PFS variable
+		sort	x11101ll	year
+		foreach	var	in		PFS_FI_ppml_noCOLI	PFS_FS_ppml_noCOLI	{
+			
+			cap	drop	l2_`var'
+			local	label:	variable	label	`var'
+			di	"`label'"
+			gen	l2_`var'	=	l2.`var'
+			lab	var	l2_`var'	"Lagged `label'"
+			
+		}
+
+
+	*	Construct spell length
+		**	IMPORANT NOTE: Since the PFS data has (1) gap period b/w 1988-1991 and (2) changed frequency since 1997, it is not clear how to define "spell"
+		**	Based on 2023-7-25 discussion, we decide to define spell as "the number of consecutive 'OBSERVATIONS' experiencing food insecurity", regardless of gap period and updated frequency
+			**	We can do robustness check with the updated spell (i) splitting pre-gap period and post-gap period, and (ii) Multiplying spell by 2 for post-1997		
+		cap drop	_seq	_spell	_end
+		tsspell, cond(year>=1979 & PFS_FI_ppml_noCOLI==1)
+
+	*	Create additional indicators
+	
+		
+		*	Create "unique" variable that has only one value for individual (need to generate individual-level summary stats)
+			
+			*	Gender
+			local	var	ind_female
+			cap	drop	`var'_uniq
+			bys x11101ll	live_in_FU:	gen `var'_uniq=`var' if _n==1	&	live_in_FU==1	
+			summ `var'_uniq	
+			label	var	`var'_uniq "Gender (ind)"
+			
+			*	Number of waves living in FU
+			loc	var	num_waves_in_FU
+			cap	drop	`var'
+			cap	drop	`var'_temp
+			cap	drop	`var'_uniq
+			bys	x11101ll:	egen	`var'=total(live_in_FU)	if	live_in_FU==1 // Only counts the period when individual was living in FU. NOT including it will result in counting invalid periods (ex. before born)
+			bys x11101ll:	egen	`var'_temp	=	max(`var')
+			bys x11101ll:	gen 	`var'_uniq	=	`var'_temp if _n==1
+			drop	`var'
+			rename	`var'_temp	`var'
+			summ	`var'_uniq,d
+			label	var	`var'_uniq "\# of waves surveyed"
+			
+			*	Ever-used FS over stuy period
+			loc	var	FS_ever_used
+			cap	drop	`var'
+			cap	drop	`var'_uniq
+			cap	drop	`var'_temp
+			bys	x11101ll:	egen	`var'=	max(FS_rec_wth)	if live_in_FU==1 // Only counts the period when individual was living in FU. NOT including it will result in counting invalid periods (ex. before born)
+			bys x11101ll:	egen	`var'_temp	=	max(`var')
+			bys x11101ll:	gen 	`var'_uniq	=	`var'_temp if _n==1
+			drop	`var'
+			rename	`var'_temp	`var'
+			summ	`var'_uniq ,d
+			label var	`var'		"FS ever used throughouth the period"
+			label var	`var'_uniq	"FS ever used throughouth the period"
+			
+			*	# of waves FS redeemed	(if ever used)
+			loc	var	total_FS_used
+			cap	drop	`var'
+			cap	drop	`var'_temp
+			cap	drop	`var'_uniq
+			bys	x11101ll:	egen	`var'=	total(FS_rec_wth)	if	live_in_FU==1 // Only counts the period when individual was living in FU. NOT including it will result in counting invalid periods (ex. before born)
+			bys x11101ll:	egen	`var'_temp	=	max(`var')
+			bys x11101ll:	gen 	`var'_uniq	=	`var'_temp if _n==1
+			summ	`var'_uniq if `var'_uniq>=1,d
+			label var	`var'		"Total FS used throughouth the period"
+			label var	`var'_uniq	"Total FS used throughouth the period"
+			
+			*	% of FS redeemed (# FS redeemed/# surveyed)		
+			loc	var	share_FS_used
+			cap	drop	`var'
+			cap	drop	`var'_uniq
+			gen	`var'	=	total_FS_used_uniq	/	num_waves_in_FU_uniq
+			bys x11101ll:	gen 	`var'_uniq	=	`var' if _n==1
+			label var	`var'		"\% of FS used throughouth the period"
+			label var	`var'_uniq	"\% of FS used throughouth the period"
+			
+		
+		
 		
 		*	Save
 		save	"${SNAP_dtInt}/SNAP_descdta_1979_2019", replace	//	Inermediate descriptive data for 1979-2019
@@ -2003,10 +2011,15 @@
 		*	By category
 		*	We use categories by - gender, race and college degree (dummy for each category)
 		*	I do NOT use individual-information for two reasons; (i) individual-level race not available. (ii) individual-education not available for indivdiual 16-years or less
+		*	(2024-9-22) I disabled rp_col, as there is no observations of college degree holder with _seq==23. Disabling doesn't matter our final analysis as we don't use this figure anyway.
 		
-		foreach	catvar	in	rp_female rp_White rp_col	{
+		foreach	catvar	in	rp_female rp_White /*rp_col*/	{
+			
+			di	"catvar is `catvar'"
 			
 			foreach	val	in	0 1	{
+				
+				di	"val is `val'"
 				
 				tab	_seq	[aw=wgt_long_ind]	if	_end==1	&	`catvar'==`val',	matcell(spell_freq_`catvar'_`val')
 				mat	list	spell_freq_`catvar'_`val'
@@ -2034,7 +2047,7 @@
 		
 		svmat	spell_pct_all
 		
-		rename	spell_pct_all?	(spell_pct_all	spell_pct_male	spell_pct_female	spell_pct_nonWhite	spell_pct_White	spell_pct_nocol	spell_pct_col)
+		rename	spell_pct_all?	(spell_pct_all	spell_pct_male	spell_pct_female	spell_pct_nonWhite	spell_pct_White	/*spell_pct_nocol	spell_pct_col*/)
 		lab	var	spell_length	"Spell Length"
 		
 		*	Y-axis title in h-bar
@@ -2073,12 +2086,14 @@
 			graph	export	"${SNAP_outRaw}/Spell_length_dist_race.png", replace
 			graph	close
 			
+			/* Disabled as of 2024-9-22. See the comment above.
 			*	By education (college degree)
 			graph hbar spell_pct_col	spell_pct_nocol, over(spell_length, /*descending*/	label(labsize(vsmall)))	legend(lab (1 "College degree") lab(2 "No college degree") size(small) rows(1))	///
 				bar(1, fcolor(gs03*0.5)) bar(2, fcolor(gs10*0.6))	graphregion(color(white)) bgcolor(white) title(Distribution of Spell Length - By College) ytitle(Fraction)
 		
 			graph	export	"${SNAP_outRaw}/Spell_length_dist_college.png", replace
 			graph	close
+			*/
 					
 	restore
 	
