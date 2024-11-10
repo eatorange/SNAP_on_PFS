@@ -2369,8 +2369,8 @@
 				replace	state="Washington D.C." if state=="District of Columbia"
 								
 				reshape	long	Annual, i(state) j(year)
-				rename	Annual	unemp_rate
-				lab	var	unemp_rate "Unemployment Rate"
+				rename	Annual	unemp_rate_annual
+				lab	var	unemp_rate_annual "State Unemployment Rate (annual)"
 			
 				merge	m:1	state using "${SNAP_dtRaw}/Statecode.dta", assert(3) nogen	//	Merge statecode
 				rename	statecode rp_state
@@ -2387,10 +2387,11 @@
 				rename	(Jan-Dec) unemp_rate#, addnumber
 				reshape	long	unemp_rate, i(state year) j(month)
 				
-				lab	var	unemp_rate	"Unemployment Rate"
+				lab	var	unemp_rate	"State Unemployment Rate (monthly)"
 			
 				merge	m:1	state using "${SNAP_dtRaw}/Statecode.dta", assert(3) nogen	//	Merge statecode
 				rename	statecode rp_state
+
 				
 				*	Create year-month variable to be merged with main data
 				gen	yearmonth	=	year*100+month
@@ -3411,6 +3412,9 @@
 			*	Import census data
 			merge	m:1	year	using	"${SNAP_dtInt}/HH_census_1979_2019.dta", nogen keep(1 3) ///
 				keepusing(pct_rp_female_Census  pct_rp_nonWhite_Census HH_age_median_Census_int pct_HH_age_below_30_Census HH_size_avg_Census pct_col_Census pov_rate_national	US_est_pop)
+			
+			*	Imnport state-wide annual unemployment data
+			merge m:1 rp_state year using "${SNAP_dtInt}/Unemployment Rate_state_annual", nogen keep(1 3) keepusing(unemp_rate_annual)	
 			
 			*	Import state-wide monthly unemployment data
 			merge m:1 rp_state prev_yrmonth using "${SNAP_dtInt}/Unemployment Rate_state_month", nogen keep(1 3) keepusing(unemp_rate)
