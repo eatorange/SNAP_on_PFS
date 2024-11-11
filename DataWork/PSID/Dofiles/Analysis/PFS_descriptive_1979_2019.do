@@ -389,7 +389,7 @@ Thank you for giving us the opportunity to consider your work and I look forward
 		
 	use	"${SNAP_dtInt}/SNAP_long_PFS_cat", clear	
 		
-		replace	PFS_FI_ppml_noCOLI=1			if	inrange(PFS_ppml_noCOLI,0,0.5)	&	inrange(year,1979,1994)
+		// replace	PFS_FI_ppml_noCOLI=1			if	inrange(PFS_ppml_noCOLI,0,0.5)	&	inrange(year,1979,1994)
 		// replace	PFS_threshold_ppml_noCOLI=0.5	if	inrange(year,1979,1994)
 	
 		*	FI trends (both PFS and FSSS)
@@ -713,7 +713,7 @@ Thank you for giving us the opportunity to consider your work and I look forward
 		
 		*	All population
 			collapse (mean) `collapse_vars' (median)	rp_age_med=rp_age	[pw=wgt_long_ind], by(year)
-			
+				
 			lab	var	rp_female	"Female (RP)"
 			lab	var	rp_nonWhte	"Non-White (RP)"
 			*lab	var	rp_HS_GED	"HS or GED (RP)"
@@ -853,19 +853,7 @@ Thank you for giving us the opportunity to consider your work and I look forward
 				predict	PFS_cutoff_pov_e, resid
 				gen		PFS_cutoff_pov_e2	=	(PFS_cutoff_pov_e)^2
 				est	store	PFS_cutoff_povrate
-				
-					*	Unemployment rate (suggested by Gundersen)
-					reg	PFS_threshold_ppml_noCOLI unemp_rate	if	!mi(PFS_threshold_ppml_noCOLI), robust	//	Poverty rate
-					predict	PFS_cutoff_unemp_hat
-					predict	PFS_cutoff_unemp_e, resid
-					gen		PFS_cutoff_unemp_e2	=	(PFS_cutoff_unemp_e)^2
-					est	store	PFS_cutoff_unemprate
-					
-					*	Graphing poverty rate and unemployment rate
-					graph twoway 	(connected unemp_rate year) ///
-									(connected pov_rate_national year, legend(label(3 "Predicted  (full)") row(1) size(small) keygap(0.1) pos(6) symxsize(5))), ytitle(Percentage (%))
-				
-				
+								
 				
 				*	Multivariate regressions
 				reg	PFS_threshold_ppml_noCOLI ln_dis_per_inc_pc	pct_rp_nonWhite_Census	if	!mi(PFS_threshold_ppml_noCOLI), robust	//	income and non-White population
@@ -901,7 +889,7 @@ Thank you for giving us the opportunity to consider your work and I look forward
 							cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2 r2_a, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
 							title(PFS cutoff on economic indicators)		replace	
 				
-				
+
 				
 				*	Comparing the first and the second model (second model is slightly better)
 				summ PFS_threshold_ppml_noCOLI PFS_cutoff_income_hat PFS_cutoff_nonWhite_hat	PFS_cutoff_income_e2	PFS_cutoff_nonWhite_e2
@@ -922,11 +910,54 @@ Thank you for giving us the opportunity to consider your work and I look forward
 			
 				graph	export	"${SNAP_outRaw}/PFS_thresholds.png", replace	
 				graph	close	
+				
+			
 		
 		
 		*	Save year-level data
 		compress
 		save	"${SNAP_dtInt}/SNAP_1979_2019_census_annual", replace
+		
+			*	(2024-11-11) Follow-up anaysese based on R&R reviewer commetn
+			use	"${SNAP_dtInt}/SNAP_1979_2019_census_annual", clear
+			
+				*	(1)	Inspecting counter-intuitive associations between known characteristics and PFS cut-offs
+					
+					*	Replciating poverty-only regressino (column 3 of table 2)
+					reg	PFS_threshold_ppml_noCOLI pov_rate_national	if	!mi(PFS_threshold_ppml_noCOLI), robust	//	Poverty rate
+					
+					*	Re-run 
+					replace	PFS_FI_ppml_noCOLI=. if !inrange(year,1995,2019)
+					reg	PFS_FI_ppml_noCOLI pov_rate_national	if	!mi(PFS_threshold_ppml_noCOLI), robust	//	Poverty rate
+					
+					*	Official FSSS prevalence rate on poverty
+					reg	FSSS_FI_official pov_rate_national	if	!mi(PFS_threshold_ppml_noCOLI), robust	//	Poverty rate
+					
+					
+					FSSS_FI
+					*Unemployment rate (suggested by Gundersen)
+					
+					
+					*	Replicate the full model regression
+					reg	PFS_threshold_ppml_noCOLI ln_dis_per_inc_pc	pct_rp_nonWhite_Census	GDP_pc_growth	pov_rate_national	if	!mi(PFS_threshold_ppml_noCOLI), robust
+			
+					
+			
+			
+				
+					
+					predict	PFS_cutoff_unemp_hat
+					predict	PFS_cutoff_unemp_e, resid
+					gen		PFS_cutoff_unemp_e2	=	(PFS_cutoff_unemp_e)^2
+					est	store	PFS_cutoff_unemprate
+					
+					*	Graphing poverty rate and unemployment rate
+					graph twoway 	(connected unemp_rate year) ///
+									(connected pov_rate_national year, legend(label(3 "Predicted  (full)") row(1) size(small) keygap(0.1) pos(6) symxsize(5))), ///
+									title(National Poverty and Unemlpoyment Rate (%)) ytitle(Percentage (%))
+					graph	export	"${SNAP_outRaw}/povrate_unemprate_national.png", replace	
+					graph	close
+				
 		
 		
 		*	Load previously saved data and import pre-1995 cutoff
