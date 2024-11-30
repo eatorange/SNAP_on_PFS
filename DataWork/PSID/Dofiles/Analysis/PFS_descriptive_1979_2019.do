@@ -933,7 +933,7 @@ Thank you for giving us the opportunity to consider your work and I look forward
 					est	store	PFS_cutoff_full_unemp1
 					reg	PFS_threshold_ppml_noCOLI ln_dis_per_inc_pc	pct_rp_nonWhite_Census	GDP_pc_growth	pov_rate_national	unemp_rate	if	!mi(PFS_threshold_ppml_noCOLI), robust	//	full regression, adding  unemp 
 					est	store	PFS_cutoff_full_unemp2
-					reg	PFS_threshold_ppml_noCOLI ln_dis_per_inc_pc	pct_rp_nonWhite_Census	GDP_pc_growth	pov_rate_national	if	!mi(PFS_threshold_ppml_noCOLI) & inrange(year,1995,2009), robust	//	full regression, using 1995-2011 data only
+					reg	PFS_threshold_ppml_noCOLI ln_dis_per_inc_pc	pct_rp_nonWhite_Census	GDP_pc_growth	pov_rate_national	if	!mi(PFS_threshold_ppml_noCOLI) & inrange(year,1995,2009), robust	//	full regression, using 1995-2009 data only
 					est	store	PFS_cutoff_full_9509
 					
 					esttab	PFS_cutoff_povrate	PFS_cutoff_unemp	PFS_cutoff_full		PFS_cutoff_full_unemp1	PFS_cutoff_full_unemp2	PFS_cutoff_full_9509	using "${SNAP_outRaw}/PFS_cutoff_on_X_sup1.csv", ///
@@ -955,7 +955,7 @@ Thank you for giving us the opportunity to consider your work and I look forward
 					
 					*	Rescaled poverty rate to percentage scale (for graphic purpose)
 					gen	pov_rate_national_pct	=	pov_rate_national * 0.01
-					gen	
+				
 				
 					*	Time trends of (i) PFS thresholds (ii) Official HH FI rate (iii) Official individual FI rate (iv) FI rate (PSID data)
 					*	PFS, NME and Dummies
@@ -969,11 +969,12 @@ Thank you for giving us the opportunity to consider your work and I look forward
 										xtitle(Year)	xtitle("", axis(2))	ytitle("PFS THreshold", axis(1)) 	ytitle("Percentage", axis(2))	///
 										title(PFS Thresholds and Key indicators)	bgcolor(white)	graphregion(color(white)) /*note(Source: USDA & BLS)*/	name(PFS_NME_annual, replace)
 						graph	export	"${SNAP_outRaw}/Trend_FI_indicators.png", replace	
-						*graph	close
+						graph	close
 						
 					restore			
 					
 					
+					*	Regress 
 					
 					
 
