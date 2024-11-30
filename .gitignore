@@ -53,3 +53,4 @@
 #temporary files
 *~
 *.tmp
+*.stswp
