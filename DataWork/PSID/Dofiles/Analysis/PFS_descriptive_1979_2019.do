@@ -716,17 +716,18 @@ Thank you for giving us the opportunity to consider your work and I look forward
 		tempfile	SNAP_long_PFS_before_cutoff
 		save		`SNAP_long_PFS_before_cutoff', replace
 	
-		
+			*	Rescale some variable for 
 		
 		*	Variables to be collapsed
-		local	collapse_vars	foodexp_tot_exclFS_pc	foodexp_tot_inclFS_pc	foodexp_tot_exclFS_pc_real	foodexp_tot_inclFS_pc_real	foodexp_W_TFP_pc foodexp_W_TFP_pc_real	///	//	Food expenditure and TFP cost per capita (nominal and real)
+		local	collapse_vars	foodexp_tot_exclFS_pc	foodexp_tot_inclFS_pc	foodexp_tot_exclFS_pc_real	foodexp_tot_inclFS_pc_real	foodexp_W_TFP_pc foodexp_W_TFP_pc_real	fam_income_pc_real	fam_income_pc	///	//	Food expenditure and TFP cost per capita (nominal and real)
 								rp_age	rp_age_below30 rp_age_over65	rp_female	rp_nonWhte	rp_HS	rp_somecol	rp_col	rp_disabled	famnum	FS_rec_wth	FS_rec_amt_capita	FS_rec_amt_capita_real	part_num	///	//	Gender, race, education, FS participation rate, FS amount
 								PFS_ppml_noCOLI	NME	PFS_FI_ppml_noCOLI	NME_below_1	FSSS_FI	FSSS_FI_v2	PFS_threshold_ppml_noCOLI	///	//	Outcome variables		
-								FI_pct	FSSS_FI_official	//	official FI prevalence rate (used to construct PFS threshold)
+								FI_pct	FSSS_FI_official	CPI		TFP_monthly_cost 	//	official FI prevalence rate (used to construct PFS threshold)
 		
 		*	All population
 			collapse (mean) `collapse_vars' (median)	rp_age_med=rp_age	[pw=wgt_long_ind], by(year)
 				
+			
 			lab	var	rp_female	"Female (RP)"
 			lab	var	rp_nonWhte	"Non-White (RP)"
 			*lab	var	rp_HS_GED	"HS or GED (RP)"
@@ -746,6 +747,10 @@ Thank you for giving us the opportunity to consider your work and I look forward
 			lab	var	foodexp_tot_inclFS_pc_real	"Monthly Food exp per capita (with FS)	(Jan 2019 dollars) "
 			lab	var	FS_rec_amt_capita			"Monthly FS amount per capita"
 			lab	var	FS_rec_amt_capita_real		"Monthly FS amount per capita (Jan 2019 dollars)"
+			lab	var	fam_income_pc				"Annual per capita family income (K)"
+			lab	var	fam_income_pc_real			"Annual per capita family income (K) (Jan 2019 dollars)"
+			lab	var	NME	"Normalized Monteray Expenditure"
+			lab	var	NME_below_1	"=1 if NME<1"
 		
 			
 		*	Import Census data
@@ -768,9 +773,14 @@ Thank you for giving us the opportunity to consider your work and I look forward
 		gen	`var'	=	(part_num*1000000)/US_est_pop
 		lab	var	`var'	"\% of ppl in US in SNAP"
 		
-		*	Additional cleaning
-		replace	pov_rate_national	=	pov_rate_national/100	//	re-scale poverty rate to vary from 0 to 1
-		sort	year
+			*	Additional cleaning
+			replace	pov_rate_national	=	pov_rate_national/100	//	re-scale poverty rate to vary from 0 to 1
+			sort	year
+			
+			gen		dis_per_inc_pc_real	=	dis_per_inc_pc	*	(CPI/100)
+			lab	var	dis_per_inc_pc_real	""
+			
+		
 	
 	
 		
@@ -974,7 +984,37 @@ Thank you for giving us the opportunity to consider your work and I look forward
 					restore			
 					
 					
-					*	Regress 
+					
+					*	Time trends of the PFS thresholds and income/food exp
+					
+					loc	var		dis_per_inc_pc_monthly
+					cap	drop	`var'
+					gen	`var'	=	dis_per_inc_pc	/	12
+					lab	var	`var'	"Average monthly per capita disposable income"
+					
+			
+					
+					preserve
+						keep	if	inrange(year,1995,2019)
+						graph	twoway	(connected PFS_threshold_ppml_noCOLI 		year, lpattern(dash) symbol(diamond) xaxis(1 2) yaxis(1) legend(label(1 "PFS thresholds")))	///
+										(connected dis_per_inc_pc 	year, /*lpattern(dash_dot)*/ xaxis(1 2) yaxis(2)  symbol(plus) legend(pos(6) row(2) label(3 "Per capita food expenditure"))),  ///
+										/*xline(1980 1993 1999 2007, axis(1) lpattern(dot))*/ xlabel(/*1980 "No payment" 1993 "xxx" 2009 "ARRA" 2020 "COVID"*/, axis(2))	///
+										xtitle(Year)	xtitle("", axis(2))	ytitle("PFS THreshold", axis(1)) 	ytitle("Percentage", axis(2))	///
+										title(PFS Thresholds and Key indicators)	bgcolor(white)	graphregion(color(white)) /*note(Source: USDA & BLS)*/	name(PFScutoff_inc_foodexp, replace)
+					restore		
+					
+					preserve
+						keep	if	inrange(year,1995,2019)
+						graph	twoway	(connected PFS_threshold_ppml_noCOLI 		year, lpattern(dash) symbol(diamond) xaxis(1 2) yaxis(1) legend(label(1 "PFS thresholds")))	///
+										(connected foodexp_W_TFP_pc_real				year, lpattern(dot) symbol(triangle) xaxis(1 2) yaxis(2) legend(label(2 "per capita TFP cost")))	///
+										(connected foodexp_tot_inclFS_pc_real 	year, /*lpattern(dash_dot)*/ xaxis(1 2) yaxis(2)  symbol(plus) legend(pos(6) row(2) label(3 "Per capita food expenditure"))),  ///
+										/*xline(1980 1993 1999 2007, axis(1) lpattern(dot))*/ xlabel(/*1980 "No payment" 1993 "xxx" 2009 "ARRA" 2020 "COVID"*/, axis(2))	///
+										xtitle(Year)	xtitle("", axis(2))	ytitle("PFS THreshold", axis(1)) 	ytitle("Percentage", axis(2))	///
+										title(PFS Thresholds and Key indicators)	bgcolor(white)	graphregion(color(white)) /*note(Source: USDA & BLS)*/	name(PFScutoff_inc_foodexp, replace)
+					restore		
+			
+				/*
+				*	Regress 
 					
 					
 
@@ -1016,7 +1056,7 @@ Thank you for giving us the opportunity to consider your work and I look forward
 					predict	PFS_cutoff_unemp_e, resid
 					gen		PFS_cutoff_unemp_e2	=	(PFS_cutoff_unemp_e)^2
 					est	store	PFS_cutoff_unemprate
-		
+				*/
 		
 		*	Load previously saved data and import pre-1995 cutoff
 		use	`SNAP_long_PFS_before_cutoff', clear
@@ -2724,7 +2764,7 @@ Thank you for giving us the opportunity to consider your work and I look forward
 				*	Figure 7	(Change in food security status by year)
 					
 					*	B&W 
-					graph bar still_FI newly_FI	status_unknown, over(year, label(angle(vertical))) stack legend(lab (1 "Still FI") 	lab(2 "Newly FI")	lab(3 "Previously unknown")rows(1))	///
+					graph bar still_FI newly_FI	status_unknown, over(year, label(angle(vertical))) stack  legend(pos(6) lab (1 "Still FI") 	lab(2 "Newly FI")	lab(3 "Previously unknown")rows(1))	///
 					graphregion(color(white)) bgcolor(white)  bar(1, fcolor(gs11)) bar(2, fcolor(gs6)) bar(3, fcolor(gs1))	///
 					ytitle(Fraction of Population) title(Change in Food Security Status)	ylabel(0(.025)0.125) 	name(change_status_byyear, replace)
 					
