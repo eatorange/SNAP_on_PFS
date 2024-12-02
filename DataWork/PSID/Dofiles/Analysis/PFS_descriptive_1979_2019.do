@@ -66,7 +66,7 @@ Thank you for giving us the opportunity to consider your work and I look forward
 			save		`GDP_growth'
 			
 		
-			*	(2024-6-26) Import GDP per capita growh rate
+			*	(2024-6-26) Import national GDP per capita growh rate
 			*	Source: World Bank: https://data.worldbank.org/indicator/NY.GDP.PCAP.KD.ZG
 			import excel "${clouldfolder}\DataWork\World Bank\GDP_per_capita_growh_rate.xls", sheet("Data") clear
 			
@@ -83,6 +83,159 @@ Thank you for giving us the opportunity to consider your work and I look forward
 			
 			*	Save
 			save	"${SNAP_dtInt}/GDP_growth_1961_2023", replace
+			
+			
+			
+			
+			*	Import state nominal GDP (Source: REAP, https://united-states.reaproject.org/data-tables/gsp-a900n/)
+			forval	sheet=1/51	{
+				
+					*	1977-1997 (1997 will be dropped)
+					
+					*	Import sheet info
+					qui	import excel "${clouldfolder}\DataWork\REAP\State GDP_1977_2023\1977_1997\Allstates_1977_1997.xlsx", describe
+					local sheetname=r(worksheet_`sheet')
+					di	"state is `sheetname'"
+				
+					import excel "${clouldfolder}\DataWork\REAP\State GDP_1977_2023\1977_1997\Allstates_1977_1997.xlsx", sheet("`sheetname'") clear
+				
+					*	Validate the entires to make sure I import the right data, and keep only relevant info only
+					assert	A=="All industry total" in 2
+					keep	in	1/2	//	Keep the first row, to validate years.
+					destring	*,	replace	//	For numeric validation
+					
+					assert	C==1977	in	1
+					assert	W==1997	in	1
+					drop	B	W	//	Drop 1997 as well
+					drop	in	1
+									
+					replace	A="`sheetname'"
+					rename	A	state
+					rename	(C-V)	GDP_state_nominal#, addnumber(1977)
+					
+					tempfile	GDP_1977_1996_`sheet'
+					save		`GDP_1977_1996_`sheet'',	replace
+					
+				*	1997-2023
+					import excel "${clouldfolder}\DataWork\REAP\State GDP_1977_2023\1997_2023\Allstates_1997_2023.xlsx", describe
+					local sheetname=r(worksheet_`sheet')
+					di	"state is `sheetname'"
+					
+					import excel "${clouldfolder}\DataWork\REAP\State GDP_1977_2023\1997_2023\Allstates_1997_2023.xlsx", sheet("`sheetname'") clear
+					
+					assert	A=="All industry total" in 2
+					keep	in	1/2	//	Keep the first row, to validate years.
+					destring	*,	replace	//	For numeric validation
+					
+					assert	C==1997	in	1
+					assert	AC==2023	in	1
+					drop	B	
+					drop	in	1
+									
+					replace	A="`sheetname'"
+					rename	A	state
+					rename	(C-AC)	GDP_state_nominal#, addnumber(1997)
+					
+					tempfile	GDP_1997_2023_`sheet'
+					save		`GDP_1997_2023_`sheet'',	replace
+
+					*	Merge two data
+					use	`GDP_1977_1996_`sheet'',	clear
+					merge	1:1	state	using	`GDP_1997_2023_`sheet'', assert(3) nogen
+					
+					tempfile	GDP_1977_2023_`sheet'
+					save		`GDP_1977_2023_`sheet''
+					
+						di	"`sheetname' is done"
+					
+			}
+			
+			*	Merge state GDPs
+			use	`GDP_1977_2023_1',	clear
+			forval	sheet=2/51	{
+				
+				append	using	`GDP_1977_2023_`sheet''				
+			}
+		
+			
+			*	Reshape and construct annual growth
+			reshape	long	GDP_state_nominal, i(state) j(year)
+			merge	m:1	state	using	"${SNAP_dtRaw}/Statecode.dta",	nogen	assert(3)	//	import PSID state code, since xtset can be done only with numeric variable
+			xtset	statecode	year
+			sort	statecode	year
+			
+			gen		GDP_state_growth_rate	=	((GDP_state_nominal / l1.GDP_state_nominal)-1)	*	100
+			
+			lab	var	GDP_state_nominal		"Annual state GDP (nominal)"
+			lab	var	GDP_state_growth_rate	"Annual state GDP growth rate (percentage)"
+			
+			*	Save
+			compress	
+			save	"${SNAP_dtInt}/State_GDP_growth_1977_2023", replace
+
+		
+		*	State poverty rate (Source: Census)
+		
+			
+			*	1979 (Source: States Ranked by Person's Poverty Rate in 1969, 1979 and 1989)
+				*	URL: https://www.census.gov/data/tables/time-series/dec/cph-series/cph-l/cph-l-183.html
+			import excel "${clouldfolder}\DataWork\Census\State poverty rates\cph-l-183.xls", sheet("CPHL-183") cellrange(A4:H71) clear
+			keep	A	E
+			rename	(A	E)	(state	state_pov_rate)
+			drop	in	1/5
+			drop	if	mi(state_pov_rate)
+			replace	state="Washington D.C." if state=="District of Columbia"
+			destring	state_pov_rate, replace
+			gen	year=1979
+			
+			tempfile	state_pov_rate_1979
+			save		`state_pov_rate_1979', replace
+			
+			
+			*	1980-2023 (Source: Table 9: Poverty of People by Region)
+				*	URL: https://www.census.gov/data/tables/time-series/demo/income-poverty/historical-poverty-people.html
+			import excel "${clouldfolder}\DataWork\Census\State poverty rates\hstpov19.xlsx", sheet("pov19") cellrange(A5:F2443) firstrow clear
+			keep	State Percentinpoverty
+			drop	if	Percentinpoverty=="Percent in poverty"
+			destring	Percentinpoverty, replace
+			
+			drop	in	364/415	//	Drop earlier estimates within the same year (Use only updated estiamtes)
+			drop	in	572/623	//	Drop earlier estimates within the same year (Use only updated estiamtes)
+			
+			drop	if	mi(Percentinpoverty)
+			rename	(State	Percentinpoverty)	(state	state_pov_rate)
+			replace	state="Washington D.C." if state=="District of Columbia"
+			
+			*	Assgin years
+			gen	year=.
+			
+			
+			forval	i=0/43	{
+				
+				local	startob=1+(51*`i')
+				local	endob=51+(51*`i')
+				local	year=2023-`i'
+				
+				*	Validate data
+				di	"i is `i', startob is `startob'"
+				assert	state=="Alabama"	in	`startob'
+				asser	state=="Wyoming"	in	`endob'
+				
+				replace	year=`year'	in	`startob'/`endob'
+				
+				
+			}
+			
+			*	Append 1979 data
+			append	using	`state_pov_rate_1979'
+			merge	m:1	state	using	"${SNAP_dtRaw}/Statecode.dta",	nogen	assert(3)
+			lab	var	state_pov_rate	"State Poverty Rate (percentage)"
+			xtset	statecode	year
+			
+			*	Save
+			compress
+			save	"${SNAP_dtInt}/state_pov_rate_1979_2023", replace
+		
 		
 		
 		*	Public social spending (Source: OECD)
@@ -969,6 +1122,10 @@ Thank you for giving us the opportunity to consider your work and I look forward
 			*	(2024-11-11) Follow-up anaysese based on R&R reviewer commetn
 			use	"${SNAP_dtInt}/SNAP_1979_2019_census_annual", clear
 			
+					
+					*	Rescaled poverty rate to percentage scale (for graphic purpose)
+					gen	pov_rate_national_pct	=	pov_rate_national * 0.01
+			
 				*	(1)	Inspecting counter-intuitive associations between known characteristics and PFS cut-offs
 					
 					*	Replciating a couple of regression, replacing a few variables in some specifications (column 3 of table 2)
@@ -993,6 +1150,8 @@ Thank you for giving us the opportunity to consider your work and I look forward
 					
 					reg	PFS_threshold_ppml_noCOLI ln_dis_per_inc_pc	pct_rp_nonWhite_Census	GDP_pc_growth	pov_rate_national	if	!mi(PFS_threshold_ppml_noCOLI), robust	//	full regression (Table 2 column 5)
 					est	store	PFS_cutoff_full
+					
+					
 								
 					*	Graphing poverty rate and unemployment rate
 					graph twoway 	(connected unemp_rate year) ///
@@ -1001,13 +1160,51 @@ Thank you for giving us the opportunity to consider your work and I look forward
 					graph	export	"${SNAP_outRaw}/povrate_unemprate_national.png", replace	
 					graph	close
 				
-		
 					
-					
-					
-					*	Rescaled poverty rate to percentage scale (for graphic purpose)
-					gen	pov_rate_national_pct	=	pov_rate_national * 0.01
 				
+					
+					*	Time trends of cut-offs and 4 covariates in the full model
+					*	Since they are all in different scales, we normalize them using 1995-2019 data
+					
+					foreach	var	in	PFS_threshold_ppml_noCOLI	ln_dis_per_inc_pc	pct_rp_nonWhite_Census	GDP_pc_growth	pov_rate_national	{
+						
+						summ	`var'	if	inrange(year,1995,2019)
+						local	mean=r(mean)
+						local	sd=r(sd)
+						
+						cap	drop	`var'_nm
+						gen	`var'_nm	=	(`var'-`mean')/`sd'	if	inrange(year,1995,2019)	&	!mi(PFS_threshold_ppml_noCOLI)
+						
+					}
+					
+					*	Including 
+					preserve
+					keep if inrange(year,1995,2019)
+					graph	twoway	(connected PFS_threshold_ppml_noCOLI_nm 		year, lpattern(dash) symbol(diamond) xaxis(1 2) yaxis(1) legend(label(1 "PFS thresholds")))	///
+									(connected ln_dis_per_inc_pc_nm				year, lpattern(dot) symbol(triangle) xaxis(1 2) yaxis(1) legend(label(2 "Income")))	///
+									(connected pct_rp_nonWhite_Census_nm	year, lpattern(dash_dot) xaxis(1 2) symbol(square) yaxis(1)  legend(label(3 "% non-White pop")))  ///
+									(connected GDP_pc_growth_nm	year, lpattern(solid) xaxis(1 2) symbol(circle) yaxis(1)  legend(label(4 "GDP per capita growth")))  ///
+									(connected pov_rate_national_nm 		year, lpattern(shortdash) xaxis(1 2) yaxis(1)  symbol(plus) legend(pos(6) row(2) label(5 "National pov rate"))),  ///
+									/*xline(1980 1993 1999 2007, axis(1) lpattern(dot))*/ xlabel(/*1980 "No payment" 1993 "xxx" 2009 "ARRA" 2020 "COVID"*/, axis(2))	///
+									xtitle(Year)	xtitle("", axis(2))	ytitle("Z-score", axis(1))	///
+									title(PFS Thresholds and Key indicators)	bgcolor(white)	graphregion(color(white)) /*note(Source: USDA & BLS)*/	name(PFS_NME_annual, replace)
+					restore
+					
+					
+					*	Full model excluding share of non-White population
+					reg	PFS_threshold_ppml_noCOLI ln_dis_per_inc_pc		GDP_pc_growth	pov_rate_national	if	!mi(PFS_threshold_ppml_noCOLI), robust	
+					est	store	PFS_cutoff_mod
+					predict	PFS_cutoff_mod_hat
+					
+					*	PFS cut-offs of full and modified
+					preserve
+						*keep	if	inrange(year,1995,2019)
+						graph	twoway	(connected PFS_cutoff_full_hat 		year, lpattern(dash) symbol(diamond) xaxis(1 2) yaxis(1) legend(label(1 "Full cut-off")))	///
+										(connected PFS_cutoff_mod_hat 	year, /*lpattern(dash_dot)*/ xaxis(1 2) yaxis(1)  symbol(plus) legend(pos(6) row(2) label(2 "Modified cut-offs"))),  ///
+										/*xline(1980 1993 1999 2007, axis(1) lpattern(dot))*/ xlabel(/*1980 "No payment" 1993 "xxx" 2009 "ARRA" 2020 "COVID"*/, axis(2))	///
+										xtitle(Year)	xtitle("", axis(2))	ytitle("PFS THreshold", axis(1)) 	///
+										title(PFS Thresholds and Key indicators)	bgcolor(white)	graphregion(color(white)) /*note(Source: USDA & BLS)*/	name(PFScutoff_inc_foodexp, replace)
+					restore		
 				
 					*	Time trends of (i) PFS thresholds (ii) Official HH FI rate (iii) Official individual FI rate (iv) FI rate (PSID data)
 					*	PFS, NME and Dummies
@@ -1037,7 +1234,7 @@ Thank you for giving us the opportunity to consider your work and I look forward
 			
 					*	Income
 					preserve
-						keep	if	inrange(year,1995,2019)
+						*keep	if	inrange(year,1995,2019)
 						graph	twoway	(connected PFS_threshold_ppml_noCOLI 		year, lpattern(dash) symbol(diamond) xaxis(1 2) yaxis(1) legend(label(1 "PFS thresholds")))	///
 										(connected dis_per_inc_pc 	year, /*lpattern(dash_dot)*/ xaxis(1 2) yaxis(2)  symbol(plus) legend(pos(6) row(2) label(3 "Per capita food expenditure"))),  ///
 										/*xline(1980 1993 1999 2007, axis(1) lpattern(dot))*/ xlabel(/*1980 "No payment" 1993 "xxx" 2009 "ARRA" 2020 "COVID"*/, axis(2))	///
@@ -1045,10 +1242,10 @@ Thank you for giving us the opportunity to consider your work and I look forward
 										title(PFS Thresholds and Key indicators)	bgcolor(white)	graphregion(color(white)) /*note(Source: USDA & BLS)*/	name(PFScutoff_inc_foodexp, replace)
 					restore		
 					
-					*	Food exp and TFP cost
+					*	Food exp and TFP cost (real)
 					preserve
-						keep	if	inrange(year,1995,2019)
-						graph	twoway	(connected PFS_threshold_ppml_noCOLI 		year, lpattern(dash) symbol(diamond) xaxis(1 2) yaxis(1) legend(label(1 "PFS thresholds")))	///
+						*keep	if	inrange(year,1995,2019)
+						graph	twoway	(connected PFS_threshold_ppml_noCOLI 		year, lpattern(dash) symbol(diamond) xaxis(1 2) yaxis(1) legend(label(1 "PFS thresholds"))) 	///
 										(connected foodexp_W_TFP_pc_real				year, lpattern(dot) symbol(triangle) xaxis(1 2) yaxis(2) legend(label(2 "per capita TFP cost")))	///
 										(connected foodexp_tot_inclFS_pc_real 	year, /*lpattern(dash_dot)*/ xaxis(1 2) yaxis(2)  symbol(plus) legend(pos(6) row(2) label(3 "Per capita food expenditure"))),  ///
 										/*xline(1980 1993 1999 2007, axis(1) lpattern(dot))*/ xlabel(/*1980 "No payment" 1993 "xxx" 2009 "ARRA" 2020 "COVID"*/, axis(2))	///
@@ -1058,13 +1255,114 @@ Thank you for giving us the opportunity to consider your work and I look forward
 					
 					* NME
 					preserve
-							graph	twoway	(connected PFS_threshold_ppml_noCOLI 		year, lpattern(dash) symbol(diamond) xaxis(1 2) yaxis(1) legend(label(1 "PFS thresholds")))	///
-										(connected foodexp_W_TFP_pc_real				year, lpattern(dot) symbol(triangle) xaxis(1 2) yaxis(2) legend(label(2 "per capita TFP cost")))	///
-										(connected foodexp_tot_inclFS_pc_real 	year, /*lpattern(dash_dot)*/ xaxis(1 2) yaxis(2)  symbol(plus) legend(pos(6) row(2) label(3 "Per capita food expenditure"))),  ///
+						graph	twoway	(connected PFS_threshold_ppml_noCOLI 		year, lpattern(dash) symbol(diamond) xaxis(1 2) yaxis(1) legend(label(1 "PFS thresholds")))	///
+										(connected NME 	year, /*lpattern(dash_dot)*/ xaxis(1 2) yaxis(2)  symbol(plus) legend(pos(6) row(2) label(2 "NME"))),  ///
 										/*xline(1980 1993 1999 2007, axis(1) lpattern(dot))*/ xlabel(/*1980 "No payment" 1993 "xxx" 2009 "ARRA" 2020 "COVID"*/, axis(2))	///
 										xtitle(Year)	xtitle("", axis(2))	ytitle("PFS THreshold", axis(1)) 	ytitle("Percentage", axis(2))	///
 										title(PFS Thresholds and Key indicators)	bgcolor(white)	graphregion(color(white)) /*note(Source: USDA & BLS)*/	name(PFScutoff_inc_foodexp, replace)
 					restore		
+					
+					*	Food exp and TFP cost (nominal)
+					preserve
+						graph	twoway	(connected foodexp_W_TFP_pc 		year if inrange(year,1979,1988), lpattern(dash) symbol(diamond) xaxis(1 2) yaxis(1) legend(label(1 "TFP cost")))	///
+										(connected foodexp_tot_inclFS_pc 	year if inrange(year,1979,1988), /*lpattern(dash_dot)*/ xaxis(1 2) yaxis(1)  symbol(plus) legend(pos(6) row(2) label(2 "Per capita food exp"))),  ///
+										/*xline(1980 1993 1999 2007, axis(1) lpattern(dot))*/ xlabel(/*1980 "No payment" 1993 "xxx" 2009 "ARRA" 2020 "COVID"*/, axis(2))	///
+										xtitle(Year)	xtitle("", axis(2))	ytitle("Dollars", axis(1)) 	///
+										title(PFS Thresholds and Key indicators)	bgcolor(white)	graphregion(color(white)) /*note(Source: USDA & BLS)*/	name(PFScutoff_inc_foodexp, replace)
+					restore	
+					
+					*	Share of non-White householder
+					graph	twoway	(connected pct_rp_nonWhite_Census 	year, /*lpattern(dash_dot)*/ xaxis(1 2) yaxis(1)  symbol(plus) legend(pos(6) row(2) label(1 "Non-White HH"))),  ///
+									/*xline(1980 1993 1999 2007, axis(1) lpattern(dot))*/ xlabel(/*1980 "No payment" 1993 "xxx" 2009 "ARRA" 2020 "COVID"*/, axis(2))	///
+									xtitle(Year)	xtitle("", axis(2))	ytitle("PFS THreshold", axis(1)) 		///
+									title(PFS Thresholds and Key indicators)	bgcolor(white)	graphregion(color(white)) /*note(Source: USDA & BLS)*/	name(PFScutoff_inc_foodexp, replace)
+					
+					*	PFS itself
+					graph	twoway	(connected PFS_ppml_noCOLI 	year, /*lpattern(dash_dot)*/ xaxis(1 2) yaxis(1)  symbol(plus) legend(pos(6) row(2) label(1 "Non-White HH"))),  ///
+									/*xline(1980 1993 1999 2007, axis(1) lpattern(dot))*/ xlabel(/*1980 "No payment" 1993 "xxx" 2009 "ARRA" 2020 "COVID"*/, axis(2))	///
+									xtitle(Year)	xtitle("", axis(2))	ytitle("PFS THreshold", axis(1)) 		///
+									title(PFS Thresholds and Key indicators)	bgcolor(white)	graphregion(color(white)) /*note(Source: USDA & BLS)*/	name(PFScutoff_inc_foodexp, replace)
+		
+			cap	drop	NME_real
+			gen	NME_real = foodexp_tot_inclFS_pc_real / foodexp_W_TFP_pc_real
+			graph twoway (connected fam_income_pc_real year, yaxis(1)) (connected pov_rate_national year, yaxis(2)), legend(pos(6))
+			
+			graph twoway (connected fam_income_pc_real year, yaxis(1)) (connected foodexp_tot_inclFS_pc_real year, yaxis(2)), legend(pos(6))
+			
+			
+			
+			
+	/*	(WIP)	tracking raw data to observe very high food expenditure in 1979-1980
+
+use "${SNAP_dtInt}/TFP cost/TFP_costs_all", clear
+
+keep if inlist(age_ind,6,25)
+keep if svy_month==1
+
+collapse (sum) TFP_monthly_cost, by(year)
+
+graph twoway (connected  TFP_monthly_cost year)
+	
+	
+	*	CPI
+	use	"${SNAP_dtInt}/CPI_1947_2021", clear
+	collapse (mean) CPI, by(year)
+	
+	*	Pure raw data
+	use "${SNAP_dtInt}/Fam_vars/foodexp_home_annual", clear
+	reshape	long foodexp_home_annual, i(x11101ll) j(year)
+	
+
+	*	Pre-cleaned merged data
+	use	"${SNAP_dtInt}/SNAP_Merged_long",	clear
+	
+	keep	if inrange(year,1979,2019)
+	
+	*	compute real value
+	
+	
+	local	varlist	foodexp_home_annual
+	
+	foreach	var	of	local	varlist	{
+		
+		cap	drop	`var'_real
+		gen	`var'_real	=	`var'	*	(100/CPI)
+		
+	}
+	
+	collapse (mean)	 foodexp_home_annual foodexp_home_annual_real CPI stamp_useamt_month [aw=wgt_long_ind], by(year)
+	
+	graph twoway (connected foodexp_home_annual_real year, yaxis(1)) (connected foodexp_home_annual year, yaxis(1))  (connected CPI year, yaxis(2)), legend(pos(6))
+	
+	
+	
+		
+	use	"${SNAP_dtInt}/SNAP_long_PFS_cat", clear	
+		
+	collapse (mean)	 foodexp_home_annual  CPI [aw=wgt_long_ind], by(year)
+	
+	local	varlist	foodexp_home_annual
+	
+	foreach	var	of	local	varlist	{
+		
+		cap	drop	`var'_real
+		gen	`var'_real	=	`var'	*	(100/CPI)
+		
+	}
+	
+	gen temp = foodexp_home_annual
+	
+	
+		 collapse (mean) FS_rec_amt_real FS_rec_amt_capita_real foodexp_home_inclFS_real foodexp_home_exclFS_real foodexp_out_real foodexp_deliv_real foodexp_tot_exclFS_real foodexp_tot_inclFS_real TFP_monthly_cost_real foodexp_tot_exclFS_pc_real foodexp_tot_inclFS_pc_real [aw=wgt_long_ind], by(year)
+		 
+		 
+		 
+		*/
+			
+			
+						
+			*	State-level data
+			
 			
 				/*
 				*	Regress 
@@ -1634,11 +1932,7 @@ Thank you for giving us the opportunity to consider your work and I look forward
 				graph	close
 				
 			
-			
-			
-			
-			
-
+				
 			
 			*	PFS and NME
 			/*
