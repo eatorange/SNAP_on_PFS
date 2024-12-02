@@ -101,6 +101,8 @@ Thank you for giving us the opportunity to consider your work and I look forward
 				
 		*	Disposable personal income per capita (2017 dollars)
 		*	Source: FRED
+				
+			*	National
 			import excel "${clouldfolder}\DataWork\BEA\real_disposable_income_pc.xls", sheet("FRED Graph") clear
 			drop	in	1/11
 			gen	year = _n + 1958
@@ -116,6 +118,43 @@ Thank you for giving us the opportunity to consider your work and I look forward
 			
 			*	Save
 			save	"${SNAP_dtInt}/dis_per_inc_pc", replace
+		
+		*	State disposable personal income per capita (2017 dollars)
+		*	Source: BEA	
+			*use	"${SNAP_dtRaw}/Statecode.dta", clear
+			import excel "${clouldfolder}\DataWork\BEA\disposable_income_pc_state.xlsx", sheet("Table") cellrange(B5:AS71) firstrow clear
+			rename (C-AS) dis_per_inc_pc#, addnumber(1979)
+			rename	B	state
+			drop	in	1/2
+			drop	in	52/59
+			drop	if	mi(state)
+
+			replace	state="Alaska" if state=="Alaska *"
+			replace	state="Hawaii" if state=="Hawaii *"
+			replace	state="Washington D.C." if state=="District of Columbia"
+			
+			reshape	long	dis_per_inc_pc, i(state) j(year)
+			lab	var	dis_per_inc_pc	"State per capita disposable income (current)"
+			destring	dis_per_inc_pc, replace
+			
+			*	Inport CPI to compute real value (2019)
+			preserve
+				use	"${SNAP_dtInt}/CPI_1947_2021", clear
+				collapse	(mean)	CPI, by(year)
+				tempfile	CPI_annual
+				save		`CPI_annual'
+			restore
+			merge	m:1	year	using	`CPI_annual',	nogen	assert(2 3)	keep(3)
+			
+			gen		dis_per_inc_pc_real	=	dis_per_inc_pc * (100/CPI)
+			lab	var	dis_per_inc_pc_real	"State per capita disposable income (2019 dollars)"
+			
+			*	Import PSID state code
+			merge	m:1	state	using	"${SNAP_dtRaw}/Statecode.dta",	nogen	assert(3)
+			
+			*	Save
+			save	"${SNAP_dtInt}/dis_per_inc_pc_state", replace
+			
 			
 		*	Gini Index (Source: World Bank)
 		import excel "${clouldfolder}\DataWork\World Bank\Gini_index.xls", sheet("Data") clear
@@ -950,7 +989,10 @@ Thank you for giving us the opportunity to consider your work and I look forward
 						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2 r2_a, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
 						title(PFS cutoff on economic indicators)		replace	
 					
+				
 					
+					reg	PFS_threshold_ppml_noCOLI ln_dis_per_inc_pc	pct_rp_nonWhite_Census	GDP_pc_growth	pov_rate_national	if	!mi(PFS_threshold_ppml_noCOLI), robust	//	full regression (Table 2 column 5)
+					est	store	PFS_cutoff_full
 								
 					*	Graphing poverty rate and unemployment rate
 					graph twoway 	(connected unemp_rate year) ///
@@ -979,7 +1021,7 @@ Thank you for giving us the opportunity to consider your work and I look forward
 										xtitle(Year)	xtitle("", axis(2))	ytitle("PFS THreshold", axis(1)) 	ytitle("Percentage", axis(2))	///
 										title(PFS Thresholds and Key indicators)	bgcolor(white)	graphregion(color(white)) /*note(Source: USDA & BLS)*/	name(PFS_NME_annual, replace)
 						graph	export	"${SNAP_outRaw}/Trend_FI_indicators.png", replace	
-						graph	close
+						*graph	close
 						
 					restore			
 					
@@ -993,7 +1035,7 @@ Thank you for giving us the opportunity to consider your work and I look forward
 					lab	var	`var'	"Average monthly per capita disposable income"
 					
 			
-					
+					*	Income
 					preserve
 						keep	if	inrange(year,1995,2019)
 						graph	twoway	(connected PFS_threshold_ppml_noCOLI 		year, lpattern(dash) symbol(diamond) xaxis(1 2) yaxis(1) legend(label(1 "PFS thresholds")))	///
@@ -1003,9 +1045,20 @@ Thank you for giving us the opportunity to consider your work and I look forward
 										title(PFS Thresholds and Key indicators)	bgcolor(white)	graphregion(color(white)) /*note(Source: USDA & BLS)*/	name(PFScutoff_inc_foodexp, replace)
 					restore		
 					
+					*	Food exp and TFP cost
 					preserve
 						keep	if	inrange(year,1995,2019)
 						graph	twoway	(connected PFS_threshold_ppml_noCOLI 		year, lpattern(dash) symbol(diamond) xaxis(1 2) yaxis(1) legend(label(1 "PFS thresholds")))	///
+										(connected foodexp_W_TFP_pc_real				year, lpattern(dot) symbol(triangle) xaxis(1 2) yaxis(2) legend(label(2 "per capita TFP cost")))	///
+										(connected foodexp_tot_inclFS_pc_real 	year, /*lpattern(dash_dot)*/ xaxis(1 2) yaxis(2)  symbol(plus) legend(pos(6) row(2) label(3 "Per capita food expenditure"))),  ///
+										/*xline(1980 1993 1999 2007, axis(1) lpattern(dot))*/ xlabel(/*1980 "No payment" 1993 "xxx" 2009 "ARRA" 2020 "COVID"*/, axis(2))	///
+										xtitle(Year)	xtitle("", axis(2))	ytitle("PFS THreshold", axis(1)) 	ytitle("Percentage", axis(2))	///
+										title(PFS Thresholds and Key indicators)	bgcolor(white)	graphregion(color(white)) /*note(Source: USDA & BLS)*/	name(PFScutoff_inc_foodexp, replace)
+					restore		
+					
+					* NME
+					preserve
+							graph	twoway	(connected PFS_threshold_ppml_noCOLI 		year, lpattern(dash) symbol(diamond) xaxis(1 2) yaxis(1) legend(label(1 "PFS thresholds")))	///
 										(connected foodexp_W_TFP_pc_real				year, lpattern(dot) symbol(triangle) xaxis(1 2) yaxis(2) legend(label(2 "per capita TFP cost")))	///
 										(connected foodexp_tot_inclFS_pc_real 	year, /*lpattern(dash_dot)*/ xaxis(1 2) yaxis(2)  symbol(plus) legend(pos(6) row(2) label(3 "Per capita food expenditure"))),  ///
 										/*xline(1980 1993 1999 2007, axis(1) lpattern(dot))*/ xlabel(/*1980 "No payment" 1993 "xxx" 2009 "ARRA" 2020 "COVID"*/, axis(2))	///
