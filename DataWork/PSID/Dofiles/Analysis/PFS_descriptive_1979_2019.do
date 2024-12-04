@@ -1122,12 +1122,24 @@ Thank you for giving us the opportunity to consider your work and I look forward
 			*	(2024-11-11) Follow-up anaysese based on R&R reviewer commetn
 			use	"${SNAP_dtInt}/SNAP_1979_2019_census_annual", clear
 			
-					
-					*	Rescaled poverty rate to percentage scale (for graphic purpose)
-					gen	pov_rate_national_pct	=	pov_rate_national * 0.01
 			
-				*	(1)	Inspecting counter-intuitive associations between known characteristics and PFS cut-offs
+		
+				*	Rescaled poverty rate to percentage scale (for graphic purpose)
+				gen	pov_rate_national_pct	=	pov_rate_national * 0.01
 					
+					
+				*	(1)	Inspecting counter-intuitive associations between known characteristics and PFS cut-offs
+								
+										
+					*	Graphing poverty rate and unemployment rate
+					graph twoway 	(connected unemp_rate year) ///
+									(connected pov_rate_national year, legend(label(3 "Predicted  (full)") row(1) size(small) keygap(0.1) pos(6) symxsize(5))), ///
+									title(National Poverty and Unemlpoyment Rate (%)) ytitle(Percentage (%))
+					graph	export	"${SNAP_outRaw}/povrate_unemprate_national.png", replace	
+					graph	close
+				
+					
+			
 					*	Replciating a couple of regression, replacing a few variables in some specifications (column 3 of table 2)
 					reg	PFS_threshold_ppml_noCOLI pov_rate_national	if	!mi(PFS_threshold_ppml_noCOLI), robust	//	Poverty rate only (column 4 of Table 2)
 					est	store	PFS_cutoff_povrate
@@ -1139,10 +1151,10 @@ Thank you for giving us the opportunity to consider your work and I look forward
 					est	store	PFS_cutoff_full_unemp1
 					reg	PFS_threshold_ppml_noCOLI ln_dis_per_inc_pc	pct_rp_nonWhite_Census	GDP_pc_growth	pov_rate_national	unemp_rate	if	!mi(PFS_threshold_ppml_noCOLI), robust	//	full regression, adding  unemp 
 					est	store	PFS_cutoff_full_unemp2
-					reg	PFS_threshold_ppml_noCOLI ln_dis_per_inc_pc	pct_rp_nonWhite_Census	GDP_pc_growth	pov_rate_national	if	!mi(PFS_threshold_ppml_noCOLI) & inrange(year,1995,2009), robust	//	full regression, using 1995-2009 data only
-					est	store	PFS_cutoff_full_9509
+					*reg	PFS_threshold_ppml_noCOLI ln_dis_per_inc_pc	pct_rp_nonWhite_Census	GDP_pc_growth	pov_rate_national	if	!mi(PFS_threshold_ppml_noCOLI) & inrange(year,1995,2009), robust	//	full regression, using 1995-2009 data only
+					*est	store	PFS_cutoff_full_9509
 					
-					esttab	PFS_cutoff_povrate	PFS_cutoff_unemp	PFS_cutoff_full		PFS_cutoff_full_unemp1	PFS_cutoff_full_unemp2	PFS_cutoff_full_9509	using "${SNAP_outRaw}/PFS_cutoff_on_X_sup1.csv", ///
+					esttab	PFS_cutoff_povrate	PFS_cutoff_unemp	PFS_cutoff_full		PFS_cutoff_full_unemp1	PFS_cutoff_full_unemp2	/*PFS_cutoff_full_9509*/	using "${SNAP_outRaw}/PFS_cutoff_on_X_sup1.csv", ///
 						cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2 r2_a, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
 						title(PFS cutoff on economic indicators)		replace	
 					
@@ -1152,21 +1164,13 @@ Thank you for giving us the opportunity to consider your work and I look forward
 					est	store	PFS_cutoff_full
 					
 					
-								
-					*	Graphing poverty rate and unemployment rate
-					graph twoway 	(connected unemp_rate year) ///
-									(connected pov_rate_national year, legend(label(3 "Predicted  (full)") row(1) size(small) keygap(0.1) pos(6) symxsize(5))), ///
-									title(National Poverty and Unemlpoyment Rate (%)) ytitle(Percentage (%))
-					graph	export	"${SNAP_outRaw}/povrate_unemprate_national.png", replace	
-					graph	close
-				
-					
+			
 				
 					
 					*	Time trends of cut-offs and 4 covariates in the full model
 					*	Since they are all in different scales, we normalize them using 1995-2019 data
 					
-					foreach	var	in	PFS_threshold_ppml_noCOLI	ln_dis_per_inc_pc	pct_rp_nonWhite_Census	GDP_pc_growth	pov_rate_national	{
+					foreach	var	in	PFS_threshold_ppml_noCOLI	PFS_FI_ppml_noCOLI ln_dis_per_inc_pc dis_per_inc_pc	pct_rp_nonWhite_Census	GDP_pc_growth	pov_rate_national	{
 						
 						summ	`var'	if	inrange(year,1995,2019)
 						local	mean=r(mean)
@@ -1181,13 +1185,15 @@ Thank you for giving us the opportunity to consider your work and I look forward
 					preserve
 					keep if inrange(year,1995,2019)
 					graph	twoway	(connected PFS_threshold_ppml_noCOLI_nm 		year, lpattern(dash) symbol(diamond) xaxis(1 2) yaxis(1) legend(label(1 "PFS thresholds")))	///
-									(connected ln_dis_per_inc_pc_nm				year, lpattern(dot) symbol(triangle) xaxis(1 2) yaxis(1) legend(label(2 "Income")))	///
-									(connected pct_rp_nonWhite_Census_nm	year, lpattern(dash_dot) xaxis(1 2) symbol(square) yaxis(1)  legend(label(3 "% non-White pop")))  ///
-									(connected GDP_pc_growth_nm	year, lpattern(solid) xaxis(1 2) symbol(circle) yaxis(1)  legend(label(4 "GDP per capita growth")))  ///
-									(connected pov_rate_national_nm 		year, lpattern(shortdash) xaxis(1 2) yaxis(1)  symbol(plus) legend(pos(6) row(2) label(5 "National pov rate"))),  ///
+									(connected PFS_FI_ppml_noCOLI_nm 		year, lpattern(longdash) symbol(X) xaxis(1 2) yaxis(1) legend(label(2 "FI Prevalence")))	///
+									(connected ln_dis_per_inc_pc_nm				year, lpattern(dot) symbol(triangle) xaxis(1 2) yaxis(1) legend(label(3 "ln(disposable income)")))	///
+									(connected pct_rp_nonWhite_Census_nm	year, lpattern(dash_dot) xaxis(1 2) symbol(square) yaxis(1)  legend(label(4 "% non-White pop")))  ///
+									(connected GDP_pc_growth_nm	year, lpattern(solid) xaxis(1 2) symbol(circle) yaxis(1)  legend(label(5 "GDP per capita growth")))  ///
+									(connected pov_rate_national_nm 		year, lpattern(shortdash) xaxis(1 2) yaxis(1)  symbol(plus) legend(pos(6) row(2) label(6 "Poverty rate"))),  ///
 									/*xline(1980 1993 1999 2007, axis(1) lpattern(dot))*/ xlabel(/*1980 "No payment" 1993 "xxx" 2009 "ARRA" 2020 "COVID"*/, axis(2))	///
 									xtitle(Year)	xtitle("", axis(2))	ytitle("Z-score", axis(1))	///
-									title(PFS Thresholds and Key indicators)	bgcolor(white)	graphregion(color(white)) /*note(Source: USDA & BLS)*/	name(PFS_NME_annual, replace)
+									title(PFS Thresholds and Key indicators (1995-2019))	bgcolor(white)	graphregion(color(white)) /*note(Source: USDA & BLS)*/	name(PFS_NME_annual, replace)
+					graph	export	"${SNAP_outRaw}/Trend_PFS_cutoff_indicators.png",	replace
 					restore
 					
 					
@@ -1234,7 +1240,7 @@ Thank you for giving us the opportunity to consider your work and I look forward
 			
 					*	Income
 					preserve
-						*keep	if	inrange(year,1995,2019)
+						keep	if	inrange(year,1995,2019)
 						graph	twoway	(connected PFS_threshold_ppml_noCOLI 		year, lpattern(dash) symbol(diamond) xaxis(1 2) yaxis(1) legend(label(1 "PFS thresholds")))	///
 										(connected dis_per_inc_pc 	year, /*lpattern(dash_dot)*/ xaxis(1 2) yaxis(2)  symbol(plus) legend(pos(6) row(2) label(3 "Per capita food expenditure"))),  ///
 										/*xline(1980 1993 1999 2007, axis(1) lpattern(dot))*/ xlabel(/*1980 "No payment" 1993 "xxx" 2009 "ARRA" 2020 "COVID"*/, axis(2))	///
@@ -1272,10 +1278,14 @@ Thank you for giving us the opportunity to consider your work and I look forward
 					restore	
 					
 					*	Share of non-White householder
-					graph	twoway	(connected pct_rp_nonWhite_Census 	year, /*lpattern(dash_dot)*/ xaxis(1 2) yaxis(1)  symbol(plus) legend(pos(6) row(2) label(1 "Non-White HH"))),  ///
+					preserve
+					keep if inrange(year,1995,2019)
+					graph	twoway		(connected PFS_threshold_ppml_noCOLI 	year, lpattern(dash) symbol(diamond) xaxis(1 2) yaxis(1) legend(label(1 "Thresholds")))	///
+										(connected pct_rp_nonWhite_Census 	year, /*lpattern(dash_dot)*/ xaxis(1 2) yaxis(2)  symbol(plus) legend(pos(6) row(2) label(2 "Percentage(%)"))),  ///
 									/*xline(1980 1993 1999 2007, axis(1) lpattern(dot))*/ xlabel(/*1980 "No payment" 1993 "xxx" 2009 "ARRA" 2020 "COVID"*/, axis(2))	///
 									xtitle(Year)	xtitle("", axis(2))	ytitle("PFS THreshold", axis(1)) 		///
 									title(PFS Thresholds and Key indicators)	bgcolor(white)	graphregion(color(white)) /*note(Source: USDA & BLS)*/	name(PFScutoff_inc_foodexp, replace)
+					restore
 					
 					*	PFS itself
 					graph	twoway	(connected PFS_ppml_noCOLI 	year, /*lpattern(dash_dot)*/ xaxis(1 2) yaxis(1)  symbol(plus) legend(pos(6) row(2) label(1 "Non-White HH"))),  ///
