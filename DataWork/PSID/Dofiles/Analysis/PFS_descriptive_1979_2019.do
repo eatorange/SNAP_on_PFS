@@ -1248,15 +1248,16 @@ Thank you for giving us the opportunity to consider your work and I look forward
 										title(PFS Thresholds and Key indicators)	bgcolor(white)	graphregion(color(white)) /*note(Source: USDA & BLS)*/	name(PFScutoff_inc_foodexp, replace)
 					restore		
 					
-					*	Food exp and TFP cost (real)
+					*	NME, Food exp and TFP cost (real)
 					preserve
 						*keep	if	inrange(year,1995,2019)
-						graph	twoway	(connected PFS_threshold_ppml_noCOLI 		year, lpattern(dash) symbol(diamond) xaxis(1 2) yaxis(1) legend(label(1 "PFS thresholds"))) 	///
-										(connected foodexp_W_TFP_pc_real				year, lpattern(dot) symbol(triangle) xaxis(1 2) yaxis(2) legend(label(2 "per capita TFP cost")))	///
-										(connected foodexp_tot_inclFS_pc_real 	year, /*lpattern(dash_dot)*/ xaxis(1 2) yaxis(2)  symbol(plus) legend(pos(6) row(2) label(3 "Per capita food expenditure"))),  ///
+						graph	twoway	(connected NME 		year, lpattern(dash) symbol(diamond) xaxis(1 2) yaxis(1) legend(label(1 "NME"))) 	///
+										(connected foodexp_W_TFP_pc_real				year, lpattern(dot) symbol(triangle) xaxis(1 2) yaxis(2) legend(label(2 "per capita TFP cost (2019 Dollars)")))	///
+										(connected foodexp_tot_inclFS_pc_real 	year, /*lpattern(dash_dot)*/ xaxis(1 2) yaxis(2)  symbol(plus) legend(pos(6) row(2) label(3 "Per capita food expenditure (2019 Dollars)"))),  ///
 										/*xline(1980 1993 1999 2007, axis(1) lpattern(dot))*/ xlabel(/*1980 "No payment" 1993 "xxx" 2009 "ARRA" 2020 "COVID"*/, axis(2))	///
-										xtitle(Year)	xtitle("", axis(2))	ytitle("PFS THreshold", axis(1)) 	ytitle("Percentage", axis(2))	///
-										title(PFS Thresholds and Key indicators)	bgcolor(white)	graphregion(color(white)) /*note(Source: USDA & BLS)*/	name(PFScutoff_inc_foodexp, replace)
+										xtitle(Year)	xtitle("", axis(2))	ytitle("Food expenditure, TFP cost and NME", axis(1)) 	ytitle("Ratio", axis(1)) 	ytitle("Dollars", axis(2))	///
+										title(Food expenditure/TFP cost/NME)	bgcolor(white)	graphregion(color(white)) /*note(Source: USDA & BLS)*/	name(PFScutoff_inc_foodexp, replace)
+						graph	export	"${SNAP_outRaw}/foodexp_TFP_NME.png", replace	
 					restore		
 					
 					* NME
@@ -1341,7 +1342,7 @@ graph twoway (connected  TFP_monthly_cost year)
 	}
 	
 	collapse (mean)	 foodexp_home_annual foodexp_home_annual_real CPI stamp_useamt_month [aw=wgt_long_ind], by(year)
-	
+	keep if inrange(year,19)
 	graph twoway (connected foodexp_home_annual_real year, yaxis(1)) (connected foodexp_home_annual year, yaxis(1))  (connected CPI year, yaxis(2)), legend(pos(6))
 	
 	
@@ -1648,10 +1649,14 @@ graph twoway (connected  TFP_monthly_cost year)
 		esttab	sumstat_ind	sumstat_indyear	using	"${SNAP_outRaw}/Sumstats_desc_7919.csv",  ///
 				cells("count(fmt(%12.0f)) mean(fmt(%12.2f)) sd(fmt(%12.2f))") label	title("Summary Statistics") noobs 	  replace
 		
+		*esttab	sumstat_ind	sumstat_indyear	using	"${SNAP_outRaw}/Sumstats_desc_7919.csv",  ///
+				main(mean %12.2f) aux(sd %12.2f keep(ind_female)) label	title("Summary Statistics") noobs 	  replace
 		
 		
+		*esttab sumstat_ind	sumstat_indyear using	"${SNAP_outRaw}/Sumstats_desc_7919.csv", cells("mean(fmt(2) label(Prop./Mean)) sd(fmt(2) label(SD) keep(ind_female))") replace
 		
 		
+	*	table	(var),	statistic(mean ind_female PFS_ppml_noCOLI) statistic(sd PFS_ppml_noCOLI) nformat(%6.2f)
 		
 		*	(2024-1-5) This plot was for internal discussion only, so disable it.
 		/*
