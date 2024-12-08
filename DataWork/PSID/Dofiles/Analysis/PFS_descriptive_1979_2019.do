@@ -1506,6 +1506,19 @@ graph twoway (connected  TFP_monthly_cost year)
 			summ	`var'_uniq,d
 			label	var	`var'_uniq "\# of waves surveyed"
 			
+			*	Ever been food insecure
+			loc	var	PFS_FI_ever_been
+			cap	drop	`var'
+			cap	drop	`var'_uniq
+			cap	drop	`var'_temp
+			bys	x11101ll:	egen	`var'=	max(PFS_FI_ppml_noCOLI)	if live_in_FU==1 // Only counts the period when individual was living in FU. NOT including it will result in counting invalid periods (ex. before born)
+			bys x11101ll:	egen	`var'_temp	=	max(`var')
+			bys x11101ll:	gen 	`var'_uniq	=	`var'_temp if _n==1
+			drop	`var'
+			rename	`var'_temp	`var'
+			summ	`var'_uniq,d
+			label	var	`var'_uniq "=1 if ever esimated to be food insecure"
+			
 			*	Ever-used FS over stuy period
 			loc	var	FS_ever_used
 			cap	drop	`var'
@@ -1610,7 +1623,17 @@ graph twoway (connected  TFP_monthly_cost year)
 
 		*	Additional macros are added for summary stats
 		
-		global	indvars			ind_female	baseline_indiv	/*splitoff_indiv*/	num_waves_in_FU_uniq	FS_ever_used_uniq	total_FS_used_uniq	/*share_FS_used_uniq*/	//	Individual-level variables
+		lab	var	ind_female				"Gender"
+		lab	var	baseline_indiv			"Surveyed in 1979"
+		lab	var	num_waves_in_FU_uniq	"Number of waves surveyed"
+		lab	var	PFS_FI_ever_been_uniq	"Ever estimated to be food insecure"
+		lab	var	FS_ever_used_uniq		"Ever used SNAP benefits"
+		lab	var	total_FS_used_uniq		"Total number of SNAP benefits used"
+		
+		lab	define	yes1no0		0	"No"	1	"Yes", replace
+		lab	val		baseline_indiv	PFS_FI_ever_been_uniq	FS_ever_used_uniq	yes1no0
+		
+		global	indvars			ind_female	baseline_indiv	/*splitoff_indiv*/	num_waves_in_FU_uniq	PFS_FI_ever_been_uniq FS_ever_used_uniq	total_FS_used_uniq	/*share_FS_used_uniq*/	//	Individual-level variables
 		
 		*global	statevars		l2_foodexp_tot_inclFS_pc_1_real l2_foodexp_inclFS_pc_2_real_K
 		global	demovars		rp_age /*rp_age_sq*/	rp_female	rp_nonWhte	rp_married	
@@ -1640,6 +1663,68 @@ graph twoway (connected  TFP_monthly_cost year)
 		est	store	sumstat_ind
 		*estpost tabstat	${indvars}	[aw=wgt_long_ind]	if	!mi(num_waves_in_FU_uniq) & income_below_200==1,	statistics(count	mean	sd	min	median	p95	max) columns(statistics)		// save
 		*est	store	sumstat_ind_incbelow200
+		
+		dtable if !mi(num_waves_in_FU_uniq) [aweight = wgt_long_ind], sample(, statistic(frequency) ) ///
+			continuous(num_waves_in_FU_uniq total_FS_used_uniq, statistics( mean sd)) factor(ind_female baseline_indiv PFS_FI_ever_been_uniq FS_ever_used_uniq, statistics( fvpercent)) ///
+			nformat(%9.0fc  frequency ) nformat(%9.2fc  mean sd) nformat(%9.1fc  fvpercent )
+			
+			*	Set-up to display 
+			collect style autolevels result frequency mean sd fvpercent, clear
+			collect layout (var#result) (cmdset)
+			collect label levels cmdset 1 "Summary"
+			collect style header result, level(hide)
+			
+			collect style autolevels var total_FS_used_uniq	num_waves_in_FU_uniq _N, clear
+
+
+			collect preview
+			
+			/* Examples on Statalist
+			
+			
+			*dtable price mpg rep78
+			dtable, continuous(num_waves_in_FU_uniq  total_FS_used_uniq, statistics( mean sd)) factor(ind_female baseline_indiv	PFS_FI_ever_been_uniq	FS_ever_used_uniq, statistics( fvpercent)) nformat(%12.2f)
+
+				
+
+
+
+			* report the layout specification
+			collect layout
+
+			* look into which result levels are being shown
+			collect query autolevels result
+			collect levelsof result
+			collect query composite
+			collect query composite _dtable_stats
+			* stop using the composite result, we want results to be stacked into a
+			* single column
+			collect style autolevels result frequency mean sd fvpercent, clear
+
+			* change how the cells are arranged;
+			* stack the results across rows for each variable;
+			* use -cmdset- for a column header
+			collect layout (var#result) (cmdset)
+
+			* nicer column header
+			collect label levels cmdset 1 "Summary"
+
+			collect preview
+
+			* hide result levels in row headers
+			collect style header result, level(hide)
+
+			collect preview
+
+			* make the sample size last
+			collect style autolevels var num_waves_in_FU_uniq ind_female _N, clear
+
+			collect preview
+
+			dtable price mpg rep78
+			
+			
+			*/
 		
 		*	Ind-year vars (observation level)
 		estpost tabstat	${summvars_obs}	[aw=wgt_long_ind],	statistics(count	mean	sd	min	median	/*p95*/	max) columns(statistics)		// save
@@ -2175,7 +2260,7 @@ graph twoway (connected  TFP_monthly_cost year)
 					(connected HFSM_FI	year if inlist(year,1999,2001,2003), lc(red) lp(shortdash) lwidth(medium)	msymbol(circle)	graphregion(fcolor(white)))	 ///
 					(connected HFSM_FI	year if inlist(year,2015,2017,2019), lc(red) lp(shortdash) lwidth(medium)	msymbol(circle) graphregion(fcolor(white)))		///
 					(line FI_pct		year if inrange(year,1979,2019),	lc(black) lp(dash) lwidth(medium)  graphregion(fcolor(white))), 	 ///
-					legend(order(1 "PFS" 2 "FSSS" /* 4 "USDA official (individual-level)" */) row(1) size(small) keygap(0.1) symxsize(5)) yscale(range(0 0.2) titlegap(1)) ylabel(0(0.025)0.2) ///
+					legend(order(1 "PFS" 2 "FSSS" /* 4 "USDA official (individual-level)" */) row(1) size(small) keygap(0.1) symxsize(5) pos(6)) yscale(range(0 0.2) titlegap(1)) ylabel(0(0.025)0.2) ///
 					title("Food Insecurity Prevalence (1979-2019)") ytitle("Fraction") xtitle("Year") name(FI_pravelence_measures, replace)	
 			
 			graph 	display FI_pravelence_measures, ysize(8) xsize(12.0)
@@ -2272,8 +2357,8 @@ graph twoway (connected  TFP_monthly_cost year)
 			
 			
 			
-			esttab	PFS_FSSS_full	PFS_FS_FSSS_FS	PFS_FS_FSSS_FI	PFS_FI_FSSS_FS	PFS_FI_FSSS_FI	using	"${SNAP_outRaw}/summstat_by_status.csv",  ///
-				cells("count(fmt(%12.0f)) mean(fmt(%12.2f)) sd(fmt(%12.2f)) min(fmt(%12.2f)) max(fmt(%12.2f))") label	title("Summary Statistics - FS(PFS) and FI(FSSS)") noobs 	  replace
+			esttab	/*PFS_FSSS_full*/	PFS_FS_FSSS_FS	PFS_FS_FSSS_FI	PFS_FI_FSSS_FS	/*PFS_FI_FSSS_FI*/	using	"${SNAP_outRaw}/summstat_by_status.csv",  ///
+				cells("mean(fmt(%12.2f)) sd(fmt(%12.2f))") label	title("Summary Statistics - FS(PFS) and FI(FSSS)") noobs 	  replace
 		
 			
 			
@@ -2307,7 +2392,7 @@ graph twoway (connected  TFP_monthly_cost year)
 		
 				
 				graph	box	PFS_ppml_noCOLI		[aw=wgt_long_ind], over(ind_female, sort(1)) over(ind_nonWhite, sort(1))	over(ind_edu_cat, sort(1)) nooutsides ///
-					bgcolor(white)	graphregion(color(white))	///
+					bgcolor(white)	graphregion(color(white))	legend(pos(6) row(1)) ///
 					name(outcome_subgroup_ind, replace) title(Estimated Food Security by Subgroup) note("")	///
 					note("Extreme values – smaller than the lower quartile minus 1.5 times interquartile range,"  "or greater than the upper quartile plus 1.5 times interquartile range – are not plotted.")
 				
@@ -3128,7 +3213,7 @@ graph twoway (connected  TFP_monthly_cost year)
 					*	B&W 
 					graph bar still_FI newly_FI	status_unknown, over(year, label(angle(vertical))) stack  legend(pos(6) lab (1 "Still FI") 	lab(2 "Newly FI")	lab(3 "Previously unknown")rows(1))	///
 					graphregion(color(white)) bgcolor(white)  bar(1, fcolor(gs11)) bar(2, fcolor(gs6)) bar(3, fcolor(gs1))	///
-					ytitle(Fraction of Population) title(Change in Food Security Status)	ylabel(0(.025)0.125) 	name(change_status_byyear, replace)
+					ytitle(Fraction of Population) title(Change in Food Security Status)	ylabel(0(.025)0.15) 	name(change_status_byyear, replace)
 					
 					graph display change_status_byyear, ysize(8) xsize(12.0)
 					graph	export	"${SNAP_outRaw}/change_in_status_7919.png", replace
