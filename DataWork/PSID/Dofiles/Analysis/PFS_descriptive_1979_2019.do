@@ -1069,10 +1069,24 @@ Thank you for giving us the opportunity to consider your work and I look forward
 				est	store	PFS_cutoff_full
 				
 				
+				*	Using "esttab"
 				esttab	PFS_cutoff_income	PFS_cutoff_nonWhite	PFS_cutoff_GDPgrowth		PFS_cutoff_povrate	PFS_cutoff_inc_nonWhite	PFS_cutoff_full	using "${SNAP_outRaw}/PFS_cutoff_on_X.csv", ///
-							cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2 r2_a, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
+							cells(b(star fmt(%8.3f)) & se(fmt(2) par)) stats(N r2, fmt(0 2)) incelldelimiter() label legend nobaselevels /*nostar*/ star(* 0.10 ** 0.05 *** 0.01)	/*drop(rp_state_enum*)*/	///
 							title(PFS cutoff on economic indicators)		replace	
 				
+				*	Using "etable"
+				*	(2024-12-9) Formatting issue- significant stars are printed in separate columns...
+				collect clear
+				cap	putdocx clear    
+				putdocx begin
+				etable, estimates(PFS_cutoff_income PFS_cutoff_nonWhite	PFS_cutoff_GDPgrowth	PFS_cutoff_povrate	PFS_cutoff_full) ///
+					cstat(_r_b) cstat(_r_se, nformat(%7.3f)) column(index) mstat(N, nformat(%9.0g)) mstat(r2, nformat(%9.2f)) stars( 0.1 "*" 0.05 "**" 0.01 "***", attach(_r_b)) 	///
+					title("Table 2: PFS Thresholds and Macroeconomic Indicators, 1995-2019")	///
+					/*export("${SNAP_outRaw}/PFS_cutoff_on_X.docx", as(docx) replace)*/
+				*collect layout (coleq#colname#result[_r_b _r_se] result[N r2]) (cmdset#stars) (), name(ETable)
+				collect layout (coleq#colname#result[_r_b _r_se] result[N r2]) (cmdset#stars) (), name(ETable)
+				putdocx collect
+				putdocx save "${SNAP_outRaw}/PFS_cutoff_on_X.docx", replace
 					
 					/*
 					*	With unemployment rate (supplementary)
@@ -1554,6 +1568,46 @@ graph twoway (connected  TFP_monthly_cost year)
 			label var	`var'		"\% of FS used throughouth the period"
 			label var	`var'_uniq	"\% of FS used throughouth the period"
 			
+	*	Additional data label
+			lab	var	ind_female				"Gender"
+			lab	var	baseline_indiv			"Surveyed in 1979"
+			lab	var	num_waves_in_FU_uniq	"Number of waves surveyed"
+			lab	var	PFS_FI_ever_been_uniq	"Ever estimated to be food insecure"
+			lab	var	FS_ever_used_uniq		"Ever used SNAP benefits"
+			lab	var	total_FS_used_uniq		"Years SNAP benefits used"
+			
+			lab	define	yes1no0		0	"No"	1	"Yes", replace
+			*lab	val		PFS_FI_ever_been_uniq	FS_ever_used_uniq	yes1no0
+			
+			lab define baseline_indiv 0 "NOT surveyed in 1979" 1 "Surveyed in 1979",	replace
+			lab val baseline_indiv baseline_indiv
+			
+			lab	define	PFS_FI_ever_been_uniq	0	"Never estimated to be food insecure"	1	"Ever estimated to be food insecure",	replace
+			lab	val		PFS_FI_ever_been_uniq	PFS_FI_ever_been_uniq
+			
+			lab	define	FS_ever_used_uniq		0	"Never used SNAP benefit"	1	"Ever used SNAP benefit", replace
+			lab	val		FS_ever_used_uniq	FS_ever_used_uniq
+			
+			
+			lab	define	rp_married	0	"NOT married (RP)"	1	"Married (RP)",	replace
+			lab	val		rp_married	rp_married
+			lab	define	rp_female	0	"Male (RP)"	1	"Female (RP)", replace
+			lab	define	rp_nonWhite	0	"White (RP)"	1	"non-White (RP)", replace
+			lab	var		rp_edu_cat	"Education (RP)"
+			lab	define	rp_employed	0	"NOT employed (RP)"	1	"Employed (RP)", replace
+			lab	val		rp_employed	rp_employed
+			lab	define	rp_disabled	0	"NOT disabled (RP)"	1	"Disabled (RP)",	replace
+			lab	var		ratio_child	"Proportion of children"
+			lab	define	FS_rec_wth	0	"NOT received SNAP"	1	"Received SNAP"
+			lab	val		FS_rec_wth	FS_rec_wth
+			lab	define	PFS_FI_ppml_noCOLI	0	"NOT estiamted to be food insecure by PFS"	1	"Estimated to be food insecure by PFS", replace
+			lab	val		PFS_FI_ppml_noCOLI	PFS_FI_ppml_noCOLI
+			lab	define	NME_below_1	0	"NME is above 1"	1	"NME is below 1", replace
+			lab	val		NME_below_1	NME_below_1
+			
+			
+			lab	var	rp_region		"Region"
+		
 		
 		
 		
@@ -1623,16 +1677,7 @@ graph twoway (connected  TFP_monthly_cost year)
 
 		*	Additional macros are added for summary stats
 		
-		lab	var	ind_female				"Gender"
-		lab	var	baseline_indiv			"Surveyed in 1979"
-		lab	var	num_waves_in_FU_uniq	"Number of waves surveyed"
-		lab	var	PFS_FI_ever_been_uniq	"Ever estimated to be food insecure"
-		lab	var	FS_ever_used_uniq		"Ever used SNAP benefits"
-		lab	var	total_FS_used_uniq		"Total number of SNAP benefits used"
-		
-		lab	define	yes1no0		0	"No"	1	"Yes", replace
-		lab	val		baseline_indiv	PFS_FI_ever_been_uniq	FS_ever_used_uniq	yes1no0
-		
+	
 		global	indvars			ind_female	baseline_indiv	/*splitoff_indiv*/	num_waves_in_FU_uniq	PFS_FI_ever_been_uniq FS_ever_used_uniq	total_FS_used_uniq	/*share_FS_used_uniq*/	//	Individual-level variables
 		
 		*global	statevars		l2_foodexp_tot_inclFS_pc_1_real l2_foodexp_inclFS_pc_2_real_K
@@ -1664,20 +1709,60 @@ graph twoway (connected  TFP_monthly_cost year)
 		*estpost tabstat	${indvars}	[aw=wgt_long_ind]	if	!mi(num_waves_in_FU_uniq) & income_below_200==1,	statistics(count	mean	sd	min	median	p95	max) columns(statistics)		// save
 		*est	store	sumstat_ind_incbelow200
 		
+		collect	clear
+		
+		*	Individual-level
 		dtable if !mi(num_waves_in_FU_uniq) [aweight = wgt_long_ind], sample(, statistic(frequency) ) ///
 			continuous(num_waves_in_FU_uniq total_FS_used_uniq, statistics( mean sd)) factor(ind_female baseline_indiv PFS_FI_ever_been_uniq FS_ever_used_uniq, statistics( fvpercent)) ///
-			nformat(%9.0fc  frequency ) nformat(%9.2fc  mean sd) nformat(%9.1fc  fvpercent )
+			nformat(%9.0fc  frequency ) nformat(%9.2fc  mean sd) nformat(%9.1fc  fvpercent ) name(summstat_ind)
 			
-			*	Set-up to display 
-			collect style autolevels result frequency mean sd fvpercent, clear
+			*	Custom setup to display 
+			collect style autolevels result frequency mean sd fvproportion fvpercent, clear
+			collect layout (var#result) (cmdset)
+			collect label levels cmdset 1 "Summary"
+			collect style header result, level(hide)
+				
+			collect layout (var[_N]#result ind_female[1]#result baseline_indiv[1]#result var[num_waves_in_FU_uniq]#result ///
+				PFS_FI_ever_been_uniq[1]#result	FS_ever_used_uniq[1]#result	var[total_FS_used_uniq]#result) (cmdset) (), name(summstat_ind)
+				
+		
+			collect preview
+	
+		*	Individual-year level
+		 
+		 global	indyear_contvar	rp_age	famnum	ratio_child	fam_income_pc_real	foodexp_tot_exclFS_pc_real	FS_rec_amt_capita_real	PFS_ppml_noCOLI	NME	
+		 global	indyear_factvar	rp_female	rp_nonWhte	rp_married	 rp_edu_cat	rp_employed	rp_disabled	rp_region	FS_rec_wth	PFS_FI_ppml_noCOLI	NME_below_1
+		 
+		 cap	collect	drop	summstat_indyear
+		 dtable [aweight = wgt_long_ind], sample(, statistic(frequency) ) ///
+			continuous(${indyear_contvar}, statistics( mean sd)) factor(${indyear_factvar}, statistics( fvpercent)) ///
+			nformat(%9.0fc  frequency ) nformat(%9.2fc  mean sd) nformat(%9.1fc  fvpercent ) name(summstat_indyear)
+			
+				*	Custom setup to display 
+			collect style autolevels result frequency mean sd fvproportion fvpercent, clear
 			collect layout (var#result) (cmdset)
 			collect label levels cmdset 1 "Summary"
 			collect style header result, level(hide)
 			
-			collect style autolevels var total_FS_used_uniq	num_waves_in_FU_uniq _N, clear
-
-
-			collect preview
+			collect layout (var[_N]#result var[rp_age]#result	rp_female[1]#result	rp_nonWhte[1]#result	rp_married[1]#result		///
+				var[1.rp_edu_cat]#result	var[2.rp_edu_cat]#result	var[3.rp_edu_cat]#result	var[4.rp_edu_cat]#result	rp_employed[1]#result	rp_disabled[1]#result	///
+				var[famnum]#result	var[ratio_child]#result	var[1.rp_region]#result	var[2.rp_region]#result	var[3.rp_region]#result	var[4.rp_region]#result	var[5.rp_region]#result	///
+				FS_rec_wth[1]#result	var[fam_income_pc_real]#result	var[foodexp_tot_exclFS_pc_real]#result	var[FS_rec_amt_capita_real]#result	///
+				PFS_FI_ppml_noCOLI[1]#result	NME_below_1[1]#result	) (cmdset) (), name(summstat_indyear)
+			
+			cap	collect	drop	sumstat_all
+			collect combine sumstat_all = summstat_ind	summstat_indyear
+			
+			
+			collect layout (var[_N]#result#collection[summstat_ind] ind_female[1]#result baseline_indiv[1]#result var[num_waves_in_FU_uniq]#result ///
+				PFS_FI_ever_been_uniq[1]#result	FS_ever_used_uniq[1]#result	var[total_FS_used_uniq]#result	///
+				var[_N]#result#collection[summstat_indyear] var[rp_age]#result	rp_female[1]#result	rp_nonWhte[1]#result	rp_married[1]#result		///
+				var[1.rp_edu_cat]#result	var[2.rp_edu_cat]#result	var[3.rp_edu_cat]#result	var[4.rp_edu_cat]#result	rp_employed[1]#result	rp_disabled[1]#result	///
+				var[famnum]#result	var[ratio_child]#result	var[1.rp_region]#result	var[2.rp_region]#result	var[3.rp_region]#result	var[4.rp_region]#result	var[5.rp_region]#result	///
+				FS_rec_wth[1]#result	var[fam_income_pc_real]#result	var[foodexp_tot_exclFS_pc_real]#result	var[FS_rec_amt_capita_real]#result	///
+				PFS_FI_ppml_noCOLI[1]#result	NME_below_1[1]#result	) (cmdset) (), name(sumstat_all)
+			
+			collect	export	"${SNAP_outRaw}/Sumstats_desc_7919.docx", replace as(docx)
 			
 			/* Examples on Statalist
 			
@@ -1699,7 +1784,7 @@ graph twoway (connected  TFP_monthly_cost year)
 			collect query composite _dtable_stats
 			* stop using the composite result, we want results to be stacked into a
 			* single column
-			collect style autolevels result frequency mean sd fvpercent, clear
+			collect style autolevels result frequency fvpercent mean percent proportion rawpercent rawproportion sd sumw, clear
 
 			* change how the cells are arranged;
 			* stack the results across rows for each variable;
@@ -2255,12 +2340,33 @@ graph twoway (connected  TFP_monthly_cost year)
 		preserve
 				
 			collapse	(mean) HFSM_FI	PFS_ppml_noCOLI	PFS_FI_ppml_noCOLI	foodexp_W_TFP_pc_real	FI_pct	[aw=wgt_long_ind], by(year)	//	weighted average by year
+			
+			 *	Data manipulation for graph plot
+			 set	obs	30
+			 replace	year=1988 in 27
+			 replace	year=1989 in 28
+			 replace	year=1990 in 29
+			 replace	year=1991 in 30
+			 
+			 sort	year
+			 
+			 cap	drop	upper
+			 gen	double	upper=0.2
+			 
+			
+			*	(2024-12-9)	Somehow collapsed var has precision issue. Make a double-version of the same variable for plotting
+			gen	double	PFS_FI_ppml_noCOLI_db	=	PFS_FI_ppml_noCOLI
+			lab	var	PFS_FI_ppml_noCOLI_db	"Estimated to be food insecure"
 		
-			twoway	(line PFS_FI_ppml_noCOLI	year if inrange(year,1979,2019),	lc(blue) lp(solid) lwidth(medium)  graphregion(fcolor(white))) 	 ///
+		
+			twoway	(bar	upper year if inrange(year, 1988, 1991), bcolor(gs14) barwidth(2)	graphregion(fcolor(white)))	///
+					(line PFS_FI_ppml_noCOLI_db	year if inrange(year,1979,1987),	lc(blue) lp(solid) lwidth(medium)  graphregion(fcolor(white))) 	 ///
+					(line PFS_FI_ppml_noCOLI_db	year if inrange(year,1992,2019),	lc(blue) lp(solid) lwidth(medium)  graphregion(fcolor(white))) 	 ///
 					(connected HFSM_FI	year if inlist(year,1999,2001,2003), lc(red) lp(shortdash) lwidth(medium)	msymbol(circle)	graphregion(fcolor(white)))	 ///
 					(connected HFSM_FI	year if inlist(year,2015,2017,2019), lc(red) lp(shortdash) lwidth(medium)	msymbol(circle) graphregion(fcolor(white)))		///
 					(line FI_pct		year if inrange(year,1979,2019),	lc(black) lp(dash) lwidth(medium)  graphregion(fcolor(white))), 	 ///
-					legend(order(1 "PFS" 2 "FSSS" /* 4 "USDA official (individual-level)" */) row(1) size(small) keygap(0.1) symxsize(5) pos(6)) yscale(range(0 0.2) titlegap(1)) ylabel(0(0.025)0.2) ///
+					legend(order(2 "PFS" 4 "FSSS" /* 4 "USDA official (individual-level)" */) row(1) size(small) keygap(0.1) symxsize(5) pos(6)) /*yscale(range(0 0.2) titlegap(1)) ylabel(0(0.025)0.2)*/ ///
+					note("Note: PFS is missing from 1988 to 1991 due to missing data in PSID")	///
 					title("Food Insecurity Prevalence (1979-2019)") ytitle("Fraction") xtitle("Year") name(FI_pravelence_measures, replace)	
 			
 			graph 	display FI_pravelence_measures, ysize(8) xsize(12.0)
@@ -2268,7 +2374,6 @@ graph twoway (connected  TFP_monthly_cost year)
 			graph	export	"${SNAP_outRaw}/PFS_FI_rate_PFS_FSSS.png", as(png) replace
 			graph	close	
 		restore
-		
 		
 		
 		
@@ -2360,6 +2465,48 @@ graph twoway (connected  TFP_monthly_cost year)
 			esttab	/*PFS_FSSS_full*/	PFS_FS_FSSS_FS	PFS_FS_FSSS_FI	PFS_FI_FSSS_FS	/*PFS_FI_FSSS_FI*/	using	"${SNAP_outRaw}/summstat_by_status.csv",  ///
 				cells("mean(fmt(%12.2f)) sd(fmt(%12.2f))") label	title("Summary Statistics - FS(PFS) and FI(FSSS)") noobs 	  replace
 		
+		
+			*	dtable version
+			lab	var	foodexp_tot_inclFS_pc_1_real	"Food expenditure per capita (including SNAP benefit)"
+			lab	define	rp_edu_cat	4	"Has college degree (RP)", modify
+			lab	var	HFSM_raw	"FSSS (raw score)"
+			
+			local	tab4_contvar	rp_age	famnum	ln_fam_income_pc_real	foodexp_tot_inclFS_pc_1_real	PFS_ppml_noCOLI	HFSM_raw
+			local	tab4_factvar	rp_female	rp_nonWhte	rp_married	rp_disabled	rp_edu_cat
+		
+		
+			 cap	collect	drop	tab4_PFS_FS_FSSS_FS
+			 dtable 	if	!mi(PFS_ppml_noCOLI)	&	PFS_FS_FSSS_FS==1	[aweight = wgt_long_ind], sample(, statistic(frequency) ) ///
+				continuous(`tab4_contvar', statistics( mean sd)) factor(`tab4_factvar', statistics( fvpercent)) ///
+				nformat(%9.0fc  frequency ) nformat(%9.2fc  mean sd) nformat(%9.1fc  fvpercent ) name(tab4_PFS_FS_FSSS_FS)
+				
+			 cap	collect	drop	tab4_PFS_FS_FSSS_FI
+			 dtable 	if	!mi(PFS_ppml_noCOLI)	&	PFS_FS_FSSS_FI==1	[aweight = wgt_long_ind], sample(, statistic(frequency) ) ///
+				continuous(`tab4_contvar', statistics( mean sd)) factor(`tab4_factvar', statistics( fvpercent)) ///
+				nformat(%9.0fc  frequency ) nformat(%9.2fc  mean sd) nformat(%9.1fc  fvpercent ) name(tab4_PFS_FS_FSSS_FI)	
+				
+			 cap	collect	drop	tab4_PFS_FI_FSSS_FI
+			 dtable 	if	!mi(PFS_ppml_noCOLI)	&	PFS_FI_FSSS_FI==1	[aweight = wgt_long_ind], sample(, statistic(frequency) ) ///
+				continuous(`tab4_contvar', statistics( mean sd)) factor(`tab4_factvar', statistics( fvpercent)) ///
+				nformat(%9.0fc  frequency ) nformat(%9.2fc  mean sd) nformat(%9.1fc  fvpercent ) name(tab4_PFS_FI_FSSS_FI)
+				
+			cap	collect	drop	tab4_all
+			collect combine tab4_all = tab4_PFS_FS_FSSS_FS	tab4_PFS_FS_FSSS_FI		tab4_PFS_FI_FSSS_FI
+			
+			collect style autolevels result frequency mean sd fvproportion fvpercent, clear
+		
+			collect label levels cmdset 1 "Summary"
+			collect style header result, level(hide)	
+			collect layout (var[_N]#result rp_female[1]#result var[rp_age]#result rp_nonWhte[1]#result rp_married[1]#result rp_disabled[1]#result rp_edu_cat[4]#result	///
+					var[famnum]#result	var[ln_fam_income_pc_real]#result	var[foodexp_tot_inclFS_pc_1_real]#result	var[PFS_ppml_noCOLI]#result	var[HFSM_raw]#result) (collection) (cmdset)
+			
+			
+			collect	export	"${SNAP_outRaw}/Table4.docx", replace as(docx)
+			
+		
+			
+			
+			
 			
 			
 			
