@@ -45,8 +45,8 @@
 
    *Standardize settings accross users
    *ssc install ietoolkit, replace
-   ieboilstart, version(14.1) maxvar(32767) matsize(11000)        //Set the version number to the oldest version used by anyone in the project team
-   `r(version)'                        //This line is needed to actually set the version from the command above
+   *ieboilstart, version(16.1) maxvar(32767) matsize(11000)        //Set the version number to the oldest version used by anyone in the project team
+   *`r(version)'                        //This line is needed to actually set the version from the command above
 	
 	*	User written commands used
 	*	This is just to make a note. For best replication, copy the current version of ado files rather than installing it.

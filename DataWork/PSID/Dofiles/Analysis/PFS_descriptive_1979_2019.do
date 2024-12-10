@@ -980,7 +980,7 @@ Thank you for giving us the opportunity to consider your work and I look forward
 		*	Model of PFS cutoff on macroeconomic indicators
 
 			lab	var	PFS_threshold_ppml_noCOLI	"Cut-off PFS"
-			local	macrovars	PFS_threshold_ppml_noCOLI Gini_index ln_dis_per_inc_pc GDP_growth_real GDP_pc_growth unemp_rate pov_rate_national pct_col_Census pct_rp_nonWhite_Census	social_spending
+			local	macrovars	PFS_threshold_ppml_noCOLI Gini_index ln_dis_per_inc_pc /*GDP_growth_real*/ GDP_pc_growth unemp_rate pov_rate_national pct_col_Census pct_rp_nonWhite_Census	social_spending
 			
 			*	Recale variables, from 0-1 to 0-100
 			foreach	var	in	pov_rate_national pct_col_Census pct_rp_nonWhite_Census	pct_rp_White_Census	{
@@ -1001,7 +1001,8 @@ Thank you for giving us the opportunity to consider your work and I look forward
 			*dtable	`macrovars'	, continuous(	`macrovars'	, stat(count mean sd min max)) nformat(%7.2f mean sd min max) title(Summary stats) export(summstat.html, replace)
 			
 			*	Correlation
-			asdoc pwcorr	`macrovars'	if	!mi(PFS_threshold_ppml_noCOLI), label star(all) replace
+			cd	"${SNAP_outRaw}"	
+			asdoc pwcorr	`macrovars'	if	!mi(PFS_threshold_ppml_noCOLI), label star(all) save(TabB3_corr_macro_table) replace
 			
 			*	Regression
 			
@@ -2377,7 +2378,7 @@ graph twoway (connected  TFP_monthly_cost year)
 		
 		
 		
-		*	Table 2: Food Security Status as estimated by PFS and FSSS
+		*	Table 3 & 4: Food Security Status as estimated by PFS and FSSS
 		
 			*	Decompose into 4 categories.			
 			loc	var	PFS_FI_FSSS_FI
@@ -2412,7 +2413,45 @@ graph twoway (connected  TFP_monthly_cost year)
 			summ	PFS_FI_FSSS_FI	PFS_FS_FSSS_FS	PFS_FI_FSSS_FS	PFS_FS_FSSS_FI	[aweight=wgt_long_ind]
 			
 				
-			*	Individual-vars
+				*	Table B4: Repeat it with the re-classified status (Table B4)			
+				loc	var	PFS_FI_FSSS_FI_cps
+				cap	drop	`var'
+				gen	`var'=.
+				replace	`var'=0	if	!mi(PFS_FI_ppml_noCOLI)	&	!mi(FSSS_FI_cps_base)
+				replace	`var'=1	if	PFS_FI_ppml_noCOLI==1	&	FSSS_FI_cps_base==1
+				lab	var	`var'	"FI(PFS) and FI(FSSS)"
+				
+				loc	var	PFS_FS_FSSS_FS_cps
+				cap	drop	`var'
+				gen	`var'=.
+				replace	`var'=0	if	!mi(PFS_FI_ppml_noCOLI)	&	!mi(FSSS_FI_cps_base)
+				replace	`var'=1	if	PFS_FI_ppml_noCOLI==0	&	FSSS_FI_cps_base==0
+				lab	var	`var'	"FS(PFS) and FS(FSSS)"
+				
+				loc	var	PFS_FI_FSSS_FS_cps
+				cap	drop	`var'
+				gen	`var'=.
+				replace	`var'=0	if	!mi(PFS_FI_ppml_noCOLI)	&	!mi(FSSS_FI_cps_base)
+				replace	`var'=1	if	PFS_FI_ppml_noCOLI==1	&	FSSS_FI_cps_base==0
+				lab	var	`var'	"FI(PFS) and FS(FSSS)"
+				
+				loc	var	PFS_FS_FSSS_FI_cps
+				cap	drop	`var'
+				gen	`var'=.
+				replace	`var'=0	if	!mi(PFS_FI_ppml_noCOLI)	&	!mi(FSSS_FI_cps_base)
+				replace	`var'=1	if	PFS_FI_ppml_noCOLI==0	&	FSSS_FI_cps_base==1
+				lab	var	`var'	"FS(PFS) and FI(FSSS)"
+				
+				summ	PFS_FI_FSSS_FI_cps	PFS_FS_FSSS_FS_cps	PFS_FI_FSSS_FS_cps	PFS_FS_FSSS_FI_cps
+				summ	PFS_FI_FSSS_FI_cps	PFS_FS_FSSS_FS_cps	PFS_FI_FSSS_FS_cps	PFS_FS_FSSS_FI_cps	[aweight=wgt_long_ind]
+			
+				
+				*	About 2,800 of them got different status.
+				tab	HFSM_FI	FSSS_FI_cps_base
+			
+				
+			
+			*	Table 3
 			tabstat	PFS_FS_FSSS_FS	PFS_FI_FSSS_FI	PFS_FI_FSSS_FS	PFS_FS_FSSS_FI	[aw=wgt_long_ind] if inlist(year,1999,2001,2003,2015,2017,2019),	///
 				statistics(/*count*/	mean		/*sd	min	 median	p95 max*/	) columns(statistics)  by(year)	save	// save
 			
@@ -2426,41 +2465,54 @@ graph twoway (connected  TFP_monthly_cost year)
 				*	Export
 			putexcel	set "${SNAP_outRaw}/PFS_FSSS_FI_by_year.xlsx", sheet(Tab2_PFS_FSSS_match) replace /*modify*/
 			putexcel	A5	=	matrix(matching_PFS_FSSS), names overwritefmt nformat(number_d2)	
-		
+				
+				*	Table B4
+				tabstat	PFS_FS_FSSS_FS_cps	PFS_FI_FSSS_FI_cps	PFS_FI_FSSS_FS_cps	PFS_FS_FSSS_FI_cps	[aw=wgt_long_ind] if inlist(year,1999,2001,2003,2015,2017,2019),	///
+				statistics(/*count*/	mean		/*sd	min	 median	p95 max*/	) columns(statistics)  by(year)	save	// save
 			
-			
-			
-			
+				mat	matching_PFS_FSSS_cps	=	r(Stat1)	\	r(Stat2)	\	r(Stat3)	\	r(Stat4)	\	r(Stat5)	\	r(Stat6)	\	r(StatTotal)
+				mat	matching_PFS_FSSS_cps	=	matching_PFS_FSSS_cps'	
+				
+				mat	rownames	matching_PFS_FSSS_cps	=	"FS(PFS) and FS(FSSS)"	"FI(PFS) and FI(FSSS)"	"FI(PFS) and FS(FSSS)"	"FS(PFS) and FI(FSSS)"
+				mat	colnames	matching_PFS_FSSS_cps	=	"1999"	"2001"	"2003"	"2015"	"2017"	"2019"	"Total"
+				mat	list	matching_PFS_FSSS_cps
+				
+					*	Export
+				putexcel	set "${SNAP_outRaw}/PFS_FSSS_FI_by_year.xlsx", sheet(TabB4_PFS_FSSS_match) modify
+				putexcel	A5	=	matrix(matching_PFS_FSSS_cps), names overwritefmt nformat(number_d2)	
+
+	
+			*	Table 4
 			*	Summary stats based on FS status
 			loc	summvars	rp_female	rp_age	rp_nonWhte	rp_married	rp_disabled	rp_col		///
 							famnum	ln_fam_income_pc_real	foodexp_tot_inclFS_pc_1_real	PFS_ppml_noCOLI HFSM_raw	
 			
-			*	Full sample
-			estpost tabstat	`summvars' 	if	!mi(PFS_ppml_noCOLI)	&	!mi(PFS_FS_FSSS_FI)	[aw=wgt_long_ind],	///
-				statistics(count	mean	sd	min	max) columns(statistics)	// save
-			est	store	PFS_FSSS_full
-			
-			*	FS(PFS)/FS(FSSS) individuals
-			estpost tabstat	`summvars' 	if	!mi(PFS_ppml_noCOLI)	&	PFS_FS_FSSS_FS==1	[aw=wgt_long_ind],	///
-				statistics(count	mean	sd	min	max) columns(statistics)	// save
-			est	store	PFS_FS_FSSS_FS
-			
-			*	FS(PFS)/FI(FSSS) individuals
-			estpost tabstat	`summvars' 	if	!mi(PFS_ppml_noCOLI)	&	PFS_FS_FSSS_FI==1	[aw=wgt_long_ind],	///
-				statistics(count	mean	sd	min	max) columns(statistics)	// save
-			est	store	PFS_FS_FSSS_FI
-			
-			*	FI(PFS)/FS(FSSS) individuals
-			estpost tabstat	`summvars' 	if	!mi(PFS_ppml_noCOLI)	&	PFS_FI_FSSS_FS==1	[aw=wgt_long_ind],	///
-				statistics(count	mean	sd	min	max) columns(statistics)	// save
-			est	store	PFS_FI_FSSS_FS
-			
-			*	FI(PFS)/FI(FSSS) individuals
-			estpost tabstat	`summvars' 	if	!mi(PFS_ppml_noCOLI)	&	PFS_FI_FSSS_FI==1	[aw=wgt_long_ind],	///
-				statistics(count	mean	sd	min	max) columns(statistics)	// save
-			est	store	PFS_FI_FSSS_FI
-			
-			
+				*	Full sample
+				estpost tabstat	`summvars' 	if	!mi(PFS_ppml_noCOLI)	&	!mi(PFS_FS_FSSS_FI)	[aw=wgt_long_ind],	///
+					statistics(count	mean	sd	min	max) columns(statistics)	// save
+				est	store	PFS_FSSS_full
+				
+				*	FS(PFS)/FS(FSSS) individuals
+				estpost tabstat	`summvars' 	if	!mi(PFS_ppml_noCOLI)	&	PFS_FS_FSSS_FS==1	[aw=wgt_long_ind],	///
+					statistics(count	mean	sd	min	max) columns(statistics)	// save
+				est	store	PFS_FS_FSSS_FS
+				
+				*	FS(PFS)/FI(FSSS) individuals
+				estpost tabstat	`summvars' 	if	!mi(PFS_ppml_noCOLI)	&	PFS_FS_FSSS_FI==1	[aw=wgt_long_ind],	///
+					statistics(count	mean	sd	min	max) columns(statistics)	// save
+				est	store	PFS_FS_FSSS_FI
+				
+				*	FI(PFS)/FS(FSSS) individuals
+				estpost tabstat	`summvars' 	if	!mi(PFS_ppml_noCOLI)	&	PFS_FI_FSSS_FS==1	[aw=wgt_long_ind],	///
+					statistics(count	mean	sd	min	max) columns(statistics)	// save
+				est	store	PFS_FI_FSSS_FS
+				
+				*	FI(PFS)/FI(FSSS) individuals
+				estpost tabstat	`summvars' 	if	!mi(PFS_ppml_noCOLI)	&	PFS_FI_FSSS_FI==1	[aw=wgt_long_ind],	///
+					statistics(count	mean	sd	min	max) columns(statistics)	// save
+				est	store	PFS_FI_FSSS_FI
+				
+				
 			
 			esttab	/*PFS_FSSS_full*/	PFS_FS_FSSS_FS	PFS_FS_FSSS_FI	PFS_FI_FSSS_FS	/*PFS_FI_FSSS_FI*/	using	"${SNAP_outRaw}/summstat_by_status.csv",  ///
 				cells("mean(fmt(%12.2f)) sd(fmt(%12.2f))") label	title("Summary Statistics - FS(PFS) and FI(FSSS)") noobs 	  replace
@@ -2506,8 +2558,7 @@ graph twoway (connected  TFP_monthly_cost year)
 		
 			
 			
-			
-			
+	
 			
 			
 /*
