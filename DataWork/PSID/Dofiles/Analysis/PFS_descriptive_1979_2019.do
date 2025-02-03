@@ -2537,13 +2537,18 @@ graph twoway (connected  TFP_monthly_cost year)
 				continuous(`tab4_contvar', statistics( mean sd)) factor(`tab4_factvar', statistics( fvpercent)) ///
 				nformat(%9.0fc  frequency ) nformat(%9.2fc  mean sd) nformat(%9.1fc  fvpercent ) name(tab4_PFS_FS_FSSS_FI)	
 				
+			 cap	collect	drop	tab4_PFS_FI_FSSS_FS
+			 dtable 	if	!mi(PFS_ppml_noCOLI)	&	PFS_FI_FSSS_FS==1	[aweight = wgt_long_ind], sample(, statistic(frequency) ) ///
+				continuous(`tab4_contvar', statistics( mean sd)) factor(`tab4_factvar', statistics( fvpercent)) ///
+				nformat(%9.0fc  frequency ) nformat(%9.2fc  mean sd) nformat(%9.1fc  fvpercent ) name(tab4_PFS_FI_FSSS_FS)	
+				
 			 cap	collect	drop	tab4_PFS_FI_FSSS_FI
 			 dtable 	if	!mi(PFS_ppml_noCOLI)	&	PFS_FI_FSSS_FI==1	[aweight = wgt_long_ind], sample(, statistic(frequency) ) ///
 				continuous(`tab4_contvar', statistics( mean sd)) factor(`tab4_factvar', statistics( fvpercent)) ///
 				nformat(%9.0fc  frequency ) nformat(%9.2fc  mean sd) nformat(%9.1fc  fvpercent ) name(tab4_PFS_FI_FSSS_FI)
 				
 			cap	collect	drop	tab4_all
-			collect combine tab4_all = tab4_PFS_FS_FSSS_FS	tab4_PFS_FS_FSSS_FI		tab4_PFS_FI_FSSS_FI
+			collect combine tab4_all = tab4_PFS_FS_FSSS_FS	tab4_PFS_FS_FSSS_FI		tab4_PFS_FI_FSSS_FS	tab4_PFS_FI_FSSS_FI
 			
 			collect style autolevels result frequency mean sd fvproportion fvpercent, clear
 		
